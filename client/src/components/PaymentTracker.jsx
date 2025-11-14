@@ -5,6 +5,8 @@ function PaymentTracker({ navigateTo }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
 
   useEffect(() => {
     fetchPaymentStatus();
@@ -40,6 +42,8 @@ function PaymentTracker({ navigateTo }) {
           ...customer,
           paidOnDate,
           paidAmount: paymentOnDate?.amount || 0,
+          offlineAmount: paymentOnDate?.offline_amount || 0,
+          onlineAmount: paymentOnDate?.online_amount || 0,
           weeklyAmount: customer.weekly_amount,
           balance: customer.balance
         };
@@ -82,6 +86,18 @@ function PaymentTracker({ navigateTo }) {
 
   const paidCount = customers.filter(c => c.paidOnDate).length;
   const unpaidCount = customers.filter(c => !c.paidOnDate).length;
+
+  // Calculate collection totals
+  const offlineTotal = customers.reduce((sum, c) => sum + (c.offlineAmount || 0), 0);
+  const onlineTotal = customers.reduce((sum, c) => sum + (c.onlineAmount || 0), 0);
+  const totalCollection = offlineTotal + onlineTotal;
+
+  const handleCustomerClick = (customer) => {
+    if (!customer.paidOnDate) {
+      setSelectedCustomer(customer);
+      setShowPaymentModal(true);
+    }
+  };
 
   return (
     <div>
@@ -140,7 +156,7 @@ function PaymentTracker({ navigateTo }) {
           marginBottom: '20px'
         }}>
           <div style={{
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            background: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
             padding: '16px',
             borderRadius: '12px',
             color: 'white',
@@ -151,7 +167,7 @@ function PaymentTracker({ navigateTo }) {
           </div>
 
           <div style={{
-            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+            background: 'linear-gradient(135deg, #b45309 0%, #92400e 100%)',
             padding: '16px',
             borderRadius: '12px',
             color: 'white',
@@ -159,6 +175,47 @@ function PaymentTracker({ navigateTo }) {
           }}>
             <div style={{ fontSize: '32px', fontWeight: 700 }}>{unpaidCount}</div>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Not Paid</div>
+          </div>
+        </div>
+
+        {/* Collection Summary */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gap: '12px',
+          marginBottom: '20px'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #475569 0%, #334155 100%)',
+            padding: '16px',
+            borderRadius: '12px',
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(71, 85, 105, 0.25)'
+          }}>
+            <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Offline Collection</div>
+            <div style={{ fontSize: '24px', fontWeight: 700 }}>{formatCurrency(offlineTotal)}</div>
+          </div>
+
+          <div style={{
+            background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+            padding: '16px',
+            borderRadius: '12px',
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(30, 64, 175, 0.25)'
+          }}>
+            <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Online Collection</div>
+            <div style={{ fontSize: '24px', fontWeight: 700 }}>{formatCurrency(onlineTotal)}</div>
+          </div>
+
+          <div style={{
+            background: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
+            padding: '16px',
+            borderRadius: '12px',
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(4, 120, 87, 0.25)'
+          }}>
+            <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Total Collection</div>
+            <div style={{ fontSize: '24px', fontWeight: 700 }}>{formatCurrency(totalCollection)}</div>
           </div>
         </div>
 
@@ -203,21 +260,313 @@ function PaymentTracker({ navigateTo }) {
                 </div>
               </div>
 
-              <div style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: customer.paidOnDate ? '#d1fae5' : '#fee2e2',
-                fontSize: '28px'
-              }}>
+              <div
+                onClick={() => handleCustomerClick(customer)}
+                style={{
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: customer.paidOnDate ? '#d1fae5' : '#fee2e2',
+                  fontSize: '28px',
+                  cursor: customer.paidOnDate ? 'default' : 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
                 {customer.paidOnDate ? '✓' : '✗'}
               </div>
             </div>
           ))
         )}
+      </div>
+
+      {showPaymentModal && selectedCustomer && (
+        <PaymentModal
+          customer={selectedCustomer}
+          selectedDate={selectedDate}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSelectedCustomer(null);
+          }}
+          onSuccess={() => {
+            setShowPaymentModal(false);
+            setSelectedCustomer(null);
+            fetchPaymentStatus();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Payment Modal Component
+function PaymentModal({ customer, selectedDate, onClose, onSuccess }) {
+  const [offlineAmount, setOfflineAmount] = useState('');
+  const [onlineAmount, setOnlineAmount] = useState('');
+  const [paymentMode, setPaymentMode] = useState('cash');
+  const [loading, setLoading] = useState(false);
+
+  const totalAmount = parseInt(offlineAmount || 0) + parseInt(onlineAmount || 0);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (totalAmount <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    if (totalAmount > customer.balance) {
+      alert('Payment amount cannot exceed loan balance');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/payments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          loan_id: customer.loan_id,
+          amount: totalAmount,
+          offline_amount: parseInt(offlineAmount || 0),
+          online_amount: parseInt(onlineAmount || 0),
+          payment_date: selectedDate,
+          payment_mode: paymentMode
+        })
+      });
+
+      if (response.ok) {
+        alert('Payment recorded successfully!');
+        onSuccess();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to record payment');
+      }
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      alert('Failed to record payment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return `₹${amount.toLocaleString('en-IN')}`;
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'white',
+          borderRadius: '16px',
+          padding: '24px',
+          maxWidth: '500px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflowY: 'auto'
+        }}
+      >
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px'
+        }}>
+          <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1f2937' }}>
+            Record Payment
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              fontSize: '28px',
+              cursor: 'pointer',
+              color: '#9ca3af',
+              padding: '0',
+              width: '32px',
+              height: '32px'
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{
+          background: '#f3f4f6',
+          padding: '16px',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          <div style={{ fontWeight: 600, fontSize: '16px', color: '#1f2937', marginBottom: '4px' }}>
+            {customer.name}
+          </div>
+          <div style={{ fontSize: '14px', color: '#6b7280' }}>
+            📱 {customer.phone}
+          </div>
+          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
+            Weekly: {formatCurrency(customer.weeklyAmount)}
+          </div>
+          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
+            Balance: {formatCurrency(customer.balance)}
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1f2937' }}>
+              Offline Amount (₹)
+            </label>
+            <input
+              type="number"
+              value={offlineAmount}
+              onChange={(e) => setOfflineAmount(e.target.value)}
+              placeholder="Enter offline collection"
+              min="0"
+              step="1"
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '2px solid #e5e7eb',
+                fontSize: '16px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1f2937' }}>
+              Online Amount (₹)
+            </label>
+            <input
+              type="number"
+              value={onlineAmount}
+              onChange={(e) => setOnlineAmount(e.target.value)}
+              placeholder="Enter online collection"
+              min="0"
+              step="1"
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '2px solid #e5e7eb',
+                fontSize: '16px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1f2937' }}>
+              Payment Mode
+            </label>
+            <select
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '2px solid #e5e7eb',
+                fontSize: '16px',
+                boxSizing: 'border-box'
+              }}
+            >
+              <option value="cash">Cash</option>
+              <option value="upi">UPI</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="cheque">Cheque</option>
+              <option value="mixed">Mixed (Cash + Online)</option>
+            </select>
+          </div>
+
+          <div style={{
+            background: '#f1f5f9',
+            padding: '16px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            border: '2px solid #1e40af'
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: '8px', color: '#1f2937' }}>
+              Payment Summary
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '14px' }}>
+              <span style={{ color: '#6b7280' }}>Offline:</span>
+              <span style={{ fontWeight: 600 }}>{formatCurrency(parseInt(offlineAmount || 0))}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '14px' }}>
+              <span style={{ color: '#6b7280' }}>Online:</span>
+              <span style={{ fontWeight: 600 }}>{formatCurrency(parseInt(onlineAmount || 0))}</span>
+            </div>
+            <div style={{ borderTop: '2px solid #1e40af', marginTop: '8px', paddingTop: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px' }}>
+                <span style={{ fontWeight: 700, color: '#1f2937' }}>Total Amount:</span>
+                <span style={{ fontWeight: 700, color: '#1e40af' }}>{formatCurrency(totalAmount)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '8px',
+                border: '2px solid #e5e7eb',
+                background: 'white',
+                color: '#6b7280',
+                fontSize: '16px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || totalAmount <= 0}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '8px',
+                border: 'none',
+                background: loading || totalAmount <= 0 ? '#9ca3af' : 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
+                color: 'white',
+                fontSize: '16px',
+                fontWeight: 600,
+                cursor: loading || totalAmount <= 0 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {loading ? 'Recording...' : 'Record Payment'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

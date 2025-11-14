@@ -12,12 +12,22 @@ function Customers({ navigateTo }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerToDelete, setCustomerToDelete] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const customersPerPage = 20;
 
   useEffect(() => {
-    fetchCustomers();
+    // Debounce search to avoid too many API calls
+    const timeoutId = setTimeout(() => {
+      setCurrentPage(1); // Reset to page 1 when search changes
+      fetchCustomers();
+    }, 300); // Wait 300ms after user stops typing
+
+    return () => clearTimeout(timeoutId);
   }, [searchTerm]);
 
   const fetchCustomers = async () => {
+    setLoading(true);
     try {
       const url = searchTerm
         ? `${API_URL}/customers?search=${encodeURIComponent(searchTerm)}`
@@ -27,6 +37,8 @@ function Customers({ navigateTo }) {
       setCustomers(data);
     } catch (error) {
       console.error('Error fetching customers:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,6 +76,26 @@ function Customers({ navigateTo }) {
     e.stopPropagation(); // Prevent triggering handleCustomerClick
     setCustomerToDelete(customer);
     setShowDeleteModal(true);
+  };
+
+  // Pagination logic
+  const indexOfLastCustomer = currentPage * customersPerPage;
+  const indexOfFirstCustomer = indexOfLastCustomer - customersPerPage;
+  const currentCustomers = customers.slice(indexOfFirstCustomer, indexOfLastCustomer);
+  const totalPages = Math.ceil(customers.length / customersPerPage);
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const downloadAllData = async () => {
@@ -158,7 +190,44 @@ function Customers({ navigateTo }) {
         />
       </div>
 
-      {customers.map((customer) => (
+      {loading ? (
+        <div style={{
+          textAlign: 'center',
+          padding: '60px 20px',
+          color: '#6b7280'
+        }}>
+          <div style={{
+            fontSize: '48px',
+            marginBottom: '16px',
+            animation: 'spin 1s linear infinite'
+          }}>⏳</div>
+          <div style={{ fontSize: '18px', fontWeight: 600 }}>Loading customers...</div>
+          <style>{`
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      ) : customers.length === 0 ? (
+        <div style={{
+          textAlign: 'center',
+          padding: '60px 20px',
+          background: 'white',
+          margin: '0 16px',
+          borderRadius: '12px'
+        }}>
+          <div style={{ fontSize: '64px', marginBottom: '16px' }}>👥</div>
+          <div style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937', marginBottom: '8px' }}>
+            {searchTerm ? 'No customers found' : 'No customers yet'}
+          </div>
+          <div style={{ fontSize: '14px', color: '#6b7280' }}>
+            {searchTerm ? 'Try a different search term' : 'Click the + button to add your first customer'}
+          </div>
+        </div>
+      ) : (
+        <>
+        {currentCustomers.map((customer) => (
         <div
           key={customer.id}
           className="customer-card"
@@ -222,7 +291,79 @@ function Customers({ navigateTo }) {
             </div>
           )}
         </div>
-      ))}
+        ))}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '24px 16px',
+            marginBottom: '80px'
+          }}>
+            <button
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              style={{
+                padding: '10px 20px',
+                borderRadius: '8px',
+                border: 'none',
+                background: currentPage === 1 ? '#e5e7eb' : 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+                color: currentPage === 1 ? '#9ca3af' : 'white',
+                fontSize: '16px',
+                fontWeight: 600,
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                boxShadow: currentPage === 1 ? 'none' : '0 4px 12px rgba(30, 64, 175, 0.25)'
+              }}
+            >
+              ← Previous
+            </button>
+
+            <div style={{
+              padding: '10px 16px',
+              background: 'white',
+              borderRadius: '8px',
+              fontWeight: 600,
+              color: '#1f2937',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              Page {currentPage} of {totalPages}
+            </div>
+
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              style={{
+                padding: '10px 20px',
+                borderRadius: '8px',
+                border: 'none',
+                background: currentPage === totalPages ? '#e5e7eb' : 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+                color: currentPage === totalPages ? '#9ca3af' : 'white',
+                fontSize: '16px',
+                fontWeight: 600,
+                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                boxShadow: currentPage === totalPages ? 'none' : '0 4px 12px rgba(30, 64, 175, 0.25)'
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        )}
+
+        {/* Customer count info */}
+        <div style={{
+          textAlign: 'center',
+          padding: '12px',
+          color: '#6b7280',
+          fontSize: '14px',
+          marginBottom: '20px'
+        }}>
+          Showing {indexOfFirstCustomer + 1}-{Math.min(indexOfLastCustomer, customers.length)} of {customers.length} customers
+        </div>
+        </>
+      )}
 
       <button className="fab" onClick={() => setShowAddCustomerModal(true)}>
         +

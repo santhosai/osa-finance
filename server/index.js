@@ -262,6 +262,12 @@ app.post('/api/loans', async (req, res) => {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
+    // Validate that start_date is a Sunday
+    const startDate = new Date(start_date);
+    if (startDate.getDay() !== 0) {
+      return res.status(400).json({ error: 'Loans can only start on Sundays' });
+    }
+
     // Check if customer has an active loan
     const existingLoansSnapshot = await db.collection('loans')
       .where('customer_id', '==', customer_id)
@@ -376,10 +382,16 @@ app.get('/api/payments', async (req, res) => {
 // Create payment
 app.post('/api/payments', async (req, res) => {
   try {
-    const { loan_id, amount, payment_date, payment_mode } = req.body;
+    const { loan_id, amount, payment_date, payment_mode, offline_amount, online_amount } = req.body;
 
     if (!loan_id || !amount || !payment_date) {
       return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Validate that payment_date is a Sunday
+    const paymentDate = new Date(payment_date);
+    if (paymentDate.getDay() !== 0) {
+      return res.status(400).json({ error: 'Payments can only be made on Sundays' });
     }
 
     // Get loan details
@@ -414,7 +426,9 @@ app.post('/api/payments', async (req, res) => {
       loan_id,
       amount,
       payment_date,
-      payment_mode: payment_mode || 'offline',
+      payment_mode: payment_mode || 'cash',
+      offline_amount: offline_amount || 0,
+      online_amount: online_amount || 0,
       weeks_covered: weeksCovered,
       week_number: weekNumber,
       balance_after: newBalance,
@@ -508,37 +522,23 @@ app.get('/api/stats', async (req, res) => {
       .get();
     const paymentsThisWeek = paymentsSnapshot.size;
 
-    // Calculate online and offline collections (all payments)
-    const allPaymentsSnapshot = await db.collection('payments').get();
-    let onlineCollection = 0;
-    let offlineCollection = 0;
-
-    allPaymentsSnapshot.forEach(doc => {
-      const payment = doc.data();
-      const amount = payment.amount || 0;
-      const mode = payment.payment_mode || 'offline';
-
-      if (mode === 'online') {
-        onlineCollection += amount;
-      } else {
-        offlineCollection += amount;
-      }
-    });
-
     res.json({
       activeLoans,
       outstanding,
       totalCustomers,
-      paymentsThisWeek,
-      onlineCollection,
-      offlineCollection
+      paymentsThisWeek
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+// Start server (only in local development)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+// Export for Vercel serverless deployment
+export default app;

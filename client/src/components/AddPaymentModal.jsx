@@ -3,16 +3,19 @@ import { API_URL } from '../config';
 
 function AddPaymentModal({ loan, onClose, onSuccess }) {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
-  const [amount, setAmount] = useState('');
-  const [paymentMode, setPaymentMode] = useState('offline');
+  const [offlineAmount, setOfflineAmount] = useState('');
+  const [onlineAmount, setOnlineAmount] = useState('');
+  const [paymentMode, setPaymentMode] = useState('cash');
   const [success, setSuccess] = useState(false);
   const [lastPayment, setLastPayment] = useState(null);
 
+  const amount = parseInt(offlineAmount || 0) + parseInt(onlineAmount || 0);
+
   const calculations = {
-    weeksCovered: amount ? (parseInt(amount) / loan.weekly_amount).toFixed(1) : '0.0',
-    newBalance: amount ? Math.max(0, loan.balance - parseInt(amount)) : loan.balance,
+    weeksCovered: amount ? (amount / loan.weekly_amount).toFixed(1) : '0.0',
+    newBalance: amount ? Math.max(0, loan.balance - amount) : loan.balance,
     remainingWeeks: amount
-      ? Math.ceil((loan.balance - parseInt(amount)) / loan.weekly_amount)
+      ? Math.ceil((loan.balance - amount) / loan.weekly_amount)
       : loan.weeksRemaining,
     weekNumber: loan.payments.length + 1
   };
@@ -20,12 +23,12 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!amount || parseInt(amount) <= 0) {
+    if (!amount || amount <= 0) {
       alert('Please enter a valid amount');
       return;
     }
 
-    if (parseInt(amount) > loan.balance) {
+    if (amount > loan.balance) {
       alert('Payment amount cannot exceed loan balance');
       return;
     }
@@ -38,7 +41,9 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
         },
         body: JSON.stringify({
           loan_id: loan.id,
-          amount: parseInt(amount),
+          amount: amount,
+          offline_amount: parseInt(offlineAmount || 0),
+          online_amount: parseInt(onlineAmount || 0),
           payment_date: paymentDate,
           payment_mode: paymentMode
         })
@@ -106,36 +111,62 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
             </div>
 
             <div className="form-group">
+              <label className="form-label">Offline Amount (₹)</label>
+              <input
+                type="number"
+                className="form-input"
+                value={offlineAmount}
+                onChange={(e) => setOfflineAmount(e.target.value)}
+                placeholder="Enter offline collection"
+                min="0"
+                step="1"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Online Amount (₹)</label>
+              <input
+                type="number"
+                className="form-input"
+                value={onlineAmount}
+                onChange={(e) => setOnlineAmount(e.target.value)}
+                placeholder="Enter online collection"
+                min="0"
+                step="1"
+              />
+            </div>
+
+            <div className="form-group">
               <label className="form-label">Payment Mode</label>
               <select
                 className="form-input"
                 value={paymentMode}
                 onChange={(e) => setPaymentMode(e.target.value)}
-                required
               >
-                <option value="offline">Offline (Cash)</option>
-                <option value="online">Online (UPI/Bank Transfer)</option>
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="cheque">Cheque</option>
+                <option value="mixed">Mixed (Cash + Online)</option>
               </select>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Payment Amount (₹)</label>
-              <input
-                type="number"
-                className="form-input"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="Enter amount"
-                min="1"
-                step="1"
-                required
-              />
-            </div>
-
-            {amount && parseInt(amount) > 0 && (
+            {amount > 0 && (
               <div className="calculation-box">
                 <div style={{ fontWeight: 600, marginBottom: '12px', color: '#1f2937' }}>
-                  Payment Calculation
+                  Payment Summary
+                </div>
+                <div className="calc-row">
+                  <span className="calc-label">Offline:</span>
+                  <span className="calc-value">{formatCurrency(parseInt(offlineAmount || 0))}</span>
+                </div>
+                <div className="calc-row">
+                  <span className="calc-label">Online:</span>
+                  <span className="calc-value">{formatCurrency(parseInt(onlineAmount || 0))}</span>
+                </div>
+                <div className="calc-row" style={{ borderTop: '2px solid #e5e7eb', paddingTop: '8px', marginTop: '8px' }}>
+                  <span className="calc-label" style={{ fontWeight: 700 }}>Total Amount:</span>
+                  <span className="calc-value" style={{ fontWeight: 700, color: '#1e40af' }}>{formatCurrency(amount)}</span>
                 </div>
                 <div className="calc-row">
                   <span className="calc-label">Weeks covered:</span>
@@ -144,10 +175,6 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
                 <div className="calc-row">
                   <span className="calc-label">New balance:</span>
                   <span className="calc-value">{formatCurrency(calculations.newBalance)}</span>
-                </div>
-                <div className="calc-row">
-                  <span className="calc-label">Remaining weeks:</span>
-                  <span className="calc-value">{calculations.remainingWeeks} weeks</span>
                 </div>
                 <div className="calc-row">
                   <span className="calc-label">Week number:</span>
@@ -198,7 +225,7 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
                   onClick={onSuccess}
                   style={{
                     flex: 1,
-                    background: '#3b82f6',
+                    background: '#1e40af',
                     color: 'white',
                     border: 'none',
                     padding: '12px 16px',
