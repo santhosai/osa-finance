@@ -184,14 +184,15 @@ function SundayDashboard({ navigateTo }) {
   const upcomingSundays = getUpcomingSundays(4);
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', maxWidth: '100vw', overflowX: 'hidden' }}>
       {/* Sidebar */}
       <div
         style={{
           position: 'fixed',
-          left: showSidebar ? '0' : '-250px',
+          left: showSidebar ? '0' : '-280px',
           top: 0,
-          width: '250px',
+          width: '280px',
+          maxWidth: '80vw',
           height: '100vh',
           background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
           transition: 'left 0.3s ease',
@@ -284,17 +285,17 @@ function SundayDashboard({ navigateTo }) {
       )}
 
       {/* Main Content */}
-      <div style={{ flex: 1, padding: '0' }}>
+      <div style={{ flex: 1, padding: '0', width: '100%' }}>
         {/* Header */}
         <div style={{
           background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-          padding: '20px 24px',
+          padding: '16px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button
               onClick={() => setShowSidebar(true)}
               style={{
@@ -303,14 +304,14 @@ function SundayDashboard({ navigateTo }) {
                 color: 'white',
                 cursor: 'pointer',
                 fontSize: '24px',
-                padding: '8px',
+                padding: '4px',
                 display: 'flex',
                 alignItems: 'center'
               }}
             >
               ☰
             </button>
-            <h2 style={{ margin: 0, color: 'white', fontSize: '24px', fontWeight: 700 }}>Sunday Collections</h2>
+            <h2 style={{ margin: 0, color: 'white', fontSize: '18px', fontWeight: 700 }}>Sunday Collections</h2>
           </div>
 
           <button
@@ -319,28 +320,28 @@ function SundayDashboard({ navigateTo }) {
               background: '#10b981',
               color: 'white',
               border: 'none',
-              padding: '10px 20px',
+              padding: '8px 12px',
               borderRadius: '8px',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '14px',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '6px'
             }}
           >
-            🔄 Refresh
+            🔄
           </button>
         </div>
 
-        <div style={{ padding: '24px' }}>
+        <div style={{ padding: '16px' }}>
           {/* Sunday Selector */}
           <div style={{
             background: 'white',
-            borderRadius: '16px',
-            padding: '24px',
-            marginBottom: '24px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.1)'
+            borderRadius: '12px',
+            padding: '16px',
+            marginBottom: '16px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
           }}>
             <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
               Select Sunday
@@ -454,79 +455,79 @@ function SundayDashboard({ navigateTo }) {
               {/* Key Metrics */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '16px',
-                marginBottom: '24px'
+                gridTemplateColumns: '1fr',
+                gap: '12px',
+                marginBottom: '16px'
               }}>
                 <div style={{
                   background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                  padding: '20px',
+                  padding: '16px',
                   borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3)',
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
                   color: 'white'
                 }}>
                   <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>
                     Customers Due
                   </div>
-                  <div style={{ fontSize: '32px', fontWeight: 700 }}>{sundayData.customersDue || 0}</div>
+                  <div style={{ fontSize: '28px', fontWeight: 700 }}>{sundayData.customersDue || 0}</div>
                 </div>
 
                 <div style={{
                   background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                  padding: '20px',
+                  padding: '16px',
                   borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(245, 158, 11, 0.3)',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
                   color: 'white'
                 }}>
                   <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>
                     Expected Collection
                   </div>
-                  <div style={{ fontSize: '28px', fontWeight: 700 }}>
+                  <div style={{ fontSize: '24px', fontWeight: 700 }}>
                     {formatCurrency(sundayData.expectedCollection || 0)}
                   </div>
                 </div>
 
                 <div style={{
                   background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  padding: '20px',
+                  padding: '16px',
                   borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(16, 185, 129, 0.3)',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
                   color: 'white'
                 }}>
                   <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>
                     Paid / Pending
                   </div>
-                  <div style={{ fontSize: '28px', fontWeight: 700 }}>
+                  <div style={{ fontSize: '24px', fontWeight: 700 }}>
                     {sundayData.paidCount || 0} / {sundayData.unpaidCount || 0}
                   </div>
                 </div>
 
                 <div style={{
                   background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                  padding: '20px',
+                  padding: '16px',
                   borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(139, 92, 246, 0.3)',
+                  boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
                   color: 'white'
                 }}>
                   <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>
                     Overall Outstanding
                   </div>
-                  <div style={{ fontSize: '28px', fontWeight: 700 }}>
+                  <div style={{ fontSize: '24px', fontWeight: 700 }}>
                     {formatCurrency(sundayData.overallOutstanding || 0)}
                   </div>
                 </div>
 
                 <div style={{
                   background: 'linear-gradient(135deg, #ec4899 0%, #db2777 100%)',
-                  padding: '20px',
+                  padding: '16px',
                   borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(236, 72, 153, 0.3)',
+                  boxShadow: '0 4px 12px rgba(236, 72, 153, 0.3)',
                   color: 'white'
                 }}>
                   <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>
                     Active Loans
                   </div>
-                  <div style={{ fontSize: '32px', fontWeight: 700 }}>{sundayData.activeLoans || 0}</div>
+                  <div style={{ fontSize: '28px', fontWeight: 700 }}>{sundayData.activeLoans || 0}</div>
                 </div>
               </div>
 

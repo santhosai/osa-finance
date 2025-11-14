@@ -320,16 +320,18 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 16px;
 }
 
 .modal {
   background: white;
   border-radius: 16px;
-  padding: 24px;
-  width: 90%;
+  padding: 20px;
+  width: 100%;
   max-width: 400px;
   max-height: 90vh;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .modal-header {
