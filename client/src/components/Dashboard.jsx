@@ -190,14 +190,15 @@ function Dashboard({ navigateTo }) {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', maxWidth: '100vw', overflowX: 'hidden' }}>
       {/* Sidebar */}
       <div
         style={{
           position: 'fixed',
-          left: showSidebar ? '0' : '-250px',
+          left: showSidebar ? '0' : '-280px',
           top: 0,
-          width: '250px',
+          width: '280px',
+          maxWidth: '80vw',
           height: '100vh',
           background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
           transition: 'left 0.3s ease',
@@ -350,17 +351,17 @@ function Dashboard({ navigateTo }) {
       )}
 
       {/* Main Content */}
-      <div style={{ flex: 1, padding: '0' }}>
+      <div style={{ flex: 1, padding: '0', width: '100%' }}>
         {/* Header */}
         <div style={{
           background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-          padding: '20px 24px',
+          padding: '16px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button
               onClick={() => setShowSidebar(true)}
               style={{
@@ -369,14 +370,14 @@ function Dashboard({ navigateTo }) {
                 color: 'white',
                 cursor: 'pointer',
                 fontSize: '24px',
-                padding: '8px',
+                padding: '4px',
                 display: 'flex',
                 alignItems: 'center'
               }}
             >
               ☰
             </button>
-            <h2 style={{ margin: 0, color: 'white', fontSize: '24px', fontWeight: 700 }}>Dashboard</h2>
+            <h2 style={{ margin: 0, color: 'white', fontSize: '20px', fontWeight: 700 }}>Dashboard</h2>
           </div>
 
           <button
@@ -385,71 +386,71 @@ function Dashboard({ navigateTo }) {
               background: '#047857',
               color: 'white',
               border: 'none',
-              padding: '10px 20px',
+              padding: '8px 12px',
               borderRadius: '8px',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '14px',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '6px'
             }}
           >
-            🔄 Refresh
+            🔄
           </button>
         </div>
 
         {/* Stats Grid */}
-        <div style={{ padding: '24px' }}>
+        <div style={{ padding: '16px' }}>
           {stats && (
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '20px',
-              marginBottom: '24px'
+              gridTemplateColumns: '1fr',
+              gap: '12px',
+              marginBottom: '16px'
             }}>
               <div style={{
                 background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
-                padding: '24px',
-                borderRadius: '16px',
-                boxShadow: '0 10px 25px rgba(30, 64, 175, 0.25)',
+                padding: '16px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(30, 64, 175, 0.25)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px', fontWeight: 600 }}>Active Loans</div>
-                <div style={{ fontSize: '36px', fontWeight: 700 }}>{stats.activeLoans}</div>
+                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Active Loans</div>
+                <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.activeLoans}</div>
               </div>
 
               <div style={{
                 background: 'linear-gradient(135deg, #b45309 0%, #92400e 100%)',
-                padding: '24px',
-                borderRadius: '16px',
-                boxShadow: '0 10px 25px rgba(180, 83, 9, 0.25)',
+                padding: '16px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(180, 83, 9, 0.25)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px', fontWeight: 600 }}>Outstanding</div>
-                <div style={{ fontSize: '36px', fontWeight: 700 }}>{formatCurrency(stats.outstanding)}</div>
+                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Outstanding</div>
+                <div style={{ fontSize: '28px', fontWeight: 700 }}>{formatCurrency(stats.outstanding)}</div>
               </div>
 
               <div style={{
                 background: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
-                padding: '24px',
-                borderRadius: '16px',
-                boxShadow: '0 10px 25px rgba(4, 120, 87, 0.25)',
+                padding: '16px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(4, 120, 87, 0.25)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px', fontWeight: 600 }}>Payments This Week</div>
-                <div style={{ fontSize: '36px', fontWeight: 700 }}>{stats.paymentsThisWeek}</div>
+                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Payments This Week</div>
+                <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.paymentsThisWeek}</div>
               </div>
 
               <div style={{
                 background: 'linear-gradient(135deg, #475569 0%, #334155 100%)',
-                padding: '24px',
-                borderRadius: '16px',
-                boxShadow: '0 10px 25px rgba(71, 85, 105, 0.25)',
+                padding: '16px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(71, 85, 105, 0.25)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px', fontWeight: 600 }}>Total Customers</div>
-                <div style={{ fontSize: '36px', fontWeight: 700 }}>{stats.totalCustomers}</div>
+                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Total Customers</div>
+                <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.totalCustomers}</div>
               </div>
             </div>
           )}
@@ -457,13 +458,13 @@ function Dashboard({ navigateTo }) {
           {/* Sunday Collections Section */}
           <div style={{
             background: 'white',
-            padding: '24px',
-            borderRadius: '16px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-            marginBottom: '24px'
+            padding: '16px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            marginBottom: '16px'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>Sunday Collections</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>Sunday Collections</h3>
               <button
                 onClick={downloadSundayCollection}
                 disabled={sundayCustomers.length === 0}
@@ -471,20 +472,20 @@ function Dashboard({ navigateTo }) {
                   background: sundayCustomers.length === 0 ? '#9ca3af' : 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
                   color: 'white',
                   border: 'none',
-                  padding: '10px 20px',
+                  padding: '8px 12px',
                   borderRadius: '8px',
                   cursor: sundayCustomers.length === 0 ? 'not-allowed' : 'pointer',
-                  fontSize: '14px',
+                  fontSize: '13px',
                   fontWeight: 600,
-                  boxShadow: sundayCustomers.length === 0 ? 'none' : '0 4px 12px rgba(30, 64, 175, 0.3)'
+                  boxShadow: sundayCustomers.length === 0 ? 'none' : '0 2px 8px rgba(30, 64, 175, 0.3)'
                 }}
               >
-                📥 Download List
+                📥 Download
               </button>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1f2937' }}>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#1f2937', fontSize: '14px' }}>
                 Select Sunday
               </label>
               <input
@@ -500,59 +501,59 @@ function Dashboard({ navigateTo }) {
                 }}
                 style={{
                   width: '100%',
-                  padding: '12px',
+                  padding: '10px',
                   borderRadius: '8px',
                   border: '2px solid #e5e7eb',
-                  fontSize: '16px',
-                  boxSizing: 'border-box',
-                  maxWidth: '300px'
+                  fontSize: '15px',
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
 
             <div style={{
               background: '#f3f4f6',
-              padding: '16px',
+              padding: '12px',
               borderRadius: '8px',
-              marginBottom: '16px'
+              marginBottom: '12px'
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontWeight: 600, color: '#1f2937' }}>Customers Due:</span>
-                <span style={{ fontWeight: 700, color: '#1e40af' }}>{sundayCustomers.length}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontWeight: 600, color: '#1f2937', fontSize: '14px' }}>Customers Due:</span>
+                <span style={{ fontWeight: 700, color: '#1e40af', fontSize: '14px' }}>{sundayCustomers.length}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontWeight: 600, color: '#1f2937' }}>Expected Collection:</span>
-                <span style={{ fontWeight: 700, color: '#047857' }}>
+                <span style={{ fontWeight: 600, color: '#1f2937', fontSize: '14px' }}>Expected Collection:</span>
+                <span style={{ fontWeight: 700, color: '#047857', fontSize: '14px' }}>
                   ₹{sundayCustomers.reduce((sum, c) => sum + c.weeklyAmount, 0).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
 
             {sundayCustomers.length > 0 ? (
-              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {sundayCustomers.map((customer, index) => (
                   <div
                     key={index}
                     style={{
                       background: 'white',
-                      border: '2px solid #e5e7eb',
+                      border: '1px solid #e5e7eb',
                       borderRadius: '8px',
-                      padding: '12px',
+                      padding: '10px',
                       marginBottom: '8px',
                       display: 'flex',
                       justifyContent: 'space-between',
-                      alignItems: 'center'
+                      alignItems: 'center',
+                      gap: '8px'
                     }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 600, color: '#1f2937', marginBottom: '4px' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: '#1f2937', marginBottom: '4px', fontSize: '14px' }}>
                         {index + 1}. {customer.name}
                       </div>
-                      <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                      <div style={{ fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         📱 {customer.phone} • Week {customer.weekNumber}/10
                       </div>
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: '18px', color: '#1e40af' }}>
+                    <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e40af', flexShrink: 0 }}>
                       ₹{customer.weeklyAmount.toLocaleString('en-IN')}
                     </div>
                   </div>
@@ -561,10 +562,11 @@ function Dashboard({ navigateTo }) {
             ) : (
               <div style={{
                 background: '#f3f4f6',
-                padding: '40px',
+                padding: '24px',
                 borderRadius: '8px',
                 textAlign: 'center',
-                color: '#6b7280'
+                color: '#6b7280',
+                fontSize: '14px'
               }}>
                 No customers have payments due on this Sunday
               </div>
