@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(node seed.js:*)",
+      "Bash(curl:*)",
+      "Bash(findstr:*)",
+      "Bash(netsh advfirewall show:*)",
+      "Bash(node index.js:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npx vite:*)",
+      "Bash(git init:*)",
+      "Bash(git config:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

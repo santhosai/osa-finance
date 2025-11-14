@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Tracker - Mockup Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f9fafb;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .phone-frame {
+            max-width: 375px;
+            margin: 0 auto 30px;
+            background: white;
+            border-radius: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            border: 8px solid #1f2937;
+        }
+
+        .screen-selector {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .screen-selector h1 {
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+
+        .screen-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .screen-btn {
+            padding: 10px 20px;
+            border: 2px solid #3b82f6;
+            background: white;
+            color: #3b82f6;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .screen-btn:hover, .screen-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .screen {
+            display: none;
+            background: #f9fafb;
+            min-height: 667px;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: #3b82f6;
+            color: white;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar h2 {
+            font-size: 18px;
+        }
+
+        .nav-icon {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+        }
+
+        /* Dashboard */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 16px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+            margin: 8px 0;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .section-title {
+            padding: 16px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        /* Payment List */
+        .payment-item {
+            background: white;
+            margin: 0 16px 12px;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .payment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .payment-name {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .payment-amount {
+            font-weight: bold;
+            color: #10b981;
+        }
+
+        .payment-date {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        /* Customer List */
+        .customer-card {
+            background: white;
+            margin: 0 16px 12px;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .customer-name {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+
+        .customer-phone {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 12px;
+        }
+
+        .customer-loan {
+            display: flex;
+            justify-content: space-between;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .loan-info {
+            font-size: 12px;
+        }
+
+        .loan-label {
+            color: #6b7280;
+        }
+
+        .loan-value {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        /* Loan Details */
+        .loan-summary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            padding: 24px 16px;
+        }
+
+        .loan-customer {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .loan-phone {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .loan-amount-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .loan-stat {
+            text-align: center;
+        }
+
+        .loan-stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .loan-stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .progress-section {
+            background: white;
+            margin: 16px;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .progress-bar {
+            height: 12px;
+            background: #e5e7eb;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            transition: width 0.3s;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        /* Payment History Table */
+        .payment-table {
+            background: white;
+            margin: 0 16px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .table-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 40px;
+            gap: 8px;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            align-items: center;
+        }
+
+        .table-row:last-child {
+            border-bottom: none;
+        }
+
+        .table-header {
+            background: #f9fafb;
+            font-weight: 600;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .table-cell {
+            font-size: 14px;
+        }
+
+        .whatsapp-btn {
+            width: 32px;
+            height: 32px;
+            background: #25d366;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            width: calc(100% - 32px);
+            margin: 16px;
+            box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #3b82f6;
+            border: 2px solid #3b82f6;
+            padding: 12px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            width: calc(100% - 32px);
+            margin: 0 16px 16px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .close-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: #f3f4f6;
+            cursor: pointer;
+            font-size: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .calculation-box {
+            background: #eff6ff;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+        }
+
+        .calc-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .calc-label {
+            color: #1f2937;
+        }
+
+        .calc-value {
+            font-weight: 600;
+            color: #3b82f6;
+        }
+
+        .modal-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .fab {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: #3b82f6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            cursor: pointer;
+            color: white;
+            font-size: 28px;
+        }
+
+        .search-bar {
+            padding: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            font-size: 16px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-active {
+            background: #d1fae5;
+            color: #059669;
+        }
+
+        .badge-closed {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .instruction {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .instruction h3 {
+            color: #3b82f6;
+            margin-bottom: 10px;
+        }
+
+        .instruction p {
+            color: #6b7280;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="instruction">
+            <h3>📱 Interactive Mockup Demo</h3>
+            <p>Click the buttons below to preview different screens of your Finance Tracker app. This shows exactly how it will look on mobile devices!</p>
+        </div>
+
+        <div class="screen-selector">
+            <h1>Finance Tracker - Screen Preview</h1>
+            <div class="screen-buttons">
+                <button class="screen-btn active" onclick="showScreen('dashboard')">Dashboard</button>
+                <button class="screen-btn" onclick="showScreen('customers')">Customers</button>
+                <button class="screen-btn" onclick="showScreen('loan-details')">Loan Details</button>
+                <button class="screen-btn" onclick="showScreen('payment-modal')">Add Payment</button>
+            </div>
+        </div>
+
+        <div class="phone-frame">
+            <!-- DASHBOARD SCREEN -->
+            <div id="dashboard" class="screen active">
+                <div class="navbar">
+                    <svg class="nav-icon" fill="white" viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+                    <h2>Dashboard</h2>
+                    <svg class="nav-icon" fill="white" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Active Loans</div>
+                        <div class="stat-value">12</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Outstanding</div>
+                        <div class="stat-value">₹85,000</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">This Week</div>
+                        <div class="stat-value">8</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Customers</div>
+                        <div class="stat-value">25</div>
+                    </div>
+                </div>
+
+                <div class="section-title">Recent Payments</div>
+
+                <div class="payment-item">
+                    <div class="payment-header">
+                        <div class="payment-name">Rajesh Kumar</div>
+                        <div class="payment-amount">₹1,000</div>
+                    </div>
+                    <div class="payment-date">Today, 2:30 PM • Week 3 • Balance: ₹7,000</div>
+                </div>
+
+                <div class="payment-item">
+                    <div class="payment-header">
+                        <div class="payment-name">Priya Sharma</div>
+                        <div class="payment-amount">₹2,000</div>
+                    </div>
+                    <div class="payment-date">Yesterday, 11:00 AM • Week 1-2 • Balance: ₹8,000</div>
+                </div>
+
+                <div class="payment-item">
+                    <div class="payment-header">
+                        <div class="payment-name">Amit Patel</div>
+                        <div class="payment-amount">₹1,500</div>
+                    </div>
+                    <div class="payment-date">2 days ago • Week 5 • Balance: ₹3,500</div>
+                </div>
+
+                <button class="btn-primary">+ Add New Loan</button>
+            </div>
+
+            <!-- CUSTOMERS SCREEN -->
+            <div id="customers" class="screen">
+                <div class="navbar">
+                    <svg class="nav-icon" fill="white" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    <h2>Customers</h2>
+                    <svg class="nav-icon" fill="white" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                </div>
+
+                <div class="search-bar">
+                    <input type="text" class="search-input" placeholder="Search by name or phone...">
+                </div>
+
+                <div class="customer-card">
+                    <div class="customer-name">Rajesh Kumar</div>
+                    <div class="customer-phone">📱 9876543210</div>
+                    <div class="customer-loan">
+                        <div class="loan-info">
+                            <div class="loan-label">Active Loan</div>
+                            <div class="loan-value">₹10,000</div>
+                        </div>
+                        <div class="loan-info">
+                            <div class="loan-label">Balance</div>
+                            <div class="loan-value">₹7,000</div>
+                        </div>
+                        <div class="loan-info">
+                            <div class="loan-label">Last Payment</div>
+                            <div class="loan-value">Today</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="customer-card">
+                    <div class="customer-name">Priya Sharma</div>
+                    <div class="customer-phone">📱 9988776655</div>
+                    <div class="customer-loan">
+                        <div class="loan-info">
+                            <div class="loan-label">Active Loan</div>
+                            <div class="loan-value">₹15,000</div>
+                        </div>
+                        <div class="loan-info">
+                            <div class="loan-label">Balance</div>
+                            <div class="loan-value">₹8,000</div>
+                        </div>
+                        <div class="loan-info">
+                            <div class="loan-label">Last Payment</div>
+                            <div class="loan-value">Yesterday</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="customer-card">
+                    <div class="customer-name">Amit Patel</div>
+                    <div class="customer-phone">📱 9123456789</div>
+                    <div class="customer-loan">
+                        <div class="loan-info">
+                            <div class="loan-label">Active Loan</div>
+                            <div class="loan-value">₹8,000</div>
+                        </div>
+                        <div class="loan-info">
+                            <div class="loan-label">Balance</div>
+                            <div class="loan-value">₹3,500</div>
+                        </div>
+                        <div class="loan-info">
+                            <div class="loan-label">Last Payment</div>
+                            <div class="loan-value">2 days ago</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="customer-card">
+                    <div class="customer-name">Sneha Reddy</div>
+                    <div class="customer-phone">📱 9876501234</div>
+                    <div class="customer-loan">
+                        <div class="loan-info">
+                            <div class="loan-label">Active Loan</div>
+                            <div class="loan-value">₹12,000</div>
+                        </div>
+                        <div class="loan-info">
+                            <div class="loan-label">Balance</div>
+                            <div class="loan-value">₹12,000</div>
+                        </div>
+                        <div class="loan-info">
+                            <div class="loan-label">Last Payment</div>
+                            <div class="loan-value">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fab">+</div>
+            </div>
+
+            <!-- LOAN DETAILS SCREEN -->
+            <div id="loan-details" class="screen">
+                <div class="navbar">
+                    <svg class="nav-icon" fill="white" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    <h2>Loan Details</h2>
+                    <svg class="nav-icon" fill="white" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                </div>
+
+                <div class="loan-summary">
+                    <div class="loan-customer">Rajesh Kumar</div>
+                    <div class="loan-phone">📱 9876543210</div>
+                    
+                    <div class="loan-amount-grid">
+                        <div class="loan-stat">
+                            <div class="loan-stat-value">₹10,000</div>
+                            <div class="loan-stat-label">Loan Amount</div>
+                        </div>
+                        <div class="loan-stat">
+                            <div class="loan-stat-value">₹7,000</div>
+                            <div class="loan-stat-label">Balance</div>
+                        </div>
+                        <div class="loan-stat">
+                            <div class="loan-stat-value">₹1,000</div>
+                            <div class="loan-stat-label">Weekly</div>
+                        </div>
+                        <div class="loan-stat">
+                            <div class="loan-stat-value">7</div>
+                            <div class="loan-stat-label">Weeks Left</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progress-section">
+                    <div class="progress-label">
+                        <span><strong>Progress</strong></span>
+                        <span class="badge badge-active">ACTIVE</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 30%"></div>
+                    </div>
+                    <div class="progress-label">
+                        <span>₹3,000 paid</span>
+                        <span>30% complete</span>
+                    </div>
+                </div>
+
+                <div class="section-title">Payment History</div>
+
+                <div class="payment-table">
+                    <div class="table-row table-header">
+                        <div>Date</div>
+                        <div>Amount</div>
+                        <div>Balance</div>
+                        <div></div>
+                    </div>
+                    <div class="table-row">
+                        <div class="table-cell">13/11/2024</div>
+                        <div class="table-cell">₹1,000</div>
+                        <div class="table-cell">₹7,000</div>
+                        <div class="whatsapp-btn">
+                            <svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                        </div>
+                    </div>
+                    <div class="table-row">
+                        <div class="table-cell">06/11/2024</div>
+                        <div class="table-cell">₹2,000</div>
+                        <div class="table-cell">₹8,000</div>
+                        <div class="whatsapp-btn">
+                            <svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-primary">+ Add Payment</button>
+                <button class="btn-secondary">⬆ Top-up Loan</button>
+            </div>
+
+            <!-- ADD PAYMENT MODAL SCREEN -->
+            <div id="payment-modal" class="screen">
+                <div class="navbar">
+                    <svg class="nav-icon" fill="white" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    <h2>Add Payment</h2>
+                    <div style="width: 24px;"></div>
+                </div>
+
+                <div style="padding: 24px;">
+                    <div class="form-group">
+                        <label class="form-label">Customer</label>
+                        <div style="padding: 12px; background: #f9fafb; border-radius: 8px;">
+                            <div style="font-weight: 600; color: #1f2937;">Rajesh Kumar</div>
+                            <div style="font-size: 14px; color: #6b7280;">📱 9876543210</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Payment Date</label>
+                        <input type="date" class="form-input" value="2024-11-13">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Payment Amount (₹)</label>
+                        <input type="number" class="form-input" value="1000" placeholder="Enter amount">
+                    </div>
+
+                    <div class="calculation-box">
+                        <div style="font-weight: 600; margin-bottom: 12px; color: #1f2937;">Payment Calculation</div>
+                        <div class="calc-row">
+                            <span class="calc-label">Weeks covered:</span>
+                            <span class="calc-value">1.0 week</span>
+                        </div>
+                        <div class="calc-row">
+                            <span class="calc-label">New balance:</span>
+                            <span class="calc-value">₹7,000</span>
+                        </div>
+                        <div class="calc-row">
+                            <span class="calc-label">Remaining weeks:</span>
+                            <span class="calc-value">7 weeks</span>
+                        </div>
+                        <div class="calc-row">
+                            <span class="calc-label">Week number:</span>
+                            <span class="calc-value">Week 4</span>
+                        </div>
+                    </div>
+
+                    <button class="btn-primary" style="margin: 16px 0;">✓ Record Payment</button>
+                    
+                    <div style="padding: 16px; background: #d1fae5; border-radius: 12px; text-align: center;">
+                        <div style="font-weight: 600; color: #059669; margin-bottom: 8px;">✓ Payment Recorded Successfully!</div>
+                        <button style="background: #25d366; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%;">
+                            <svg style="width: 20px; height: 20px; display: inline-block; vertical-align: middle; margin-right: 8px;" fill="white" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                            Send WhatsApp Message
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showScreen(screenId) {
+            // Hide all screens
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            // Remove active from all buttons
+            document.querySelectorAll('.screen-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected screen
+            document.getElementById(screenId).classList.add('active');
+            
+            // Add active to clicked button
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>
