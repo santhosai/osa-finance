@@ -22,6 +22,9 @@ function Dashboard({ navigateTo }) {
     try {
       const response = await fetch(`${API_URL}/stats`);
       const data = await response.json();
+      console.log('Dashboard Stats:', data);
+      console.log('Online Collection:', data.onlineCollection);
+      console.log('Offline Collection:', data.offlineCollection);
       setStats(data);
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -192,6 +195,26 @@ function Dashboard({ navigateTo }) {
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
             📥 Export Data
+          </button>
+
+          <button
+            onClick={() => { setShowSidebar(false); navigateTo('payment-tracker'); }}
+            style={{
+              width: '100%',
+              padding: '15px 20px',
+              background: 'transparent',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 600,
+              transition: 'background 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#334155'}
+            onMouseOut={(e) => e.target.style.background = 'transparent'}
+          >
+            📅 Payment Tracker
           </button>
         </div>
 

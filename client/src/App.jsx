@@ -3,6 +3,7 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
 import LoanDetails from './components/LoanDetails';
+import PaymentTracker from './components/PaymentTracker';
 import './App.css';
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
     <div className="app">
       {currentView === 'dashboard' && <Dashboard navigateTo={navigateTo} />}
       {currentView === 'customers' && <Customers navigateTo={navigateTo} />}
+      {currentView === 'payment-tracker' && <PaymentTracker navigateTo={navigateTo} />}
       {currentView === 'loan-details' && selectedLoanId && (
         <LoanDetails loanId={selectedLoanId} navigateTo={navigateTo} />
       )}
