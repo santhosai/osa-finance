@@ -3,7 +3,7 @@
 const getApiUrl = () => {
   // Production: Use deployed backend URL
   if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    return 'https://server-26v2muykz-santhosais-projects.vercel.app/api';
+    return 'https://server-rho-cyan-11.vercel.app/api';
   }
 
   // Development: Use local server
