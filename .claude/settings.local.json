@@ -11,7 +11,8 @@
       "Bash(npm run dev:*)",
       "Bash(npx vite:*)",
       "Bash(git init:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(vercel:*)"
     ],
     "deny": [],
     "ask": []

@@ -3,3 +3,5 @@ serviceAccountKey.json
 .env
 finance.db
 *.log
+
+.vercel
