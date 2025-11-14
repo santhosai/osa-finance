@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AddCustomerModal from './AddCustomerModal';
 import AddLoanModal from './AddLoanModal';
+import DeleteCustomerModal from './DeleteCustomerModal';
 import { API_URL } from '../config';
 
 function Customers({ navigateTo }) {
@@ -8,7 +9,9 @@ function Customers({ navigateTo }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerToDelete, setCustomerToDelete] = useState(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -55,6 +58,12 @@ function Customers({ navigateTo }) {
       setSelectedCustomer(customer);
       setShowAddLoanModal(true);
     }
+  };
+
+  const handleDeleteClick = (e, customer) => {
+    e.stopPropagation(); // Prevent triggering handleCustomerClick
+    setCustomerToDelete(customer);
+    setShowDeleteModal(true);
   };
 
   const downloadAllData = async () => {
@@ -154,7 +163,37 @@ function Customers({ navigateTo }) {
           key={customer.id}
           className="customer-card"
           onClick={() => handleCustomerClick(customer)}
+          style={{ position: 'relative' }}
         >
+          <button
+            onClick={(e) => handleDeleteClick(e, customer)}
+            style={{
+              position: 'absolute',
+              top: '12px',
+              right: '12px',
+              background: '#fee2e2',
+              border: '1px solid #fca5a5',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              color: '#991b1b',
+              fontWeight: 600,
+              transition: 'all 0.2s',
+              zIndex: 10
+            }}
+            onMouseOver={(e) => {
+              e.target.style.background = '#fca5a5';
+              e.target.style.color = 'white';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.background = '#fee2e2';
+              e.target.style.color = '#991b1b';
+            }}
+            title="Delete Customer"
+          >
+            🗑️
+          </button>
           <div className="customer-name">{customer.name}</div>
           <div className="customer-phone">📱 {customer.phone}</div>
           {customer.loan_id ? (
@@ -211,6 +250,21 @@ function Customers({ navigateTo }) {
           onSuccess={() => {
             setShowAddLoanModal(false);
             setSelectedCustomer(null);
+            fetchCustomers();
+          }}
+        />
+      )}
+
+      {showDeleteModal && customerToDelete && (
+        <DeleteCustomerModal
+          customer={customerToDelete}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setCustomerToDelete(null);
+          }}
+          onSuccess={() => {
+            setShowDeleteModal(false);
+            setCustomerToDelete(null);
             fetchCustomers();
           }}
         />
