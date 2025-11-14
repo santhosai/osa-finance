@@ -20,6 +20,7 @@ function PaymentTracker({ navigateTo }) {
       // For each customer with loan, check if they paid on selected date
       const customerStatusPromises = allCustomers.map(async (customer) => {
         if (!customer.loan_id) return null;
+        if (customer.balance === 0) return null; // Skip completed loans
 
         // Get all payments for this loan
         const loanResponse = await fetch(`${API_URL}/loans/${customer.loan_id}`);
@@ -30,10 +31,17 @@ function PaymentTracker({ navigateTo }) {
           payment => payment.payment_date === selectedDate
         );
 
+        // Get the actual payment amount if paid
+        const paymentOnDate = loanData.payments?.find(
+          payment => payment.payment_date === selectedDate
+        );
+
         return {
           ...customer,
           paidOnDate,
-          weeklyAmount: customer.weekly_amount
+          paidAmount: paymentOnDate?.amount || 0,
+          weeklyAmount: customer.weekly_amount,
+          balance: customer.balance
         };
       });
 
@@ -45,6 +53,27 @@ function PaymentTracker({ navigateTo }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const downloadReport = () => {
+    const csvHeader = 'Customer Name,Phone,Weekly Amount,Balance,Paid Amount,Status\n';
+    const csvRows = customers.map(customer => {
+      const status = customer.paidOnDate ? 'PAID' : 'NOT PAID';
+      return `${customer.name},${customer.phone},${customer.weeklyAmount},${customer.balance},${customer.paidAmount},${status}`;
+    }).join('\n');
+
+    const csvContent = csvHeader + csvRows;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Payment_Report_${selectedDate}.csv`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const formatCurrency = (amount) => {
@@ -67,7 +96,15 @@ function PaymentTracker({ navigateTo }) {
           <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
         </svg>
         <h2>Payment Tracker</h2>
-        <div style={{ width: '40px' }}></div>
+        <svg
+          className="nav-icon"
+          fill="white"
+          viewBox="0 0 24 24"
+          onClick={downloadReport}
+          title="Download Report"
+        >
+          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+        </svg>
       </div>
 
       <div style={{ padding: '20px' }}>
