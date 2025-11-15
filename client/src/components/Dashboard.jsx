@@ -191,7 +191,7 @@ function Dashboard({ navigateTo }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', maxWidth: '100vw', overflowX: 'hidden' }}>
-      {/* Sidebar */}
+      {/* Menu Sidebar */}
       <div
         style={{
           position: 'fixed',
@@ -310,6 +310,46 @@ function Dashboard({ navigateTo }) {
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
             📅 Payment Tracker
+          </button>
+
+          <button
+            onClick={() => { setShowSidebar(false); navigateTo('vaddi-list'); }}
+            style={{
+              width: '100%',
+              padding: '15px 20px',
+              background: 'transparent',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 600,
+              transition: 'background 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#334155'}
+            onMouseOut={(e) => e.target.style.background = 'transparent'}
+          >
+            📝 Vaddi List
+          </button>
+
+          <button
+            onClick={() => { setShowSidebar(false); navigateTo('monthly-finance'); }}
+            style={{
+              width: '100%',
+              padding: '15px 20px',
+              background: 'transparent',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 600,
+              transition: 'background 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#334155'}
+            onMouseOut={(e) => e.target.style.background = 'transparent'}
+          >
+            💰 Monthly Finance
           </button>
         </div>
 

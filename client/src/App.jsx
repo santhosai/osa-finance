@@ -4,6 +4,8 @@ import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
 import LoanDetails from './components/LoanDetails';
 import PaymentTracker from './components/PaymentTracker';
+import VaddiList from './components/VaddiList';
+import MonthlyFinance from './components/MonthlyFinance';
 import './App.css';
 
 function App() {
@@ -41,6 +43,8 @@ function App() {
       {currentView === 'dashboard' && <Dashboard navigateTo={navigateTo} />}
       {currentView === 'customers' && <Customers navigateTo={navigateTo} />}
       {currentView === 'payment-tracker' && <PaymentTracker navigateTo={navigateTo} />}
+      {currentView === 'vaddi-list' && <VaddiList navigateTo={navigateTo} />}
+      {currentView === 'monthly-finance' && <MonthlyFinance navigateTo={navigateTo} />}
       {currentView === 'loan-details' && selectedLoanId && (
         <LoanDetails loanId={selectedLoanId} navigateTo={navigateTo} />
       )}
