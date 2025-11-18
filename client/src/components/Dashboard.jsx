@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import AddCustomerModal from './AddCustomerModal';
 import PaymentsThisWeekModal from './PaymentsThisWeekModal';
+import VaddiCalculator from './VaddiCalculator';
 import { API_URL } from '../config';
 
 function Dashboard({ navigateTo }) {
   const [stats, setStats] = useState(null);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
+  const [showCalculator, setShowCalculator] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [monthlyFinanceBalance, setMonthlyFinanceBalance] = useState(0);
 
@@ -315,6 +317,26 @@ function Dashboard({ navigateTo }) {
           >
             💰 Monthly Finance
           </button>
+
+          <button
+            onClick={() => { setShowSidebar(false); setShowCalculator(true); }}
+            style={{
+              width: '100%',
+              padding: '15px 20px',
+              background: 'transparent',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 600,
+              transition: 'background 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#334155'}
+            onMouseOut={(e) => e.target.style.background = 'transparent'}
+          >
+            🧮 Vaddi Calculator
+          </button>
         </div>
 
         <button
@@ -511,6 +533,12 @@ function Dashboard({ navigateTo }) {
       {showPaymentsThisWeekModal && (
         <PaymentsThisWeekModal
           onClose={() => setShowPaymentsThisWeekModal(false)}
+        />
+      )}
+
+      {showCalculator && (
+        <VaddiCalculator
+          onClose={() => setShowCalculator(false)}
         />
       )}
     </div>

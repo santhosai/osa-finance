@@ -65,6 +65,39 @@ function LoanDetails({ loanId, navigateTo }) {
     }
   };
 
+  const closeLoan = async () => {
+    const message = loan.balance > 0
+      ? `Are you sure you want to close this loan?\n\nRemaining balance: ₹${loan.balance.toLocaleString('en-IN')}\n\nThis balance will be written off and the loan will be marked as closed.`
+      : 'Are you sure you want to close this loan?';
+
+    const confirmed = window.confirm(message);
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`${API_URL}/loans/${loan.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: 'closed'
+        })
+      });
+
+      if (response.ok) {
+        alert('Loan closed successfully!');
+        navigateTo('customers');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to close loan');
+      }
+    } catch (error) {
+      console.error('Error closing loan:', error);
+      alert('Failed to close loan');
+    }
+  };
+
   const downloadPaymentHistory = () => {
     // Create CSV content with more detailed information
     const csvHeader = 'Payment Date,Week Number,Amount Paid,Weeks Covered,Balance After Payment,Customer Name,Phone,Loan Start Date,Total Loan Amount,Weekly Payment\n';
@@ -227,9 +260,33 @@ function LoanDetails({ loanId, navigateTo }) {
         ))}
       </div>
 
-      <button className="btn-primary" onClick={() => setShowAddPaymentModal(true)}>
-        + Add Payment
-      </button>
+      <div style={{ display: 'flex', gap: '12px', padding: '16px' }}>
+        <button className="btn-primary" onClick={() => setShowAddPaymentModal(true)} style={{ flex: 1, margin: 0 }}>
+          + Add Payment
+        </button>
+
+        {loan.status === 'active' && (
+          <button
+            onClick={closeLoan}
+            style={{
+              flex: 1,
+              background: '#dc2626',
+              color: 'white',
+              border: 'none',
+              padding: '12px 20px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 600,
+              transition: 'background 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#b91c1c'}
+            onMouseOut={(e) => e.target.style.background = '#dc2626'}
+          >
+            ✓ Close Loan
+          </button>
+        )}
+      </div>
 
       {showAddPaymentModal && (
         <AddPaymentModal
