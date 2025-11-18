@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import AddCustomerModal from './AddCustomerModal';
+import PaymentsThisWeekModal from './PaymentsThisWeekModal';
 import { API_URL } from '../config';
 
 function Dashboard({ navigateTo }) {
   const [stats, setStats] = useState(null);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [monthlyFinanceBalance, setMonthlyFinanceBalance] = useState(0);
 
@@ -433,14 +435,30 @@ function Dashboard({ navigateTo }) {
                 </div>
               </div>
 
-              <div style={{
-                background: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
-                padding: '16px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 12px rgba(4, 120, 87, 0.25)',
-                color: 'white'
-              }}>
-                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Payments This Week</div>
+              <div
+                onClick={() => setShowPaymentsThisWeekModal(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  boxShadow: '0 4px 12px rgba(4, 120, 87, 0.25)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.boxShadow = '0 8px 20px rgba(4, 120, 87, 0.35)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 120, 87, 0.25)';
+                }}
+              >
+                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>
+                  Payments This Week
+                  <span style={{ marginLeft: '6px', fontSize: '10px', opacity: 0.8 }}>👆 Click to view</span>
+                </div>
                 <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.paymentsThisWeek}</div>
               </div>
 
@@ -467,6 +485,12 @@ function Dashboard({ navigateTo }) {
             setShowAddCustomerModal(false);
             fetchStats();
           }}
+        />
+      )}
+
+      {showPaymentsThisWeekModal && (
+        <PaymentsThisWeekModal
+          onClose={() => setShowPaymentsThisWeekModal(false)}
         />
       )}
     </div>
