@@ -526,6 +526,106 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// ============ SUNDAY COLLECTIONS (OPTIMIZED) ============
+
+// Get all customers due for payment on a specific Sunday
+app.get('/api/sunday-collections', async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({ error: 'Date parameter is required' });
+    }
+
+    // Get all active loans
+    const loansSnapshot = await db.collection('loans')
+      .where('status', '==', 'active')
+      .where('balance', '>', 0)
+      .get();
+
+    // Get all customers in one batch
+    const customerIds = loansSnapshot.docs.map(doc => doc.data().customer_id);
+    const customersMap = new Map();
+
+    if (customerIds.length > 0) {
+      // Firestore limits 'in' queries to 10 items, so we batch them
+      const batches = [];
+      for (let i = 0; i < customerIds.length; i += 10) {
+        const batch = customerIds.slice(i, i + 10);
+        batches.push(
+          db.collection('customers')
+            .where('__name__', 'in', batch)
+            .get()
+        );
+      }
+
+      const customerSnapshots = await Promise.all(batches);
+      customerSnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+          customersMap.set(doc.id, doc.data());
+        });
+      });
+    }
+
+    // Get all payments for the selected date
+    const paymentsSnapshot = await db.collection('payments')
+      .where('payment_date', '==', date)
+      .get();
+
+    const paymentsMap = new Map();
+    paymentsSnapshot.docs.forEach(doc => {
+      const payment = doc.data();
+      paymentsMap.set(payment.loan_id, payment);
+    });
+
+    // Build response with all data
+    const sundayCustomers = [];
+
+    for (const loanDoc of loansSnapshot.docs) {
+      const loanData = loanDoc.data();
+      const customer = customersMap.get(loanData.customer_id);
+
+      if (!customer) continue;
+
+      // Check if loan should have a payment on this Sunday
+      const startDate = new Date(loanData.start_date);
+      const selectedDate = new Date(date);
+
+      // Only include if the selected date is on or after the start date
+      if (selectedDate < startDate) continue;
+
+      // Calculate week number
+      const weeksDiff = Math.floor((selectedDate - startDate) / (7 * 24 * 60 * 60 * 1000));
+      const weekNumber = weeksDiff + 1;
+
+      // Check if already paid
+      const isPaid = paymentsMap.has(loanDoc.id);
+
+      sundayCustomers.push({
+        loanId: loanDoc.id,
+        name: customer.name,
+        phone: customer.phone,
+        weeklyAmount: loanData.weekly_amount,
+        balance: loanData.balance,
+        weekNumber,
+        isPaid,
+        paymentDetails: isPaid ? paymentsMap.get(loanDoc.id) : null
+      });
+    }
+
+    // Sort by paid status (unpaid first) then by name
+    sundayCustomers.sort((a, b) => {
+      if (a.isPaid !== b.isPaid) return a.isPaid ? 1 : -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    res.json(sundayCustomers);
+  } catch (error) {
+    console.error('Error fetching Sunday collections:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

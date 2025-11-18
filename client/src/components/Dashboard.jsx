@@ -97,45 +97,10 @@ function Dashboard({ navigateTo }) {
   const fetchSundayCustomers = async () => {
     setLoadingSundayCustomers(true);
     try {
-      const response = await fetch(`${API_URL}/customers`);
-      const allCustomers = await response.json();
-
-      // Filter customers with active loans
-      const customersWithLoans = allCustomers.filter(c => c.loan_id && c.balance > 0);
-
-      // Get payment details for each customer
-      const customerPromises = customersWithLoans.map(async (customer) => {
-        const loanResponse = await fetch(`${API_URL}/loans/${customer.loan_id}`);
-        const loanData = await loanResponse.json();
-
-        // Check if customer has already paid on the selected Sunday
-        const paidOnSelectedSunday = loanData.payments?.some(
-          payment => payment.payment_date === selectedSunday
-        );
-
-        // Calculate which week number this would be
-        const startDate = new Date(loanData.start_date);
-        const selectedDate = new Date(selectedSunday);
-        const weeksDiff = Math.floor((selectedDate - startDate) / (7 * 24 * 60 * 60 * 1000));
-
-        // Include if within 10 weeks (both paid and unpaid)
-        if (weeksDiff >= 0 && weeksDiff < 10) {
-          return {
-            name: customer.name,
-            phone: customer.phone,
-            weeklyAmount: customer.weekly_amount,
-            weekNumber: weeksDiff + 1,
-            isPaid: paidOnSelectedSunday,
-            loanId: customer.loan_id,
-            customerId: customer.id
-          };
-        }
-        return null;
-      });
-
-      const results = await Promise.all(customerPromises);
-      const dueCustomers = results.filter(c => c !== null);
-      setSundayCustomers(dueCustomers);
+      // Use optimized endpoint - one API call instead of 100+
+      const response = await fetch(`${API_URL}/sunday-collections?date=${selectedSunday}`);
+      const customers = await response.json();
+      setSundayCustomers(customers);
     } catch (error) {
       console.error('Error fetching Sunday customers:', error);
     } finally {
