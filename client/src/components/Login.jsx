@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import './Login.css';
 
+// PASSWORD VERSION - Change this when you change password to logout all devices
+const PASSWORD_VERSION = '2025-01-18-v2'; // Updated with new password "vimala"
+
 function Login({ onLogin }) {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
@@ -9,8 +12,10 @@ function Login({ onLogin }) {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Check credentials
-    if (userId === 'omsairam' && password === 'omsai123') {
+    // Check credentials - PASSWORD CHANGED TO "vimala"
+    if (userId === 'omsairam' && password === 'vimala') {
+      // Store password version to invalidate old sessions
+      localStorage.setItem('passwordVersion', PASSWORD_VERSION);
       onLogin(true);
     } else {
       setError('Invalid User ID or Password');

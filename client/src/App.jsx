@@ -10,10 +10,23 @@ import SundayCollections from './components/SundayCollections';
 import OverduePayments from './components/OverduePayments';
 import './App.css';
 
+// PASSWORD VERSION - Must match Login.jsx to keep session valid
+const CURRENT_PASSWORD_VERSION = '2025-01-18-v2';
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     // Check localStorage for existing login session
-    return localStorage.getItem('isLoggedIn') === 'true';
+    const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    const storedVersion = localStorage.getItem('passwordVersion');
+
+    // Force logout if password version doesn't match (password was changed)
+    if (loggedIn && storedVersion !== CURRENT_PASSWORD_VERSION) {
+      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('passwordVersion');
+      return false;
+    }
+
+    return loggedIn;
   });
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedLoanId, setSelectedLoanId] = useState(null);
