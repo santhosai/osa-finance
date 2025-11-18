@@ -51,7 +51,7 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
       }
 
       // Format the message
-      const message = `Dear ${customerData.name},
+      const message = `HI ${customerData.name},
 
 You have received a loan of ₹${parseInt(loanAmount).toLocaleString('en-IN')} from Om Sai Murugan Finance.
 
