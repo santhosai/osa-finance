@@ -1,9 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 
 function AddCustomerModal({ onClose, onSuccess }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [isContactPickerSupported, setIsContactPickerSupported] = useState(false);
+
+  // Check if Contact Picker API is supported (Android Chrome)
+  useEffect(() => {
+    setIsContactPickerSupported('contacts' in navigator && 'ContactsManager' in window);
+  }, []);
+
+  const pickContact = async () => {
+    try {
+      const props = ['name', 'tel'];
+      const opts = { multiple: false };
+      const contacts = await navigator.contacts.select(props, opts);
+
+      if (contacts && contacts.length > 0) {
+        const contact = contacts[0];
+
+        // Set name
+        if (contact.name && contact.name.length > 0) {
+          setName(contact.name[0]);
+        }
+
+        // Set phone (clean it to get only digits)
+        if (contact.tel && contact.tel.length > 0) {
+          const phoneNumber = contact.tel[0].replace(/\D/g, '');
+          // Take last 10 digits if phone has country code
+          const cleanPhone = phoneNumber.length > 10 ? phoneNumber.slice(-10) : phoneNumber;
+          setPhone(cleanPhone);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking contact:', error);
+      // User cancelled or error occurred - do nothing
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -55,6 +89,37 @@ function AddCustomerModal({ onClose, onSuccess }) {
         </div>
 
         <form onSubmit={handleSubmit}>
+          {isContactPickerSupported && (
+            <button
+              type="button"
+              onClick={pickContact}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '12px',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                marginBottom: '16px',
+                boxShadow: '0 3px 8px rgba(59, 130, 246, 0.3)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 5px 12px rgba(59, 130, 246, 0.4)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 3px 8px rgba(59, 130, 246, 0.3)';
+              }}
+            >
+              📱 Pick from Phone Contacts
+            </button>
+          )}
+
           <div className="form-group">
             <label className="form-label">Customer Name</label>
             <input

@@ -37,6 +37,45 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
 
   const totalWeeks = loanAmount && weeklyAmount ? Math.ceil(parseInt(loanAmount) / parseInt(weeklyAmount)) : 0;
 
+  const sendWhatsAppMessage = async (customerId, loanAmount, weeklyAmount) => {
+    try {
+      // Get customer details
+      let customerData;
+      if (customerName && customerPhone) {
+        // Already have customer data from props
+        customerData = { name: customerName, phone: customerPhone };
+      } else {
+        // Fetch customer details
+        const response = await fetch(`${API_URL}/customers/${customerId}`);
+        customerData = await response.json();
+      }
+
+      // Format the message
+      const message = `Dear ${customerData.name},
+
+You have received a loan of ₹${parseInt(loanAmount).toLocaleString('en-IN')} from Om Sai Murugan Finance.
+
+Weekly payment: ₹${parseInt(weeklyAmount).toLocaleString('en-IN')}
+Payment starts from: ${new Date(startDate).toLocaleDateString('en-IN')}
+
+Thank you for choosing our service!
+
+- Om Sai Murugan Finance`;
+
+      // Open WhatsApp with pre-filled message
+      // Remove any non-digits and ensure 10 digits
+      const cleanPhone = customerData.phone.replace(/\D/g, '');
+      const phoneWithCountryCode = `91${cleanPhone}`; // Add India country code
+      const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+
+      // Open in new tab
+      window.open(whatsappUrl, '_blank');
+    } catch (error) {
+      console.error('Error sending WhatsApp message:', error);
+      // Don't show error to user - WhatsApp message is optional
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -71,6 +110,9 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
       });
 
       if (response.ok) {
+        // Send WhatsApp message to customer
+        await sendWhatsAppMessage(selectedCustomerId, loanAmount, weeklyAmount);
+
         onSuccess();
       } else {
         const error = await response.json();
