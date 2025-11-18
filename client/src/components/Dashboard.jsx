@@ -733,8 +733,16 @@ function Dashboard({ navigateTo }) {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
                       <div style={{
+                        fontSize: '10px',
+                        color: '#6b7280',
+                        fontWeight: 600,
+                        marginBottom: '-2px'
+                      }}>
+                        WEEKLY AMOUNT
+                      </div>
+                      <div style={{
                         fontWeight: 800,
-                        fontSize: '17px',
+                        fontSize: '18px',
                         color: customer.isPaid ? '#059669' : '#dc2626',
                         letterSpacing: '-0.02em'
                       }}>
