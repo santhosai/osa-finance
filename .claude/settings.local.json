@@ -12,7 +12,8 @@
       "Bash(npx vite:*)",
       "Bash(git init:*)",
       "Bash(git config:*)",
-      "Bash(vercel:*)"
+      "Bash(vercel:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

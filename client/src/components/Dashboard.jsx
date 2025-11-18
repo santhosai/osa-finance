@@ -12,6 +12,7 @@ function Dashboard({ navigateTo }) {
   const [selectedSunday, setSelectedSunday] = useState(getNextSunday());
   const [sundayCustomers, setSundayCustomers] = useState([]);
   const [monthlyFinanceBalance, setMonthlyFinanceBalance] = useState(0);
+  const [loadingSundayCustomers, setLoadingSundayCustomers] = useState(false);
 
   // Helper function to get next Sunday
   function getNextSunday() {
@@ -80,12 +81,21 @@ function Dashboard({ navigateTo }) {
     window.location.reload();
   };
 
-  const handlePayNow = (customer) => {
-    setSelectedCustomerForPayment(customer);
-    setShowPaymentModal(true);
+  const handlePayNow = async (customer) => {
+    try {
+      // Fetch full loan details first
+      const response = await fetch(`${API_URL}/loans/${customer.loanId}`);
+      const loanData = await response.json();
+      setSelectedCustomerForPayment(loanData);
+      setShowPaymentModal(true);
+    } catch (error) {
+      console.error('Error fetching loan details:', error);
+      alert('Failed to load payment form. Please try again.');
+    }
   };
 
   const fetchSundayCustomers = async () => {
+    setLoadingSundayCustomers(true);
     try {
       const response = await fetch(`${API_URL}/customers`);
       const allCustomers = await response.json();
@@ -128,6 +138,8 @@ function Dashboard({ navigateTo }) {
       setSundayCustomers(dueCustomers);
     } catch (error) {
       console.error('Error fetching Sunday customers:', error);
+    } finally {
+      setLoadingSundayCustomers(false);
     }
   };
 
@@ -630,49 +642,102 @@ function Dashboard({ navigateTo }) {
               </div>
             </div>
 
-            {sundayCustomers.length > 0 ? (
+            {loadingSundayCustomers ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '40px 20px',
+                color: '#6b7280'
+              }}>
+                <div style={{
+                  fontSize: '36px',
+                  marginBottom: '12px',
+                  animation: 'spin 1s linear infinite'
+                }}>⏳</div>
+                <div style={{ fontSize: '14px', fontWeight: 600 }}>Loading customers...</div>
+                <style>{`
+                  @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                  }
+                `}</style>
+              </div>
+            ) : sundayCustomers.length > 0 ? (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {sundayCustomers.map((customer, index) => (
                   <div
                     key={index}
                     style={{
-                      background: 'white',
+                      background: customer.isPaid
+                        ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
+                        : 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
                       border: `2px solid ${customer.isPaid ? '#10b981' : '#ef4444'}`,
-                      borderRadius: '8px',
-                      padding: '10px',
-                      marginBottom: '8px',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      marginBottom: '10px',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      gap: '8px',
-                      position: 'relative'
+                      gap: '10px',
+                      position: 'relative',
+                      boxShadow: customer.isPaid
+                        ? '0 2px 8px rgba(16, 185, 129, 0.15)'
+                        : '0 2px 8px rgba(239, 68, 68, 0.15)',
+                      transition: 'all 0.2s ease'
                     }}
                   >
                     <div
                       style={{
                         position: 'absolute',
-                        top: '-1px',
-                        right: '-1px',
-                        background: customer.isPaid ? '#10b981' : '#ef4444',
+                        top: '8px',
+                        right: '8px',
+                        background: customer.isPaid
+                          ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                          : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
                         color: 'white',
-                        padding: '2px 8px',
-                        borderRadius: '0 6px 0 6px',
-                        fontSize: '11px',
-                        fontWeight: 700
+                        padding: '4px 10px',
+                        borderRadius: '20px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        letterSpacing: '0.5px',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
                       }}
                     >
-                      {customer.isPaid ? '✓ PAID' : '✗ UNPAID'}
+                      <span style={{ fontSize: '12px' }}>
+                        {customer.isPaid ? '✓' : '✗'}
+                      </span>
+                      {customer.isPaid ? 'PAID' : 'UNPAID'}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0, paddingRight: '60px' }}>
-                      <div style={{ fontWeight: 600, color: '#1f2937', marginBottom: '4px', fontSize: '14px' }}>
+                    <div style={{ flex: 1, minWidth: 0, paddingRight: '80px' }}>
+                      <div style={{
+                        fontWeight: 700,
+                        color: '#1f2937',
+                        marginBottom: '6px',
+                        fontSize: '15px',
+                        letterSpacing: '-0.01em'
+                      }}>
                         {index + 1}. {customer.name}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{
+                        fontSize: '12px',
+                        color: '#6b7280',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        fontWeight: 500
+                      }}>
                         📱 {customer.phone} • Week {customer.weekNumber}/10
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e40af' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
+                      <div style={{
+                        fontWeight: 800,
+                        fontSize: '17px',
+                        color: customer.isPaid ? '#059669' : '#dc2626',
+                        letterSpacing: '-0.02em'
+                      }}>
                         ₹{customer.weeklyAmount.toLocaleString('en-IN')}
                       </div>
                       {!customer.isPaid && (
@@ -682,16 +747,24 @@ function Dashboard({ navigateTo }) {
                             background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                             color: 'white',
                             border: 'none',
-                            borderRadius: '6px',
-                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            padding: '7px 14px',
                             fontSize: '12px',
-                            fontWeight: 600,
+                            fontWeight: 700,
                             cursor: 'pointer',
                             whiteSpace: 'nowrap',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            boxShadow: '0 3px 8px rgba(16, 185, 129, 0.3)',
+                            transition: 'all 0.2s ease',
+                            letterSpacing: '0.3px'
                           }}
-                          onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
-                          onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                          onMouseOver={(e) => {
+                            e.target.style.transform = 'translateY(-2px) scale(1.03)';
+                            e.target.style.boxShadow = '0 5px 12px rgba(16, 185, 129, 0.4)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.target.style.transform = 'translateY(0) scale(1)';
+                            e.target.style.boxShadow = '0 3px 8px rgba(16, 185, 129, 0.3)';
+                          }}
                         >
                           💰 Pay
                         </button>
@@ -728,9 +801,7 @@ function Dashboard({ navigateTo }) {
 
       {showPaymentModal && selectedCustomerForPayment && (
         <AddPaymentModal
-          loanId={selectedCustomerForPayment.loanId}
-          customerName={selectedCustomerForPayment.name}
-          customerPhone={selectedCustomerForPayment.phone}
+          loan={selectedCustomerForPayment}
           onClose={() => {
             setShowPaymentModal(false);
             setSelectedCustomerForPayment(null);
