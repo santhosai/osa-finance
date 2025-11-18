@@ -13,7 +13,10 @@
       "Bash(git init:*)",
       "Bash(git config:*)",
       "Bash(vercel:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []
