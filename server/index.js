@@ -591,11 +591,12 @@ app.get('/api/sunday-collections', async (req, res) => {
       const startDate = new Date(loanData.start_date);
       const selectedDate = new Date(date);
 
-      // Only include if the selected date is on or after the start date
-      if (selectedDate < startDate) continue;
-
       // Calculate week number
       const weeksDiff = Math.floor((selectedDate - startDate) / (7 * 24 * 60 * 60 * 1000));
+
+      // Only include if within 10 weeks (same logic as before)
+      if (weeksDiff < 0 || weeksDiff >= 10) continue;
+
       const weekNumber = weeksDiff + 1;
 
       // Check if already paid
