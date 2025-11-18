@@ -5,6 +5,8 @@ import db from './firestore.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Updated: Nov 18, 2025 - Phone uniqueness removed
+
 // CORS configuration for production
 const corsOptions = {
   origin: process.env.CLIENT_URL || '*',
