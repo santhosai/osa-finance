@@ -15,6 +15,14 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
     }
   }, [customerId]);
 
+  // Auto-calculate weekly amount when loan amount changes (loan ÷ 10 weeks)
+  useEffect(() => {
+    if (loanAmount && parseInt(loanAmount) > 0) {
+      const calculatedWeekly = Math.ceil(parseInt(loanAmount) / 10);
+      setWeeklyAmount(calculatedWeekly.toString());
+    }
+  }, [loanAmount]);
+
   const fetchCustomers = async () => {
     try {
       const response = await fetch(`${API_URL}/customers`);
@@ -134,11 +142,14 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
               className="form-input"
               value={weeklyAmount}
               onChange={(e) => setWeeklyAmount(e.target.value)}
-              placeholder="Enter weekly payment amount"
+              placeholder="Auto-calculated (Loan ÷ 10)"
               min="1"
               step="1"
               required
             />
+            <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+              Auto-calculated as Loan Amount ÷ 10 weeks (editable)
+            </small>
           </div>
 
           <div className="form-group">

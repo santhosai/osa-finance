@@ -8,7 +8,7 @@ const MonthlyFinance = ({ navigateTo }) => {
     amount: '',
     date: '',
     monthlyInstallment: '',
-    totalMonths: ''
+    totalMonths: '5' // Default to 5 months
   });
   const [showForm, setShowForm] = useState(false);
 
@@ -19,6 +19,18 @@ const MonthlyFinance = ({ navigateTo }) => {
       setCustomers(JSON.parse(savedCustomers));
     }
   }, []);
+
+  // Auto-calculate monthly installment when amount changes (amount ÷ 5 months)
+  useEffect(() => {
+    if (formData.amount && parseFloat(formData.amount) > 0) {
+      const totalMonths = parseInt(formData.totalMonths) || 5;
+      const calculatedMonthly = Math.ceil(parseFloat(formData.amount) / totalMonths);
+      setFormData(prev => ({
+        ...prev,
+        monthlyInstallment: calculatedMonthly.toString()
+      }));
+    }
+  }, [formData.amount, formData.totalMonths]);
 
   // Save customers to localStorage
   const saveCustomers = (newCustomers) => {
@@ -79,7 +91,7 @@ const MonthlyFinance = ({ navigateTo }) => {
     saveCustomers(updatedCustomers);
 
     // Reset form
-    setFormData({ name: '', amount: '', date: '', monthlyInstallment: '', totalMonths: '' });
+    setFormData({ name: '', amount: '', date: '', monthlyInstallment: '', totalMonths: '5' });
     setShowForm(false);
   };
 
@@ -412,9 +424,10 @@ const MonthlyFinance = ({ navigateTo }) => {
             />
             <input
               type="number"
-              name="monthlyInstallment"
-              placeholder="Monthly Payment"
-              value={formData.monthlyInstallment}
+              name="totalMonths"
+              placeholder="Total Months (Default: 5)"
+              min="1"
+              value={formData.totalMonths}
               onChange={handleInputChange}
               style={{
                 padding: '12px',
@@ -425,10 +438,9 @@ const MonthlyFinance = ({ navigateTo }) => {
             />
             <input
               type="number"
-              name="totalMonths"
-              placeholder="Total Months"
-              min="1"
-              value={formData.totalMonths}
+              name="monthlyInstallment"
+              placeholder="Auto-calculated (Amount ÷ Months)"
+              value={formData.monthlyInstallment}
               onChange={handleInputChange}
               style={{
                 padding: '12px',
