@@ -6,6 +6,7 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
   const [selectedCustomerId, setSelectedCustomerId] = useState(customerId || '');
   const [loanAmount, setLoanAmount] = useState('');
   const [weeklyAmount, setWeeklyAmount] = useState('');
+  const [loanGivenDate, setLoanGivenDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
           customer_id: selectedCustomerId,
           loan_amount: parseInt(loanAmount),
           weekly_amount: parseInt(weeklyAmount),
+          loan_given_date: loanGivenDate,
           start_date: startDate
         })
       });
@@ -140,7 +142,21 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
           </div>
 
           <div className="form-group">
-            <label className="form-label">Start Date</label>
+            <label className="form-label">Loan Given Date</label>
+            <input
+              type="date"
+              className="form-input"
+              value={loanGivenDate}
+              onChange={(e) => setLoanGivenDate(e.target.value)}
+              required
+            />
+            <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+              When you actually gave them the money
+            </small>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Payment Start Date</label>
             <input
               type="date"
               className="form-input"
@@ -148,6 +164,9 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
               onChange={(e) => setStartDate(e.target.value)}
               required
             />
+            <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+              When they start paying weekly (usually next Sunday)
+            </small>
           </div>
 
           {loanAmount && weeklyAmount && parseInt(loanAmount) > 0 && parseInt(weeklyAmount) > 0 && (

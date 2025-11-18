@@ -248,9 +248,9 @@ app.get('/api/loans/:id', async (req, res) => {
 // Create new loan
 app.post('/api/loans', async (req, res) => {
   try {
-    const { customer_id, loan_amount, weekly_amount, start_date } = req.body;
+    const { customer_id, loan_amount, weekly_amount, loan_given_date, start_date } = req.body;
 
-    if (!customer_id || !loan_amount || !weekly_amount || !start_date) {
+    if (!customer_id || !loan_amount || !weekly_amount || !loan_given_date || !start_date) {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
@@ -276,6 +276,7 @@ app.post('/api/loans', async (req, res) => {
       loan_amount,
       weekly_amount,
       balance: loan_amount,
+      loan_given_date,
       start_date,
       status: 'active',
       created_at: new Date().toISOString()
