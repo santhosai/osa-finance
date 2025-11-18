@@ -7,6 +7,7 @@ import PaymentTracker from './components/PaymentTracker';
 import VaddiList from './components/VaddiList';
 import MonthlyFinance from './components/MonthlyFinance';
 import SundayCollections from './components/SundayCollections';
+import OverduePayments from './components/OverduePayments';
 import './App.css';
 
 function App() {
@@ -44,6 +45,7 @@ function App() {
       {currentView === 'dashboard' && <Dashboard navigateTo={navigateTo} />}
       {currentView === 'customers' && <Customers navigateTo={navigateTo} />}
       {currentView === 'sunday-collections' && <SundayCollections navigateTo={navigateTo} />}
+      {currentView === 'overdue-payments' && <OverduePayments navigateTo={navigateTo} />}
       {currentView === 'payment-tracker' && <PaymentTracker navigateTo={navigateTo} />}
       {currentView === 'vaddi-list' && <VaddiList navigateTo={navigateTo} />}
       {currentView === 'monthly-finance' && <MonthlyFinance navigateTo={navigateTo} />}

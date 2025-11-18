@@ -177,6 +177,26 @@ function Dashboard({ navigateTo }) {
           </button>
 
           <button
+            onClick={() => { setShowSidebar(false); navigateTo('overdue-payments'); }}
+            style={{
+              width: '100%',
+              padding: '15px 20px',
+              background: 'transparent',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 600,
+              transition: 'background 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#334155'}
+            onMouseOut={(e) => e.target.style.background = 'transparent'}
+          >
+            ⚠️ Overdue Payments
+          </button>
+
+          <button
             onClick={() => { setShowSidebar(false); navigateTo('customers'); }}
             style={{
               width: '100%',
