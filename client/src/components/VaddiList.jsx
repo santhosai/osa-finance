@@ -5,7 +5,9 @@ const VaddiList = ({ navigateTo }) => {
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
-    date: ''
+    date: '',
+    expectedReturnMonth: '',
+    phone: ''
   });
   const [showReminder, setShowReminder] = useState(false);
   const [todaysReminders, setTodaysReminders] = useState([]);
@@ -22,8 +24,8 @@ const VaddiList = ({ navigateTo }) => {
 
   // Check for reminders on current date
   const checkReminders = (entriesList) => {
-    const today = new Date().getDate();
-    const reminders = entriesList.filter(entry => parseInt(entry.date) === today);
+    const today = new Date().toISOString().split('T')[0];
+    const reminders = entriesList.filter(entry => entry.date === today);
 
     if (reminders.length > 0) {
       setTodaysReminders(reminders);
@@ -50,14 +52,14 @@ const VaddiList = ({ navigateTo }) => {
   const handleAddEntry = (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.amount || !formData.date) {
-      alert('Please fill all fields');
+    if (!formData.name || !formData.amount || !formData.date || !formData.expectedReturnMonth) {
+      alert('Please fill all required fields');
       return;
     }
 
-    const date = parseInt(formData.date);
-    if (date < 1 || date > 31) {
-      alert('Please enter a valid date (1-31)');
+    // Validate phone if provided
+    if (formData.phone && formData.phone.length !== 10) {
+      alert('Phone number must be 10 digits');
       return;
     }
 
@@ -65,23 +67,37 @@ const VaddiList = ({ navigateTo }) => {
       id: Date.now(),
       name: formData.name,
       amount: parseFloat(formData.amount),
-      date: date
+      date: formData.date,
+      expectedReturnMonth: formData.expectedReturnMonth,
+      phone: formData.phone || ''
     };
 
     const updatedEntries = [...entries, newEntry];
     // Sort by date
-    updatedEntries.sort((a, b) => a.date - b.date);
+    updatedEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     saveEntries(updatedEntries);
 
     // Reset form
-    setFormData({ name: '', amount: '', date: '' });
+    setFormData({ name: '', amount: '', date: '', expectedReturnMonth: '', phone: '' });
   };
 
   // Delete entry
   const handleDelete = (id) => {
     const updatedEntries = entries.filter(entry => entry.id !== id);
     saveEntries(updatedEntries);
+  };
+
+  // Send WhatsApp notification
+  const sendWhatsAppReminder = (entry) => {
+    if (!entry.phone) {
+      alert('No phone number available for this entry');
+      return;
+    }
+
+    const message = `Reminder: Your interest payment of ₹${entry.amount.toLocaleString('en-IN')} is due today.\n\nExpected return month: ${entry.expectedReturnMonth}\n\nThank you!`;
+    const whatsappUrl = `https://wa.me/91${entry.phone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   // Calculate total
@@ -96,19 +112,19 @@ const VaddiList = ({ navigateTo }) => {
       return;
     }
 
-    const csvHeader = 'Name,Amount,Date (Day of Month)\n';
+    const csvHeader = 'Name,Amount,Date,Expected Return Month,Phone\n';
     const csvRows = entries.map(entry =>
-      `${entry.name},₹${entry.amount},${entry.date}`
+      `${entry.name},₹${entry.amount},${entry.date},${entry.expectedReturnMonth},${entry.phone || 'N/A'}`
     ).join('\n');
 
-    const csvContent = csvHeader + csvRows + `\n\nTotal,₹${calculateTotal()},`;
+    const csvContent = csvHeader + csvRows + `\n\nTotal Amount,₹${calculateTotal()},,`;
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
 
     link.setAttribute('href', url);
-    link.setAttribute('download', `monthly_tracker_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `vaddi_list_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
 
     document.body.appendChild(link);
@@ -263,9 +279,10 @@ const VaddiList = ({ navigateTo }) => {
           <input
             type="text"
             name="name"
-            placeholder="Name"
+            placeholder="Name *"
             value={formData.name}
             onChange={handleInputChange}
+            required
             style={{
               padding: '12px',
               border: '1px solid #ddd',
@@ -276,9 +293,10 @@ const VaddiList = ({ navigateTo }) => {
           <input
             type="number"
             name="amount"
-            placeholder="Amount"
+            placeholder="Amount *"
             value={formData.amount}
             onChange={handleInputChange}
+            required
             style={{
               padding: '12px',
               border: '1px solid #ddd',
@@ -287,13 +305,41 @@ const VaddiList = ({ navigateTo }) => {
             }}
           />
           <input
-            type="number"
+            type="date"
             name="date"
-            placeholder="Date (1-31)"
-            min="1"
-            max="31"
+            placeholder="Interest Date *"
             value={formData.date}
             onChange={handleInputChange}
+            required
+            style={{
+              padding: '12px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
+          />
+          <input
+            type="month"
+            name="expectedReturnMonth"
+            placeholder="Expected Return Month *"
+            value={formData.expectedReturnMonth}
+            onChange={handleInputChange}
+            required
+            style={{
+              padding: '12px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
+          />
+          <input
+            type="tel"
+            name="phone"
+            placeholder="Phone (Optional)"
+            value={formData.phone}
+            onChange={handleInputChange}
+            pattern="[0-9]{10}"
+            maxLength="10"
             style={{
               padding: '12px',
               border: '1px solid #ddd',
@@ -322,65 +368,115 @@ const VaddiList = ({ navigateTo }) => {
               No entries yet. Add your first entry above!
             </p>
           ) : (
-            <div style={{ display: 'grid', gap: '10px' }}>
+            <div style={{ display: 'grid', gap: '12px' }}>
               {entries.map(entry => (
                 <div key={entry.id} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '14px',
+                  padding: '16px',
                   background: 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
                   borderRadius: '8px',
                   borderLeft: '4px solid #667eea'
                 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '16px', color: '#1e293b', marginBottom: '4px' }}>
-                      {entry.name}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b', marginBottom: '6px' }}>
+                        {entry.name}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                        💰 Amount: ₹{entry.amount.toLocaleString('en-IN')}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                        📅 Interest Date: {new Date(entry.date).toLocaleDateString('en-IN')}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                        📆 Expected Return: {new Date(entry.expectedReturnMonth + '-01').toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}
+                      </div>
+                      {entry.phone && (
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>
+                          📱 Phone: {entry.phone}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize: '13px', color: '#64748b' }}>
-                      Day {entry.date} | ₹{entry.amount.toLocaleString('en-IN')}
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      {entry.phone && (
+                        <button
+                          onClick={() => sendWhatsAppReminder(entry)}
+                          style={{
+                            background: '#25D366',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '8px 12px',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap'
+                          }}
+                          title="Send WhatsApp Reminder"
+                        >
+                          📲 WhatsApp
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(entry.id)}
+                        style={{
+                          background: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '32px',
+                          height: '32px',
+                          fontSize: '18px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}
+                        title="Delete"
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDelete(entry.id)}
-                    style={{
-                      background: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '50%',
-                      width: '32px',
-                      height: '32px',
-                      fontSize: '18px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                    title="Delete"
-                  >
-                    ×
-                  </button>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Total */}
+        {/* Overall Amount Summary */}
         {entries.length > 0 && (
           <div style={{
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
-            padding: '16px',
-            borderRadius: '8px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontWeight: 700,
-            fontSize: '18px'
+            padding: '20px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
           }}>
-            <span>Total:</span>
-            <span>₹{calculateTotal().toLocaleString('en-IN')}</span>
+            <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', opacity: 0.9 }}>
+              📊 Overall Summary
+            </div>
+            <div style={{ display: 'grid', gap: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', opacity: 0.9 }}>Total Entries:</span>
+                <span style={{ fontSize: '18px', fontWeight: 700 }}>{entries.length}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', opacity: 0.9 }}>Entries with Phone:</span>
+                <span style={{ fontSize: '18px', fontWeight: 700 }}>{entries.filter(e => e.phone).length}</span>
+              </div>
+              <div style={{
+                borderTop: '1px solid rgba(255,255,255,0.3)',
+                paddingTop: '12px',
+                marginTop: '4px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span style={{ fontSize: '16px', fontWeight: 600 }}>Total Amount:</span>
+                <span style={{ fontSize: '24px', fontWeight: 700 }}>₹{calculateTotal().toLocaleString('en-IN')}</span>
+              </div>
+            </div>
           </div>
         )}
       </div>

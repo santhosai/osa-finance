@@ -112,16 +112,6 @@ app.post('/api/customers', async (req, res) => {
       return res.status(400).json({ error: 'Name and phone are required' });
     }
 
-    // Check if phone already exists
-    const existingSnapshot = await db.collection('customers')
-      .where('phone', '==', phone)
-      .limit(1)
-      .get();
-
-    if (!existingSnapshot.empty) {
-      return res.status(400).json({ error: 'Phone number already exists' });
-    }
-
     const customerData = {
       name,
       phone,

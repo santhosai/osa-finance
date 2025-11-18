@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AddCustomerModal from './AddCustomerModal';
 import AddLoanModal from './AddLoanModal';
 import DeleteCustomerModal from './DeleteCustomerModal';
+import EditCustomerModal from './EditCustomerModal';
 import { API_URL } from '../config';
 
 function Customers({ navigateTo }) {
@@ -10,8 +11,10 @@ function Customers({ navigateTo }) {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerToDelete, setCustomerToDelete] = useState(null);
+  const [customerToEdit, setCustomerToEdit] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const customersPerPage = 20;
@@ -76,6 +79,12 @@ function Customers({ navigateTo }) {
     e.stopPropagation(); // Prevent triggering handleCustomerClick
     setCustomerToDelete(customer);
     setShowDeleteModal(true);
+  };
+
+  const handleEditClick = (e, customer) => {
+    e.stopPropagation(); // Prevent triggering handleCustomerClick
+    setCustomerToEdit(customer);
+    setShowEditModal(true);
   };
 
   // Pagination logic
@@ -234,6 +243,35 @@ function Customers({ navigateTo }) {
           onClick={() => handleCustomerClick(customer)}
           style={{ position: 'relative' }}
         >
+          <button
+            onClick={(e) => handleEditClick(e, customer)}
+            style={{
+              position: 'absolute',
+              top: '12px',
+              right: '70px',
+              background: '#dbeafe',
+              border: '1px solid #93c5fd',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              color: '#1e40af',
+              fontWeight: 600,
+              transition: 'all 0.2s',
+              zIndex: 10
+            }}
+            onMouseOver={(e) => {
+              e.target.style.background = '#3b82f6';
+              e.target.style.color = 'white';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.background = '#dbeafe';
+              e.target.style.color = '#1e40af';
+            }}
+            title="Edit Customer"
+          >
+            ✏️
+          </button>
           <button
             onClick={(e) => handleDeleteClick(e, customer)}
             style={{
@@ -406,6 +444,21 @@ function Customers({ navigateTo }) {
           onSuccess={() => {
             setShowDeleteModal(false);
             setCustomerToDelete(null);
+            fetchCustomers();
+          }}
+        />
+      )}
+
+      {showEditModal && customerToEdit && (
+        <EditCustomerModal
+          customer={customerToEdit}
+          onClose={() => {
+            setShowEditModal(false);
+            setCustomerToEdit(null);
+          }}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setCustomerToEdit(null);
             fetchCustomers();
           }}
         />

@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
 import AddCustomerModal from './AddCustomerModal';
+import AddPaymentModal from './AddPaymentModal';
 import { API_URL } from '../config';
 
 function Dashboard({ navigateTo }) {
   const [stats, setStats] = useState(null);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedCustomerForPayment, setSelectedCustomerForPayment] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedSunday, setSelectedSunday] = useState(getNextSunday());
   const [sundayCustomers, setSundayCustomers] = useState([]);
+  const [monthlyFinanceBalance, setMonthlyFinanceBalance] = useState(0);
 
   // Helper function to get next Sunday
   function getNextSunday() {
@@ -19,13 +23,31 @@ function Dashboard({ navigateTo }) {
     return nextSunday.toISOString().split('T')[0];
   }
 
+  const calculateMonthlyFinanceBalance = () => {
+    try {
+      const monthlyFinanceData = localStorage.getItem('monthlyFinanceCustomers');
+      if (monthlyFinanceData) {
+        const customers = JSON.parse(monthlyFinanceData);
+        const totalBalance = customers.reduce((sum, customer) => sum + (customer.balance || 0), 0);
+        setMonthlyFinanceBalance(totalBalance);
+      } else {
+        setMonthlyFinanceBalance(0);
+      }
+    } catch (error) {
+      console.error('Error calculating monthly finance balance:', error);
+      setMonthlyFinanceBalance(0);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
     fetchSundayCustomers();
+    calculateMonthlyFinanceBalance();
 
     // Auto-refresh stats every 5 seconds when on dashboard
     const interval = setInterval(() => {
       fetchStats();
+      calculateMonthlyFinanceBalance();
     }, 5000);
 
     return () => clearInterval(interval);
@@ -58,6 +80,11 @@ function Dashboard({ navigateTo }) {
     window.location.reload();
   };
 
+  const handlePayNow = (customer) => {
+    setSelectedCustomerForPayment(customer);
+    setShowPaymentModal(true);
+  };
+
   const fetchSundayCustomers = async () => {
     try {
       const response = await fetch(`${API_URL}/customers`);
@@ -81,13 +108,16 @@ function Dashboard({ navigateTo }) {
         const selectedDate = new Date(selectedSunday);
         const weeksDiff = Math.floor((selectedDate - startDate) / (7 * 24 * 60 * 60 * 1000));
 
-        // Only include if within 10 weeks and hasn't paid yet
-        if (weeksDiff >= 0 && weeksDiff < 10 && !paidOnSelectedSunday) {
+        // Include if within 10 weeks (both paid and unpaid)
+        if (weeksDiff >= 0 && weeksDiff < 10) {
           return {
             name: customer.name,
             phone: customer.phone,
             weeklyAmount: customer.weekly_amount,
-            weekNumber: weeksDiff + 1
+            weekNumber: weeksDiff + 1,
+            isPaid: paidOnSelectedSunday,
+            loanId: customer.loan_id,
+            customerId: customer.id
           };
         }
         return null;
@@ -467,8 +497,28 @@ function Dashboard({ navigateTo }) {
                 boxShadow: '0 4px 12px rgba(180, 83, 9, 0.25)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Outstanding</div>
-                <div style={{ fontSize: '28px', fontWeight: 700 }}>{formatCurrency(stats.outstanding)}</div>
+                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Total Outstanding</div>
+                <div style={{ fontSize: '28px', fontWeight: 700, marginBottom: '8px' }}>
+                  {formatCurrency((stats.outstanding || 0) + monthlyFinanceBalance)}
+                </div>
+                <div style={{
+                  fontSize: '11px',
+                  opacity: 0.85,
+                  borderTop: '1px solid rgba(255,255,255,0.2)',
+                  paddingTop: '8px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Weekly Finance:</span>
+                    <span style={{ fontWeight: 600 }}>{formatCurrency(stats.outstanding || 0)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Monthly Finance:</span>
+                    <span style={{ fontWeight: 600 }}>{formatCurrency(monthlyFinanceBalance)}</span>
+                  </div>
+                </div>
               </div>
 
               <div style={{
@@ -557,13 +607,25 @@ function Dashboard({ navigateTo }) {
               marginBottom: '12px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontWeight: 600, color: '#1f2937', fontSize: '14px' }}>Customers Due:</span>
+                <span style={{ fontWeight: 600, color: '#1f2937', fontSize: '14px' }}>Total Customers:</span>
                 <span style={{ fontWeight: 700, color: '#1e40af', fontSize: '14px' }}>{sundayCustomers.length}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontWeight: 600, color: '#047857', fontSize: '14px' }}>✓ Paid:</span>
+                <span style={{ fontWeight: 700, color: '#047857', fontSize: '14px' }}>
+                  {sundayCustomers.filter(c => c.isPaid).length}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontWeight: 600, color: '#dc2626', fontSize: '14px' }}>✗ Unpaid:</span>
+                <span style={{ fontWeight: 700, color: '#dc2626', fontSize: '14px' }}>
+                  {sundayCustomers.filter(c => !c.isPaid).length}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #d1d5db' }}>
                 <span style={{ fontWeight: 600, color: '#1f2937', fontSize: '14px' }}>Expected Collection:</span>
                 <span style={{ fontWeight: 700, color: '#047857', fontSize: '14px' }}>
-                  ₹{sundayCustomers.reduce((sum, c) => sum + c.weeklyAmount, 0).toLocaleString('en-IN')}
+                  ₹{sundayCustomers.filter(c => !c.isPaid).reduce((sum, c) => sum + c.weeklyAmount, 0).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
@@ -575,17 +637,33 @@ function Dashboard({ navigateTo }) {
                     key={index}
                     style={{
                       background: 'white',
-                      border: '1px solid #e5e7eb',
+                      border: `2px solid ${customer.isPaid ? '#10b981' : '#ef4444'}`,
                       borderRadius: '8px',
                       padding: '10px',
                       marginBottom: '8px',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      gap: '8px'
+                      gap: '8px',
+                      position: 'relative'
                     }}
                   >
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '-1px',
+                        right: '-1px',
+                        background: customer.isPaid ? '#10b981' : '#ef4444',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: '0 6px 0 6px',
+                        fontSize: '11px',
+                        fontWeight: 700
+                      }}
+                    >
+                      {customer.isPaid ? '✓ PAID' : '✗ UNPAID'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, paddingRight: '60px' }}>
                       <div style={{ fontWeight: 600, color: '#1f2937', marginBottom: '4px', fontSize: '14px' }}>
                         {index + 1}. {customer.name}
                       </div>
@@ -593,8 +671,31 @@ function Dashboard({ navigateTo }) {
                         📱 {customer.phone} • Week {customer.weekNumber}/10
                       </div>
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e40af', flexShrink: 0 }}>
-                      ₹{customer.weeklyAmount.toLocaleString('en-IN')}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e40af' }}>
+                        ₹{customer.weeklyAmount.toLocaleString('en-IN')}
+                      </div>
+                      {!customer.isPaid && (
+                        <button
+                          onClick={() => handlePayNow(customer)}
+                          style={{
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '6px 12px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                          }}
+                          onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
+                          onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                        >
+                          💰 Pay
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -621,6 +722,24 @@ function Dashboard({ navigateTo }) {
           onSuccess={() => {
             setShowAddCustomerModal(false);
             fetchStats();
+          }}
+        />
+      )}
+
+      {showPaymentModal && selectedCustomerForPayment && (
+        <AddPaymentModal
+          loanId={selectedCustomerForPayment.loanId}
+          customerName={selectedCustomerForPayment.name}
+          customerPhone={selectedCustomerForPayment.phone}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSelectedCustomerForPayment(null);
+          }}
+          onSuccess={() => {
+            setShowPaymentModal(false);
+            setSelectedCustomerForPayment(null);
+            fetchStats();
+            fetchSundayCustomers();
           }}
         />
       )}
