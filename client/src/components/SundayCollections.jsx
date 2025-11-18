@@ -50,8 +50,9 @@ function SundayCollections({ navigateTo }) {
           const selectedDate = new Date(selectedSunday);
           const weeksDiff = Math.floor((selectedDate - startDate) / (7 * 24 * 60 * 60 * 1000));
 
-          // Include if within 10 weeks (both paid and unpaid)
-          if (weeksDiff >= 0 && weeksDiff < 10) {
+          // Include all customers with balance > 0 (already filtered at line 35)
+          // Customers continue showing until fully paid, regardless of week number
+          if (weeksDiff >= 0) {
             return {
               name: customer.name,
               phone: customer.phone,
@@ -325,7 +326,7 @@ function SundayCollections({ navigateTo }) {
                     textOverflow: 'ellipsis',
                     fontWeight: 500
                   }}>
-                    📱 {customer.phone} • Week {customer.weekNumber}/10
+                    📱 {customer.phone} • Week {customer.weekNumber}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
