@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import AddPaymentModal from './AddPaymentModal';
+import AddLoanModal from './AddLoanModal';
 import { API_URL } from '../config';
 
 function LoanDetails({ loanId, navigateTo }) {
   const [loan, setLoan] = useState(null);
   const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
+  const [showAddLoanModal, setShowAddLoanModal] = useState(false);
 
   useEffect(() => {
     fetchLoanDetails();
@@ -260,9 +262,37 @@ function LoanDetails({ loanId, navigateTo }) {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: '12px', padding: '16px' }}>
-        <button className="btn-primary" onClick={() => setShowAddPaymentModal(true)} style={{ flex: 1, margin: 0 }}>
+      <div style={{ display: 'flex', gap: '12px', padding: '16px', flexWrap: 'wrap' }}>
+        <button className="btn-primary" onClick={() => setShowAddPaymentModal(true)} style={{ flex: 1, margin: 0, minWidth: '140px' }}>
           + Add Payment
+        </button>
+
+        <button
+          onClick={() => setShowAddLoanModal(true)}
+          style={{
+            flex: 1,
+            margin: 0,
+            minWidth: '140px',
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            color: 'white',
+            border: 'none',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: 600,
+            transition: 'all 0.2s'
+          }}
+          onMouseOver={(e) => {
+            e.target.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
+            e.target.style.transform = 'translateY(-2px)';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+            e.target.style.transform = 'translateY(0)';
+          }}
+        >
+          + Add Another Loan
         </button>
 
         {loan.status === 'active' && (
@@ -270,6 +300,7 @@ function LoanDetails({ loanId, navigateTo }) {
             onClick={closeLoan}
             style={{
               flex: 1,
+              minWidth: '140px',
               background: '#dc2626',
               color: 'white',
               border: 'none',
@@ -295,6 +326,20 @@ function LoanDetails({ loanId, navigateTo }) {
           onSuccess={() => {
             setShowAddPaymentModal(false);
             fetchLoanDetails();
+          }}
+        />
+      )}
+
+      {showAddLoanModal && (
+        <AddLoanModal
+          customerId={loan.customer_id}
+          customerName={loan.customer_name}
+          customerPhone={loan.customer_phone}
+          onClose={() => setShowAddLoanModal(false)}
+          onSuccess={() => {
+            setShowAddLoanModal(false);
+            alert('New loan added successfully! You can view it from the customer list.');
+            navigateTo('customers');
           }}
         />
       )}
