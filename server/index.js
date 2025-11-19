@@ -20,6 +20,16 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Root health check (no /api prefix for testing)
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    version: VERSION,
+    timestamp: new Date().toISOString(),
+    message: 'Backend v' + VERSION + ' - DUPLICATE PHONES ALLOWED'
+  });
+});
+
 // Health check and version endpoint
 app.get('/api/health', (req, res) => {
   res.json({
