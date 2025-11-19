@@ -64,45 +64,47 @@ app.get('/api/customers', async (req, res) => {
         }
       }
 
-      // Get active loan for this customer
+      // Get ALL active loans for this customer (multiple loans allowed)
       const loansSnapshot = await db.collection('loans')
         .where('customer_id', '==', doc.id)
         .where('status', '==', 'active')
-        .limit(1)
         .get();
 
       if (!loansSnapshot.empty) {
-        const loanDoc = loansSnapshot.docs[0];
-        const loanData = loanDoc.data();
+        // Create a separate entry for EACH active loan
+        for (const loanDoc of loansSnapshot.docs) {
+          const loanData = loanDoc.data();
 
-        // Get last payment date
-        let lastPaymentDate = null;
-        try {
-          const paymentsSnapshot = await db.collection('payments')
-            .where('loan_id', '==', loanDoc.id)
-            .get();
+          // Get last payment date for this specific loan
+          let lastPaymentDate = null;
+          try {
+            const paymentsSnapshot = await db.collection('payments')
+              .where('loan_id', '==', loanDoc.id)
+              .get();
 
-          if (!paymentsSnapshot.empty) {
-            // Sort by payment_date in memory to avoid needing a Firestore index
-            const payments = paymentsSnapshot.docs.map(doc => doc.data());
-            payments.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
-            lastPaymentDate = payments[0].payment_date;
+            if (!paymentsSnapshot.empty) {
+              // Sort by payment_date in memory to avoid needing a Firestore index
+              const payments = paymentsSnapshot.docs.map(doc => doc.data());
+              payments.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
+              lastPaymentDate = payments[0].payment_date;
+            }
+          } catch (error) {
+            // If payments query fails, just set to null
+            lastPaymentDate = null;
           }
-        } catch (error) {
-          // If payments query fails, just set to null
-          lastPaymentDate = null;
-        }
 
-        customers.push({
-          ...customerData,
-          loan_id: loanDoc.id,
-          loan_amount: loanData.loan_amount,
-          balance: loanData.balance,
-          weekly_amount: loanData.weekly_amount,
-          status: loanData.status,
-          last_payment_date: lastPaymentDate
-        });
+          customers.push({
+            ...customerData,
+            loan_id: loanDoc.id,
+            loan_amount: loanData.loan_amount,
+            balance: loanData.balance,
+            weekly_amount: loanData.weekly_amount,
+            status: loanData.status,
+            last_payment_date: lastPaymentDate
+          });
+        }
       } else {
+        // Customer has no active loans
         customers.push(customerData);
       }
     }
