@@ -69,7 +69,9 @@ const VaddiList = ({ navigateTo }) => {
       amount: parseFloat(formData.amount),
       date: formData.date,
       expectedReturnMonth: formData.expectedReturnMonth,
-      phone: formData.phone || ''
+      phone: formData.phone || '',
+      paid: false,
+      paidDate: null
     };
 
     const updatedEntries = [...entries, newEntry];
@@ -88,7 +90,30 @@ const VaddiList = ({ navigateTo }) => {
     saveEntries(updatedEntries);
   };
 
-  // Send WhatsApp notification
+  // Mark as paid and send receipt
+  const markAsPaid = (entry) => {
+    if (!entry.phone) {
+      const confirmed = window.confirm('No phone number for this entry. Mark as paid anyway?');
+      if (!confirmed) return;
+    }
+
+    const updatedEntries = entries.map(e => {
+      if (e.id === entry.id) {
+        return { ...e, paid: true, paidDate: new Date().toISOString().split('T')[0] };
+      }
+      return e;
+    });
+    saveEntries(updatedEntries);
+
+    // Send WhatsApp receipt if phone available
+    if (entry.phone) {
+      const message = `Payment Receipt - Monthly Interest\n\nName: ${entry.name}\nAmount Paid: ₹${entry.amount.toLocaleString('en-IN')}\nPaid Date: ${new Date().toLocaleDateString('en-IN')}\n\nThank you for your payment!\n\n- Om Sai Murugan Finance`;
+      const whatsappUrl = `https://wa.me/91${entry.phone}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    }
+  };
+
+  // Send WhatsApp reminder (for unpaid entries)
   const sendWhatsAppReminder = (entry) => {
     if (!entry.phone) {
       alert('No phone number available for this entry');
@@ -372,14 +397,31 @@ const VaddiList = ({ navigateTo }) => {
               {entries.map(entry => (
                 <div key={entry.id} style={{
                   padding: '16px',
-                  background: 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
+                  background: entry.paid
+                    ? 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)'
+                    : 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
                   borderRadius: '8px',
-                  borderLeft: '4px solid #667eea'
+                  borderLeft: entry.paid ? '4px solid #10b981' : '4px solid #667eea',
+                  opacity: entry.paid ? 0.7 : 1
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b', marginBottom: '6px' }}>
-                        {entry.name}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b' }}>
+                          {entry.name}
+                        </div>
+                        {entry.paid && (
+                          <span style={{
+                            background: '#10b981',
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: 600
+                          }}>
+                            ✓ PAID
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
                         💰 Amount: ₹{entry.amount.toLocaleString('en-IN')}
@@ -390,6 +432,11 @@ const VaddiList = ({ navigateTo }) => {
                       <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
                         📆 Expected Return: {new Date(entry.expectedReturnMonth + '-01').toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}
                       </div>
+                      {entry.paid && entry.paidDate && (
+                        <div style={{ fontSize: '13px', color: '#059669', fontWeight: 600, marginBottom: '4px' }}>
+                          ✓ Paid on: {new Date(entry.paidDate).toLocaleDateString('en-IN')}
+                        </div>
+                      )}
                       {entry.phone && (
                         <div style={{ fontSize: '13px', color: '#64748b' }}>
                           📱 Phone: {entry.phone}
@@ -397,25 +444,46 @@ const VaddiList = ({ navigateTo }) => {
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      {entry.phone && (
-                        <button
-                          onClick={() => sendWhatsAppReminder(entry)}
-                          style={{
-                            background: '#25D366',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            padding: '8px 12px',
-                            fontSize: '14px',
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                            whiteSpace: 'nowrap'
-                          }}
-                          title="Send WhatsApp Reminder"
-                        >
-                          📲 WhatsApp
-                        </button>
-                      )}
+                      {!entry.paid ? (
+                        <>
+                          <button
+                            onClick={() => markAsPaid(entry)}
+                            style={{
+                              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '8px 12px',
+                              fontSize: '14px',
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                              whiteSpace: 'nowrap'
+                            }}
+                            title="Mark as Paid & Send Receipt"
+                          >
+                            ✓ Mark Paid
+                          </button>
+                          {entry.phone && (
+                            <button
+                              onClick={() => sendWhatsAppReminder(entry)}
+                              style={{
+                                background: '#25D366',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '8px 12px',
+                                fontSize: '14px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap'
+                              }}
+                              title="Send WhatsApp Reminder"
+                            >
+                              📲 Remind
+                            </button>
+                          )}
+                        </>
+                      ) : null}
                       <button
                         onClick={() => handleDelete(entry.id)}
                         style={{

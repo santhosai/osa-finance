@@ -5,7 +5,8 @@ import db from './firestore.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Updated: Nov 18, 2025 - Phone uniqueness removed
+// Updated: Jan 19, 2025 - CONFIRMED: NO phone uniqueness check
+// Duplicate phone numbers ARE allowed - multiple customers can have same number
 
 // CORS configuration for production
 const corsOptions = {
