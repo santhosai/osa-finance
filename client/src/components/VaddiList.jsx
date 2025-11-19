@@ -185,7 +185,19 @@ const VaddiList = ({ navigateTo }) => {
           >
             ←
           </button>
-          <h2 style={{ margin: 0, color: 'white', fontSize: '20px', fontWeight: 700 }}>Vaddi List</h2>
+          <h2 style={{ margin: 0, color: 'white', fontSize: '20px', fontWeight: 700 }}>
+            Vaddi List
+            <span style={{
+              marginLeft: '8px',
+              fontSize: '11px',
+              background: '#10b981',
+              color: 'white',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              fontWeight: 600,
+              verticalAlign: 'middle'
+            }}>v3.0 📱</span>
+          </h2>
         </div>
       </div>
 
