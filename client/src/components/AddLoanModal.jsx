@@ -28,9 +28,10 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
     try {
       const response = await fetch(`${API_URL}/customers`);
       const data = await response.json();
-      // Filter out customers who already have active loans
-      const availableCustomers = data.filter((c) => !c.loan_id);
-      setCustomers(availableCustomers);
+      // Show ALL customers - they can have multiple loans
+      // Sort by name for easier selection
+      const sortedCustomers = data.sort((a, b) => a.name.localeCompare(b.name));
+      setCustomers(sortedCustomers);
     } catch (error) {
       console.error('Error fetching customers:', error);
     }

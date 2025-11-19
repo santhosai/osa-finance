@@ -55,6 +55,30 @@ function AddCustomerModal({ onClose, onSuccess }) {
     }
 
     try {
+      // First, check if a customer with this phone already exists
+      const checkResponse = await fetch(`${API_URL}/customers?search=${cleanPhone}`);
+      if (checkResponse.ok) {
+        const existingCustomers = await checkResponse.json();
+        const customerWithSamePhone = existingCustomers.find(c => c.phone === cleanPhone);
+
+        if (customerWithSamePhone) {
+          // Customer already exists - show helpful message
+          const confirmAddLoan = window.confirm(
+            `Customer "${customerWithSamePhone.name}" with phone ${cleanPhone} already exists.\n\n` +
+            `To add a new loan for this customer:\n` +
+            `1. Close this dialog\n` +
+            `2. Click "Add Loan" button\n` +
+            `3. Select "${customerWithSamePhone.name}" from the customer dropdown\n\n` +
+            `Click OK to close this dialog.`
+          );
+          if (confirmAddLoan) {
+            onClose();
+          }
+          return;
+        }
+      }
+
+      // No existing customer found - proceed to create new customer
       const response = await fetch(`${API_URL}/customers`, {
         method: 'POST',
         headers: {
