@@ -8,6 +8,7 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
   const [weeklyAmount, setWeeklyAmount] = useState('');
   const [loanGivenDate, setLoanGivenDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     if (!customerId) {
@@ -113,7 +114,8 @@ Thank you for choosing our service!
         // Send WhatsApp message to customer
         await sendWhatsAppMessage(selectedCustomerId, loanAmount, weeklyAmount);
 
-        onSuccess();
+        // Show success message and keep modal open
+        setShowSuccess(true);
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to create loan');
@@ -129,16 +131,58 @@ Thank you for choosing our service!
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={showSuccess ? () => { onSuccess(); onClose(); } : onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3 className="modal-title">Add New Loan</h3>
-          <button className="close-btn" onClick={onClose}>
+          <h3 className="modal-title">{showSuccess ? '✅ Loan Created!' : 'Add New Loan'}</h3>
+          <button className="close-btn" onClick={() => { onSuccess(); onClose(); }}>
             ×
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        {showSuccess ? (
+          <div style={{ padding: '24px', textAlign: 'center' }}>
+            <div style={{
+              background: '#d1fae5',
+              border: '2px solid #10b981',
+              borderRadius: '12px',
+              padding: '20px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>✅</div>
+              <div style={{ fontSize: '18px', fontWeight: 600, color: '#065f46', marginBottom: '8px' }}>
+                Loan Created Successfully!
+              </div>
+              <div style={{ fontSize: '14px', color: '#059669' }}>
+                WhatsApp message opened in new tab
+              </div>
+            </div>
+
+            <div style={{
+              background: '#fef3c7',
+              border: '1px solid #fbbf24',
+              borderRadius: '8px',
+              padding: '16px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '13px', color: '#92400e', lineHeight: '1.5' }}>
+                💡 <strong>Next Steps:</strong><br/>
+                1. Switch to WhatsApp tab<br/>
+                2. Send the pre-filled message<br/>
+                3. Return here and click Close
+              </div>
+            </div>
+
+            <button
+              onClick={() => { onSuccess(); onClose(); }}
+              className="btn-primary"
+              style={{ margin: 0, width: '100%' }}
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">Customer</label>
             {customerId ? (
@@ -254,6 +298,7 @@ Thank you for choosing our service!
             Create Loan
           </button>
         </form>
+        )}
       </div>
     </div>
   );
