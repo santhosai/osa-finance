@@ -67,9 +67,11 @@ function Customers({ navigateTo }) {
   };
 
   const handleCustomerClick = (customer) => {
-    if (customer.loan_id) {
-      navigateTo('loan-details', customer.loan_id);
+    if (customer.loans && customer.loans.length > 0) {
+      // Customer has loans - navigate to customer loans view
+      navigateTo('customer-loans', customer.id);
     } else {
+      // Customer has no loans - open add loan modal
       setSelectedCustomer(customer);
       setShowAddLoanModal(true);
     }
@@ -109,43 +111,28 @@ function Customers({ navigateTo }) {
 
   const downloadAllData = async () => {
     try {
-      // Fetch full loan details for each customer to get start date and other info
-      const customerPromises = customers.map(async (customer) => {
-        if (customer.loan_id) {
-          const loanResponse = await fetch(`${API_URL}/loans/${customer.loan_id}`);
-          const loanData = await loanResponse.json();
-          return { ...customer, loanDetails: loanData };
+      // Create CSV header
+      const csvHeader = 'Customer Name,Phone,Loan Amount,Balance,Weekly Payment,Start Date,Last Payment Date,Status\n';
+
+      const csvRows = [];
+
+      customers.forEach(customer => {
+        if (customer.loans && customer.loans.length > 0) {
+          // Create a row for each loan
+          customer.loans.forEach(loan => {
+            const totalPaid = loan.loan_amount - loan.balance;
+            const lastPayment = loan.last_payment_date || 'No payments';
+            const startDate = loan.start_date || '-';
+
+            csvRows.push(`${customer.name},${customer.phone},${loan.loan_amount},${loan.balance},${loan.weekly_amount},${startDate},${lastPayment},${loan.status}`);
+          });
+        } else {
+          // Customer with no loans
+          csvRows.push(`${customer.name},${customer.phone},No Active Loan,-,-,-,-,-`);
         }
-        return customer;
       });
 
-      const customersWithDetails = await Promise.all(customerPromises);
-
-      // Create CSV header with date fields
-      const csvHeader = 'Customer Name,Phone,Loan Amount,Balance,Weekly Payment,Status,Total Paid,Progress %,Start Date,Last Payment Date,Weeks Remaining,Expected Completion Date\n';
-
-      const csvRows = customersWithDetails.map(customer => {
-        if (customer.loan_id) {
-          const totalPaid = customer.loan_amount - customer.balance;
-          const progress = ((totalPaid / customer.loan_amount) * 100).toFixed(1);
-          const lastPayment = customer.last_payment_date || 'No payments';
-          const weeksRemaining = customer.loanDetails?.weeksRemaining || 0;
-
-          // Calculate expected completion date
-          const startDate = customer.loanDetails?.start_date || '';
-          const expectedDate = startDate ? new Date(startDate) : null;
-          if (expectedDate) {
-            expectedDate.setDate(expectedDate.getDate() + (customer.loanDetails?.totalWeeks * 7));
-          }
-          const expectedCompletion = expectedDate ? expectedDate.toISOString().split('T')[0] : '-';
-
-          return `${customer.name},${customer.phone},${customer.loan_amount},${customer.balance},${customer.weekly_amount},${customer.status},${totalPaid},${progress}%,${startDate},${lastPayment},${weeksRemaining},${expectedCompletion}`;
-        } else {
-          return `${customer.name},${customer.phone},No Active Loan,-,-,-,-,-,-,-,-,-`;
-        }
-      }).join('\n');
-
-      const csvContent = csvHeader + csvRows;
+      const csvContent = csvHeader + csvRows.join('\n');
 
       // Create blob and download
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -303,25 +290,31 @@ function Customers({ navigateTo }) {
           </button>
           <div className="customer-name">{customer.name}</div>
           <div className="customer-phone">📱 {customer.phone}</div>
-          {customer.loan_id ? (
+          {customer.total_active_loans > 0 ? (
             <div className="customer-loan">
               <div className="loan-info">
-                <div className="loan-label">Active Loan</div>
-                <div className="loan-value">{formatCurrency(customer.loan_amount)}</div>
+                <div className="loan-label">Active Loans</div>
+                <div className="loan-value">
+                  {customer.total_active_loans} {customer.total_active_loans === 1 ? 'loan' : 'loans'}
+                </div>
               </div>
               <div className="loan-info">
-                <div className="loan-label">Balance</div>
-                <div className="loan-value">{formatCurrency(customer.balance)}</div>
+                <div className="loan-label">Total Balance</div>
+                <div className="loan-value">{formatCurrency(customer.total_balance)}</div>
               </div>
               <div className="loan-info">
-                <div className="loan-label">Last Payment</div>
-                <div className="loan-value">{formatDate(customer.last_payment_date)}</div>
+                <div className="loan-label">Most Recent</div>
+                <div className="loan-value">
+                  {customer.loans && customer.loans.length > 0
+                    ? formatDate(customer.loans[customer.loans.length - 1].last_payment_date)
+                    : '-'}
+                </div>
               </div>
             </div>
           ) : (
             <div className="customer-loan">
               <div className="loan-info">
-                <div className="loan-label">No active loan</div>
+                <div className="loan-label">No active loans</div>
                 <div className="loan-value" style={{ color: '#6b7280' }}>
                   Click to add loan
                 </div>

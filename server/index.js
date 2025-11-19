@@ -64,14 +64,17 @@ app.get('/api/customers', async (req, res) => {
         }
       }
 
-      // Get ALL active loans for this customer (multiple loans allowed)
+      // Get ALL active loans for this customer (grouped approach)
       const loansSnapshot = await db.collection('loans')
         .where('customer_id', '==', doc.id)
         .where('status', '==', 'active')
         .get();
 
+      const loans = [];
+      let totalBalance = 0;
+
       if (!loansSnapshot.empty) {
-        // Create a separate entry for EACH active loan
+        // Build array of all loans for this customer
         for (const loanDoc of loansSnapshot.docs) {
           const loanData = loanDoc.data();
 
@@ -93,20 +96,29 @@ app.get('/api/customers', async (req, res) => {
             lastPaymentDate = null;
           }
 
-          customers.push({
-            ...customerData,
+          loans.push({
             loan_id: loanDoc.id,
             loan_amount: loanData.loan_amount,
             balance: loanData.balance,
             weekly_amount: loanData.weekly_amount,
             status: loanData.status,
-            last_payment_date: lastPaymentDate
+            start_date: loanData.start_date,
+            loan_given_date: loanData.loan_given_date,
+            last_payment_date: lastPaymentDate,
+            created_at: loanData.created_at
           });
+
+          totalBalance += loanData.balance;
         }
-      } else {
-        // Customer has no active loans
-        customers.push(customerData);
       }
+
+      // Add customer with all their loans grouped together
+      customers.push({
+        ...customerData,
+        loans: loans,
+        total_active_loans: loans.length,
+        total_balance: totalBalance
+      });
     }
 
     // Sort by name

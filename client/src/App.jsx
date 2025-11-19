@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
+import CustomerLoans from './components/CustomerLoans';
 import LoanDetails from './components/LoanDetails';
 import PaymentTracker from './components/PaymentTracker';
 import VaddiList from './components/VaddiList';
@@ -30,6 +31,7 @@ function App() {
   });
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedLoanId, setSelectedLoanId] = useState(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
 
   useEffect(() => {
     // Save login state to localStorage
@@ -41,11 +43,22 @@ function App() {
     localStorage.removeItem('isLoggedIn');
     setCurrentView('dashboard');
     setSelectedLoanId(null);
+    setSelectedCustomerId(null);
   };
 
-  const navigateTo = (view, loanId = null) => {
+  const navigateTo = (view, id = null) => {
     setCurrentView(view);
-    setSelectedLoanId(loanId);
+    // id could be either loanId or customerId depending on the view
+    if (view === 'loan-details') {
+      setSelectedLoanId(id);
+      setSelectedCustomerId(null);
+    } else if (view === 'customer-loans') {
+      setSelectedCustomerId(id);
+      setSelectedLoanId(null);
+    } else {
+      setSelectedLoanId(null);
+      setSelectedCustomerId(null);
+    }
   };
 
   // Show login page if not logged in
@@ -57,6 +70,9 @@ function App() {
     <div className="app">
       {currentView === 'dashboard' && <Dashboard navigateTo={navigateTo} />}
       {currentView === 'customers' && <Customers navigateTo={navigateTo} />}
+      {currentView === 'customer-loans' && selectedCustomerId && (
+        <CustomerLoans customerId={selectedCustomerId} navigateTo={navigateTo} />
+      )}
       {currentView === 'sunday-collections' && <SundayCollections navigateTo={navigateTo} />}
       {currentView === 'overdue-payments' && <OverduePayments navigateTo={navigateTo} />}
       {currentView === 'payment-tracker' && <PaymentTracker navigateTo={navigateTo} />}
