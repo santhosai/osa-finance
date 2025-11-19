@@ -108,15 +108,17 @@ app.get('/api/customers/:id', async (req, res) => {
   }
 });
 
-// Create new customer
+// Create new customer - v3.2.0 NO DUPLICATE CHECK
 app.post('/api/customers', async (req, res) => {
   try {
+    console.log('🎯 CREATE CUSTOMER v3.2.0 - DUPLICATE PHONES ALLOWED:', req.body);
     const { name, phone } = req.body;
 
     if (!name || !phone) {
       return res.status(400).json({ error: 'Name and phone are required' });
     }
 
+    // NO DUPLICATE PHONE CHECK - Multiple customers can have same phone!
     const customerData = {
       name,
       phone,
@@ -126,8 +128,10 @@ app.post('/api/customers', async (req, res) => {
     const docRef = await db.collection('customers').add(customerData);
     const newDoc = await docRef.get();
 
+    console.log('✅ Customer created successfully:', newDoc.id);
     res.status(201).json({ id: newDoc.id, ...newDoc.data() });
   } catch (error) {
+    console.error('❌ Error creating customer:', error);
     res.status(500).json({ error: error.message });
   }
 });
