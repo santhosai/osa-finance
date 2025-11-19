@@ -5,10 +5,11 @@ import db from './firestore.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ⚡ DEPLOYMENT v3.1.0 - Jan 19, 2025 23:45
+// ⚡ DEPLOYMENT v3.3.0 - Jan 19, 2025 23:50 - FORCE REBUILD
 // CONFIRMED: NO phone uniqueness check - Duplicate phones ARE ALLOWED
 // Using Firestore (NOT SQLite) - NO UNIQUE constraint on phone field
-console.log('🚀 Backend v3.1.0 - DUPLICATE PHONES ALLOWED');
+const VERSION = '3.3.0';
+console.log(`🚀 Backend v${VERSION} - DUPLICATE PHONES ALLOWED`);
 
 // CORS configuration for production
 const corsOptions = {
@@ -18,6 +19,16 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Health check and version endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    version: VERSION,
+    timestamp: new Date().toISOString(),
+    message: 'Backend is running - DUPLICATE PHONES ALLOWED'
+  });
+});
 
 // ============ CUSTOMER ROUTES ============
 
@@ -108,10 +119,10 @@ app.get('/api/customers/:id', async (req, res) => {
   }
 });
 
-// Create new customer - v3.2.0 NO DUPLICATE CHECK
+// Create new customer - v3.3.0 NO DUPLICATE CHECK
 app.post('/api/customers', async (req, res) => {
   try {
-    console.log('🎯 CREATE CUSTOMER v3.2.0 - DUPLICATE PHONES ALLOWED:', req.body);
+    console.log(`🎯 CREATE CUSTOMER v${VERSION} - DUPLICATE PHONES ALLOWED:`, req.body);
     const { name, phone } = req.body;
 
     if (!name || !phone) {
