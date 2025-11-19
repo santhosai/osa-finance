@@ -21,7 +21,8 @@
       "Bash(git log:*)",
       "Bash(del database.js 2)",
       "Bash(nul)",
-      "Bash(del finance.db 2)"
+      "Bash(del finance.db 2)",
+      "Bash(python -m json.tool:*)"
     ],
     "deny": [],
     "ask": []

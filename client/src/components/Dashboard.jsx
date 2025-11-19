@@ -1,16 +1,26 @@
 import { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import AddCustomerModal from './AddCustomerModal';
 import PaymentsThisWeekModal from './PaymentsThisWeekModal';
 import VaddiCalculator from './VaddiCalculator';
 import { API_URL } from '../config';
 
+// Fetcher function for SWR
+const fetcher = (url) => fetch(url).then(res => res.json());
+
 function Dashboard({ navigateTo }) {
-  const [stats, setStats] = useState(null);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [monthlyFinanceBalance, setMonthlyFinanceBalance] = useState(0);
+
+  // Use SWR for automatic caching and re-fetching
+  const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
+    refreshInterval: 5000, // Auto-refresh every 5 seconds
+    revalidateOnFocus: true, // Refresh when user returns to tab
+    dedupingInterval: 2000, // Prevent duplicate requests within 2s
+  });
 
   const calculateMonthlyFinanceBalance = () => {
     try {
@@ -29,34 +39,22 @@ function Dashboard({ navigateTo }) {
   };
 
   useEffect(() => {
-    fetchStats();
     calculateMonthlyFinanceBalance();
 
-    // Auto-refresh stats every 5 seconds when on dashboard
+    // Auto-refresh monthly finance balance every 5 seconds
     const interval = setInterval(() => {
-      fetchStats();
       calculateMonthlyFinanceBalance();
     }, 5000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const fetchStats = async () => {
-    try {
-      const response = await fetch(`${API_URL}/stats`);
-      const data = await response.json();
-      setStats(data);
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
-
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
   };
 
   const handleRefresh = () => {
-    fetchStats();
+    mutate(); // SWR: Re-fetch data automatically
   };
 
   const handleLogout = () => {
@@ -525,7 +523,7 @@ function Dashboard({ navigateTo }) {
           onClose={() => setShowAddCustomerModal(false)}
           onSuccess={() => {
             setShowAddCustomerModal(false);
-            fetchStats();
+            mutate(); // SWR: Re-fetch data automatically
           }}
         />
       )}

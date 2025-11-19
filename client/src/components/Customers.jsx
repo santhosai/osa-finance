@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import AddCustomerModal from './AddCustomerModal';
 import AddLoanModal from './AddLoanModal';
 import DeleteCustomerModal from './DeleteCustomerModal';
 import EditCustomerModal from './EditCustomerModal';
 import { API_URL } from '../config';
 
+// Fetcher function for SWR
+const fetcher = (url) => fetch(url).then(res => res.json());
+
 function Customers({ navigateTo }) {
-  const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
@@ -15,35 +18,19 @@ function Customers({ navigateTo }) {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerToDelete, setCustomerToDelete] = useState(null);
   const [customerToEdit, setCustomerToEdit] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const customersPerPage = 20;
 
-  useEffect(() => {
-    // Debounce search to avoid too many API calls
-    const timeoutId = setTimeout(() => {
-      setCurrentPage(1); // Reset to page 1 when search changes
-      fetchCustomers();
-    }, 300); // Wait 300ms after user stops typing
+  // Use SWR for automatic caching and re-fetching
+  const url = searchTerm
+    ? `${API_URL}/customers?search=${encodeURIComponent(searchTerm)}`
+    : `${API_URL}/customers`;
 
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
-
-  const fetchCustomers = async () => {
-    setLoading(true);
-    try {
-      const url = searchTerm
-        ? `${API_URL}/customers?search=${encodeURIComponent(searchTerm)}`
-        : `${API_URL}/customers`;
-      const response = await fetch(url);
-      const data = await response.json();
-      setCustomers(data);
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: customers = [], error, isLoading, mutate } = useSWR(url, fetcher, {
+    refreshInterval: 0, // Don't auto-refresh (save bandwidth)
+    revalidateOnFocus: true, // Refresh when user returns to tab
+    dedupingInterval: 2000, // Prevent duplicate requests within 2s
+  });
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -186,7 +173,7 @@ function Customers({ navigateTo }) {
         />
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div style={{
           textAlign: 'center',
           padding: '60px 20px',
@@ -405,7 +392,7 @@ function Customers({ navigateTo }) {
           onClose={() => setShowAddCustomerModal(false)}
           onSuccess={() => {
             setShowAddCustomerModal(false);
-            fetchCustomers();
+            mutate(); // SWR: Re-fetch data automatically
           }}
         />
       )}
@@ -422,7 +409,7 @@ function Customers({ navigateTo }) {
           onSuccess={() => {
             setShowAddLoanModal(false);
             setSelectedCustomer(null);
-            fetchCustomers();
+            mutate(); // SWR: Re-fetch data automatically
           }}
         />
       )}
@@ -437,7 +424,7 @@ function Customers({ navigateTo }) {
           onSuccess={() => {
             setShowDeleteModal(false);
             setCustomerToDelete(null);
-            fetchCustomers();
+            mutate(); // SWR: Re-fetch data automatically
           }}
         />
       )}
@@ -452,7 +439,7 @@ function Customers({ navigateTo }) {
           onSuccess={() => {
             setShowEditModal(false);
             setCustomerToEdit(null);
-            fetchCustomers();
+            mutate(); // SWR: Re-fetch data automatically
           }}
         />
       )}

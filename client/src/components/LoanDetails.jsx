@@ -1,26 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import AddPaymentModal from './AddPaymentModal';
 import AddLoanModal from './AddLoanModal';
 import { API_URL } from '../config';
 
+// Fetcher function for SWR
+const fetcher = (url) => fetch(url).then(res => res.json());
+
 function LoanDetails({ loanId, navigateTo }) {
-  const [loan, setLoan] = useState(null);
   const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
 
-  useEffect(() => {
-    fetchLoanDetails();
-  }, [loanId]);
-
-  const fetchLoanDetails = async () => {
-    try {
-      const response = await fetch(`${API_URL}/loans/${loanId}`);
-      const data = await response.json();
-      setLoan(data);
-    } catch (error) {
-      console.error('Error fetching loan details:', error);
+  // Use SWR for automatic caching and re-fetching
+  const { data: loan, error, isLoading, mutate } = useSWR(
+    loanId ? `${API_URL}/loans/${loanId}` : null,
+    fetcher,
+    {
+      refreshInterval: 0, // Don't auto-refresh (save bandwidth)
+      revalidateOnFocus: true, // Refresh when user returns to tab
+      dedupingInterval: 2000, // Prevent duplicate requests within 2s
     }
-  };
+  );
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -56,7 +56,7 @@ function LoanDetails({ loanId, navigateTo }) {
 
       if (response.ok) {
         // Refresh loan details to update balance, progress, etc.
-        fetchLoanDetails();
+        mutate(); // SWR: Re-fetch data automatically
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to delete payment');
@@ -124,8 +124,44 @@ function LoanDetails({ loanId, navigateTo }) {
     document.body.removeChild(link);
   };
 
+  if (isLoading) {
+    return (
+      <div style={{
+        textAlign: 'center',
+        padding: '60px 20px',
+        color: '#6b7280'
+      }}>
+        <div style={{
+          fontSize: '48px',
+          marginBottom: '16px',
+          animation: 'spin 1s linear infinite'
+        }}>⏳</div>
+        <div style={{ fontSize: '18px', fontWeight: 600 }}>Loading loan details...</div>
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   if (!loan) {
-    return <div>Loading...</div>;
+    return (
+      <div style={{
+        textAlign: 'center',
+        padding: '60px 20px',
+        background: 'white',
+        margin: '16px',
+        borderRadius: '12px'
+      }}>
+        <div style={{ fontSize: '64px', marginBottom: '16px' }}>❌</div>
+        <div style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937' }}>
+          Loan not found
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -325,7 +361,7 @@ function LoanDetails({ loanId, navigateTo }) {
           onClose={() => setShowAddPaymentModal(false)}
           onSuccess={() => {
             setShowAddPaymentModal(false);
-            fetchLoanDetails();
+            mutate(); // SWR: Re-fetch data automatically
           }}
         />
       )}

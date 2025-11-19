@@ -1,29 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
+import useSWR from 'swr';
 import AddLoanModal from './AddLoanModal';
 import { API_URL } from '../config';
 
+// Fetcher function for SWR
+const fetcher = (url) => fetch(url).then(res => res.json());
+
 function CustomerLoans({ navigateTo, customerId }) {
-  const [customer, setCustomer] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
 
-  useEffect(() => {
-    fetchCustomerData();
-  }, [customerId]);
+  // Use SWR for automatic caching and re-fetching
+  const { data: allCustomers = [], error, isLoading, mutate } = useSWR(`${API_URL}/customers`, fetcher, {
+    refreshInterval: 0, // Don't auto-refresh (save bandwidth)
+    revalidateOnFocus: true, // Refresh when user returns to tab
+    dedupingInterval: 2000, // Prevent duplicate requests within 2s
+  });
 
-  const fetchCustomerData = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/customers`);
-      const allCustomers = await response.json();
-      const foundCustomer = allCustomers.find(c => c.id === customerId);
-      setCustomer(foundCustomer);
-    } catch (error) {
-      console.error('Error fetching customer:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Find the specific customer from the list
+  const customer = useMemo(() => {
+    return allCustomers.find(c => c.id === customerId);
+  }, [allCustomers, customerId]);
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -38,7 +34,7 @@ function CustomerLoans({ navigateTo, customerId }) {
     navigateTo('loan-details', loanId);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div>
         <div className="navbar">
@@ -335,7 +331,7 @@ function CustomerLoans({ navigateTo, customerId }) {
           onClose={() => setShowAddLoanModal(false)}
           onSuccess={() => {
             setShowAddLoanModal(false);
-            fetchCustomerData();
+            mutate(); // SWR: Re-fetch data automatically
           }}
         />
       )}
