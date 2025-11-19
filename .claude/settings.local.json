@@ -18,7 +18,10 @@
       "Bash(git push:*)",
       "Bash(git restore:*)",
       "Bash(npm run build:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(del database.js 2)",
+      "Bash(nul)",
+      "Bash(del finance.db 2)"
     ],
     "deny": [],
     "ask": []
