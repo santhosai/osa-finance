@@ -288,16 +288,9 @@ app.post('/api/loans', async (req, res) => {
       return res.status(400).json({ error: 'Loans can only start on Sundays' });
     }
 
-    // Check if customer has an active loan
-    const existingLoansSnapshot = await db.collection('loans')
-      .where('customer_id', '==', customer_id)
-      .where('status', '==', 'active')
-      .limit(1)
-      .get();
-
-    if (!existingLoansSnapshot.empty) {
-      return res.status(400).json({ error: 'Customer already has an active loan' });
-    }
+    // ALLOW MULTIPLE LOANS: Customer can have multiple active loans
+    // Each loan is tracked separately with its own loan_id
+    console.log(`✅ Creating new loan for customer ${customer_id} (multiple loans allowed)`);
 
     const loanData = {
       customer_id,
