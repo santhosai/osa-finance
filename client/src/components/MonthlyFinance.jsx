@@ -8,7 +8,8 @@ const MonthlyFinance = ({ navigateTo }) => {
     amount: '',
     date: '',
     monthlyInstallment: '',
-    totalMonths: '5' // Default to 5 months
+    totalMonths: '5', // Default to 5 months
+    phone: ''
   });
   const [showForm, setShowForm] = useState(false);
 
@@ -79,6 +80,7 @@ const MonthlyFinance = ({ navigateTo }) => {
     const newCustomer = {
       id: Date.now(),
       name: formData.name,
+      phone: formData.phone || '',
       totalAmount: amount,
       monthlyInstallment: monthlyInstallment,
       totalMonths: totalMonths,
@@ -91,12 +93,24 @@ const MonthlyFinance = ({ navigateTo }) => {
     saveCustomers(updatedCustomers);
 
     // Reset form
-    setFormData({ name: '', amount: '', date: '', monthlyInstallment: '', totalMonths: '5' });
+    setFormData({ name: '', amount: '', date: '', monthlyInstallment: '', totalMonths: '5', phone: '' });
     setShowForm(false);
   };
 
   // Toggle payment status
   const togglePayment = (customerId, monthIndex) => {
+    const customer = customers.find(c => c.id === customerId);
+    const payment = customer?.paymentSchedule[monthIndex];
+
+    // If marking as paid and customer has phone, send WhatsApp receipt
+    if (customer && payment && !payment.paid && customer.phone) {
+      const message = `Payment Receipt - Monthly Finance\n\nCustomer: ${customer.name}\nMonth ${payment.month} Payment: ₹${payment.amount.toLocaleString('en-IN')}\nDate: ${new Date().toLocaleDateString('en-IN')}\nRemaining Balance: ₹${(customer.balance - payment.amount).toLocaleString('en-IN')}\n\nThank you for your payment!\n\n- Om Sai Murugan Finance`;
+
+      const phoneNumber = customer.phone.replace(/\D/g, '');
+      const whatsappUrl = `https://wa.me/91${phoneNumber}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    }
+
     const updatedCustomers = customers.map(customer => {
       if (customer.id === customerId) {
         const updatedSchedule = [...customer.paymentSchedule];
@@ -137,11 +151,11 @@ const MonthlyFinance = ({ navigateTo }) => {
       return;
     }
 
-    let csvContent = 'Customer Name,Total Amount,Monthly Installment,Total Months,Start Date,Balance,Paid Months\n';
+    let csvContent = 'Customer Name,Phone,Total Amount,Monthly Installment,Total Months,Start Date,Balance,Paid Months\n';
 
     customers.forEach(customer => {
       const paidMonths = customer.paymentSchedule.filter(p => p.paid).length;
-      csvContent += `${customer.name},₹${customer.totalAmount},₹${customer.monthlyInstallment},${customer.totalMonths},${customer.startDate},₹${customer.balance},${paidMonths}/${customer.totalMonths}\n`;
+      csvContent += `${customer.name},${customer.phone || 'N/A'},₹${customer.totalAmount},₹${customer.monthlyInstallment},${customer.totalMonths},${customer.startDate},₹${customer.balance},${paidMonths}/${customer.totalMonths}\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -455,6 +469,21 @@ const MonthlyFinance = ({ navigateTo }) => {
               placeholder="Start Date"
               value={formData.date}
               onChange={handleInputChange}
+              style={{
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+            <input
+              type="tel"
+              name="phone"
+              placeholder="Phone (Optional)"
+              value={formData.phone}
+              onChange={handleInputChange}
+              pattern="[0-9]{10}"
+              maxLength="10"
               style={{
                 padding: '12px',
                 border: '1px solid #ddd',
