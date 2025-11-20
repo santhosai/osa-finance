@@ -324,6 +324,8 @@ function PaymentModal({ customer, selectedDate, onClose, onSuccess }) {
   const [onlineAmount, setOnlineAmount] = useState('');
   const [paymentMode, setPaymentMode] = useState('cash');
   const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
 
   const totalAmount = parseInt(offlineAmount || 0) + parseInt(onlineAmount || 0);
 
@@ -359,8 +361,14 @@ function PaymentModal({ customer, selectedDate, onClose, onSuccess }) {
       });
 
       if (response.ok) {
-        alert('Payment recorded successfully!');
-        onSuccess();
+        // Show success screen with Done/WhatsApp options
+        setPaymentData({
+          amount: totalAmount,
+          offlineAmount: parseInt(offlineAmount || 0),
+          onlineAmount: parseInt(onlineAmount || 0),
+          date: selectedDate
+        });
+        setShowSuccess(true);
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to record payment');
@@ -371,6 +379,25 @@ function PaymentModal({ customer, selectedDate, onClose, onSuccess }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const sendWhatsAppMessage = () => {
+    const message = `Payment Receipt
+
+Customer: ${customer.name}
+${customer.loan_name && customer.loan_name !== 'General Loan' ? `Loan: ${customer.loan_name}\n` : ''}Amount Paid: ₹${paymentData.amount.toLocaleString('en-IN')}
+Date: ${new Date(paymentData.date).toLocaleDateString('en-IN')}
+Balance Remaining: ₹${(customer.balance - paymentData.amount).toLocaleString('en-IN')}
+
+Thank you for your payment!
+
+- Om Sai Murugan Finance`;
+
+    const cleanPhone = customer.phone.replace(/\D/g, '');
+    const phoneWithCountryCode = `91${cleanPhone}`;
+    const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+
+    window.open(whatsappUrl, '_blank');
   };
 
   const formatCurrency = (amount) => {
@@ -413,10 +440,10 @@ function PaymentModal({ customer, selectedDate, onClose, onSuccess }) {
           marginBottom: '20px'
         }}>
           <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1f2937' }}>
-            Record Payment
+            {showSuccess ? '✅ Payment Recorded!' : 'Record Payment'}
           </h3>
           <button
-            onClick={onClose}
+            onClick={() => { onSuccess(); onClose(); }}
             style={{
               background: 'transparent',
               border: 'none',
@@ -431,6 +458,69 @@ function PaymentModal({ customer, selectedDate, onClose, onSuccess }) {
             ×
           </button>
         </div>
+
+        {showSuccess ? (
+          // Success Screen
+          <div>
+            <div style={{
+              background: '#d1fae5',
+              border: '2px solid #10b981',
+              borderRadius: '12px',
+              padding: '20px',
+              marginBottom: '20px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>✅</div>
+              <div style={{ fontSize: '18px', fontWeight: 600, color: '#065f46', marginBottom: '8px' }}>
+                Payment Recorded Successfully!
+              </div>
+              <div style={{ fontSize: '14px', color: '#059669' }}>
+                Amount: ₹{paymentData.amount.toLocaleString('en-IN')}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => { onSuccess(); onClose(); }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  background: 'white',
+                  color: '#6b7280',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Done
+              </button>
+              <button
+                onClick={() => {
+                  sendWhatsAppMessage();
+                  onSuccess();
+                  onClose();
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                  color: 'white',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                📱 WhatsApp
+              </button>
+            </div>
+          </div>
+        ) : (
+          // Payment Form
+          <div>
 
         <div style={{
           background: '#f3f4f6',
@@ -584,6 +674,8 @@ function PaymentModal({ customer, selectedDate, onClose, onSuccess }) {
             </button>
           </div>
         </form>
+          </div>
+        )}
       </div>
     </div>
   );
