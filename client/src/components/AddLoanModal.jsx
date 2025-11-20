@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { API_URL } from '../config';
+import AddCustomerModal from './AddCustomerModal';
 
 function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSuccess }) {
   const [customers, setCustomers] = useState([]);
@@ -12,6 +13,7 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
   const [loanGivenDate, setLoanGivenDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
 
   useEffect(() => {
     if (!customerId) {
@@ -231,19 +233,52 @@ Thank you for choosing our service!
                 <div className="customer-info-phone">📱 {customerPhone}</div>
               </div>
             ) : (
-              <select
-                className="form-input"
-                value={selectedCustomerId}
-                onChange={(e) => setSelectedCustomerId(e.target.value)}
-                required
-              >
-                <option value="">Select a customer</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name} ({customer.phone})
-                  </option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                <select
+                  className="form-input"
+                  value={selectedCustomerId}
+                  onChange={(e) => setSelectedCustomerId(e.target.value)}
+                  required
+                  style={{ flex: 1 }}
+                >
+                  <option value="">Select a customer</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} ({customer.phone})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCustomerModal(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '0 16px',
+                    cursor: 'pointer',
+                    fontSize: '20px',
+                    fontWeight: 600,
+                    minWidth: '50px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.4)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                  title="Add new customer"
+                >
+                  +
+                </button>
+              </div>
             )}
           </div>
 
@@ -400,6 +435,21 @@ Thank you for choosing our service!
         </form>
         )}
       </div>
+
+      {showAddCustomerModal && (
+        <AddCustomerModal
+          onClose={() => setShowAddCustomerModal(false)}
+          onSuccess={(newCustomerId) => {
+            setShowAddCustomerModal(false);
+            // Refresh customer list
+            fetchCustomers();
+            // Auto-select the newly created customer
+            if (newCustomerId) {
+              setSelectedCustomerId(newCustomerId);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

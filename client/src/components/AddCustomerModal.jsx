@@ -91,7 +91,9 @@ function AddCustomerModal({ onClose, onSuccess }) {
       });
 
       if (response.ok) {
-        onSuccess();
+        const data = await response.json();
+        // Pass the new customer ID to onSuccess
+        onSuccess(data.id);
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to create customer');
