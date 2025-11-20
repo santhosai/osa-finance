@@ -359,6 +359,30 @@ app.post('/api/loans/:id/topup', async (req, res) => {
   }
 });
 
+// Update loan (for editing loan details like loan_name)
+app.put('/api/loans/:id', async (req, res) => {
+  try {
+    const { loan_name, status } = req.body;
+    const updateData = {};
+
+    // Only update fields that are provided
+    if (loan_name !== undefined) updateData.loan_name = loan_name;
+    if (status !== undefined) updateData.status = status;
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    await db.collection('loans').doc(req.params.id).update(updateData);
+    const doc = await db.collection('loans').doc(req.params.id).get();
+
+    console.log(`✅ Updated loan ${req.params.id}:`, updateData);
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Close loan
 app.put('/api/loans/:id/close', async (req, res) => {
   try {

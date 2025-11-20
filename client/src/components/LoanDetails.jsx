@@ -35,6 +35,31 @@ function LoanDetails({ loanId, navigateTo }) {
     return `₹${amount.toLocaleString('en-IN')}`;
   };
 
+  const updateLoanName = async (newName) => {
+    try {
+      const response = await fetch(`${API_URL}/loans/${loan.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          loan_name: newName
+        })
+      });
+
+      if (response.ok) {
+        mutate(); // SWR: Re-fetch data to show updated name
+        alert('Loan name updated successfully!');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to update loan name');
+      }
+    } catch (error) {
+      console.error('Error updating loan name:', error);
+      alert('Failed to update loan name');
+    }
+  };
+
   const sendWhatsAppMessage = (payment) => {
     const message = `Payment Receipt\n\nCustomer: ${loan.customer_name}\nAmount: ${formatCurrency(payment.amount)}\nDate: ${formatDate(payment.payment_date)}\nWeek: ${payment.week_number}\nBalance Remaining: ${formatCurrency(payment.balance_after)}\n\nThank you for your payment!`;
 
@@ -184,20 +209,46 @@ function LoanDetails({ loanId, navigateTo }) {
       <div className="loan-summary">
         <div className="loan-customer">{loan.customer_name}</div>
         <div className="loan-phone">📱 {loan.customer_phone}</div>
-        {loan.loan_name && (
-          <div style={{
-            fontSize: '16px',
-            fontWeight: 600,
-            color: '#3b82f6',
-            marginTop: '8px',
-            padding: '8px 12px',
-            background: '#dbeafe',
-            borderRadius: '8px',
-            textAlign: 'center'
-          }}>
-            {loan.loan_name}
-          </div>
-        )}
+        <div style={{
+          fontSize: '16px',
+          fontWeight: 600,
+          color: '#3b82f6',
+          marginTop: '8px',
+          padding: '8px 12px',
+          background: '#dbeafe',
+          borderRadius: '8px',
+          textAlign: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
+        }}>
+          {loan.loan_name || 'General Loan'}
+          <button
+            onClick={() => {
+              const newName = prompt('Enter loan name/responsible person:', loan.loan_name || '');
+              if (newName !== null && newName.trim() !== '') {
+                updateLoanName(newName.trim());
+              }
+            }}
+            style={{
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '4px 8px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            title="Edit loan name"
+          >
+            ✏️ Edit
+          </button>
+        </div>
 
         <div className="loan-amount-grid">
           <div className="loan-stat">
