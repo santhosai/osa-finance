@@ -21,13 +21,14 @@ function WeeklyFinanceView({ navigateTo }) {
     }
   );
 
-  // Show ALL loans (Weekly type or loans without type field)
+  // Show Weekly type loans + old loans without type (old loans default to Weekly)
   const weeklyLoans = useMemo(() => {
     const loans = [];
     allCustomers.forEach(customer => {
       if (customer.loans && customer.loans.length > 0) {
         customer.loans.forEach(loan => {
-          // Show loans that are Weekly type OR don't have loan_type (old loans)
+          // Show Weekly loans OR old loans without loan_type (default to Weekly)
+          // This ensures old loans don't appear in Monthly view
           const isWeekly = !loan.loan_type || loan.loan_type === 'Weekly';
           const hasBalance = loan.balance > 0;
 

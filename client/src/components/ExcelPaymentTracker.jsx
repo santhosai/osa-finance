@@ -33,8 +33,13 @@ function ExcelPaymentTracker({ navigateTo }) {
       customers.forEach(customer => {
         if (customer.loans && customer.loans.length > 0) {
           customer.loans.forEach((loan) => {
-            // Show ALL loans (Weekly/Monthly/any type) - only filter by selected type if loan_type exists
-            const matchesType = !loan.loan_type || loan.loan_type === loanType || loanType === 'All';
+            // Filter logic (strict separation - no duplicates):
+            // 'All': Show everything
+            // 'Weekly': Show Weekly OR old loans without type (old loans default to Weekly)
+            // 'Monthly': Show ONLY Monthly (strict - no old loans)
+            const matchesType = loanType === 'All' ? true :
+                                loanType === 'Weekly' ? (!loan.loan_type || loan.loan_type === 'Weekly') :
+                                loanType === 'Monthly' ? (loan.loan_type === 'Monthly') : false;
             const isActive = loan.balance > 0; // Show loans with remaining balance
 
             if (matchesType && isActive) {
