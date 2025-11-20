@@ -67,33 +67,54 @@ function Dashboard({ navigateTo }) {
       const response = await fetch(`${API_URL}/customers`);
       const customers = await response.json();
 
-      const customerPromises = customers.map(async (customer) => {
-        if (customer.loan_id) {
-          const loanResponse = await fetch(`${API_URL}/loans/${customer.loan_id}`);
-          const loanData = await loanResponse.json();
-          return { ...customer, loanDetails: loanData };
+      // Fetch detailed info for each loan
+      const loanDetailsPromises = [];
+      const customerLoanMap = [];
+
+      for (const customer of customers) {
+        if (customer.loans && customer.loans.length > 0) {
+          for (const loan of customer.loans) {
+            const promise = fetch(`${API_URL}/loans/${loan.loan_id}`)
+              .then(res => res.json())
+              .then(loanData => ({
+                customerName: customer.name,
+                customerPhone: customer.phone,
+                loanData
+              }));
+            loanDetailsPromises.push(promise);
+          }
+        } else {
+          // Customer with no loans
+          customerLoanMap.push({
+            customerName: customer.name,
+            customerPhone: customer.phone,
+            loanData: null
+          });
         }
-        return customer;
-      });
+      }
 
-      const customersWithDetails = await Promise.all(customerPromises);
-      const csvHeader = 'Customer Name,Phone,Loan Amount,Balance,Weekly Payment,Status,Total Paid,Progress %,Start Date,Last Payment Date,Weeks Remaining,Expected Completion Date\n';
+      const loansWithDetails = await Promise.all(loanDetailsPromises);
+      const allRows = [...customerLoanMap, ...loansWithDetails];
 
-      const csvRows = customersWithDetails.map(customer => {
-        if (customer.loan_id) {
-          const totalPaid = customer.loan_amount - customer.balance;
-          const progress = ((totalPaid / customer.loan_amount) * 100).toFixed(1);
-          const lastPayment = customer.last_payment_date || 'No payments';
-          const weeksRemaining = customer.loanDetails?.weeksRemaining || 0;
-          const startDate = customer.loanDetails?.start_date || '';
+      const csvHeader = 'Customer Name,Phone,Loan Name,Loan Amount,Balance,Weekly Payment,Status,Total Paid,Progress %,Start Date,Last Payment Date,Weeks Remaining,Expected Completion Date\n';
+
+      const csvRows = allRows.map(row => {
+        if (row.loanData) {
+          const loan = row.loanData;
+          const totalPaid = loan.loan_amount - loan.balance;
+          const progress = ((totalPaid / loan.loan_amount) * 100).toFixed(1);
+          const lastPayment = loan.payments && loan.payments.length > 0 ? loan.payments[0].payment_date : 'No payments';
+          const weeksRemaining = loan.weeksRemaining || 0;
+          const startDate = loan.start_date || '';
           const expectedDate = startDate ? new Date(startDate) : null;
           if (expectedDate) {
-            expectedDate.setDate(expectedDate.getDate() + (customer.loanDetails?.totalWeeks * 7));
+            expectedDate.setDate(expectedDate.getDate() + (loan.totalWeeks * 7));
           }
           const expectedCompletion = expectedDate ? expectedDate.toISOString().split('T')[0] : '-';
-          return `${customer.name},${customer.phone},${customer.loan_amount},${customer.balance},${customer.weekly_amount},${customer.status},${totalPaid},${progress}%,${startDate},${lastPayment},${weeksRemaining},${expectedCompletion}`;
+          const loanName = loan.loan_name || 'General Loan';
+          return `${row.customerName},${row.customerPhone},${loanName},${loan.loan_amount},${loan.balance},${loan.weekly_amount},${loan.status},${totalPaid},${progress}%,${startDate},${lastPayment},${weeksRemaining},${expectedCompletion}`;
         } else {
-          return `${customer.name},${customer.phone},No Active Loan,-,-,-,-,-,-,-,-,-`;
+          return `${row.customerName},${row.customerPhone},No Active Loan,-,-,-,-,-,-,-,-,-,-`;
         }
       }).join('\n');
 

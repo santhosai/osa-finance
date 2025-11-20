@@ -98,6 +98,7 @@ app.get('/api/customers', async (req, res) => {
 
           loans.push({
             loan_id: loanDoc.id,
+            loan_name: loanData.loan_name || 'General Loan', // Include loan name
             loan_amount: loanData.loan_amount,
             balance: loanData.balance,
             weekly_amount: loanData.weekly_amount,
@@ -290,7 +291,7 @@ app.get('/api/loans/:id', async (req, res) => {
 // Create new loan
 app.post('/api/loans', async (req, res) => {
   try {
-    const { customer_id, loan_amount, weekly_amount, loan_given_date, start_date } = req.body;
+    const { customer_id, loan_name, loan_amount, weekly_amount, loan_given_date, start_date } = req.body;
 
     if (!customer_id || !loan_amount || !weekly_amount || !loan_given_date || !start_date) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -304,10 +305,11 @@ app.post('/api/loans', async (req, res) => {
 
     // ALLOW MULTIPLE LOANS: Customer can have multiple active loans
     // Each loan is tracked separately with its own loan_id
-    console.log(`✅ Creating new loan for customer ${customer_id} (multiple loans allowed)`);
+    console.log(`✅ Creating new loan "${loan_name || 'General Loan'}" for customer ${customer_id} (multiple loans allowed)`);
 
     const loanData = {
       customer_id,
+      loan_name: loan_name || 'General Loan', // Default name if not provided
       loan_amount,
       weekly_amount,
       balance: loan_amount,

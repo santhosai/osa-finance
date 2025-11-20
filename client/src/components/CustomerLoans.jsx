@@ -202,11 +202,12 @@ function CustomerLoans({ navigateTo, customerId }) {
                 }}>
                   <div>
                     <div style={{
-                      fontSize: '14px',
-                      color: '#6b7280',
-                      marginBottom: '4px'
+                      fontSize: '16px',
+                      color: '#3b82f6',
+                      marginBottom: '4px',
+                      fontWeight: 600
                     }}>
-                      Loan #{index + 1}
+                      {loan.loan_name || `Loan #${index + 1}`}
                     </div>
                     <div style={{
                       fontSize: '28px',

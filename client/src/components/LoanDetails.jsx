@@ -184,6 +184,20 @@ function LoanDetails({ loanId, navigateTo }) {
       <div className="loan-summary">
         <div className="loan-customer">{loan.customer_name}</div>
         <div className="loan-phone">📱 {loan.customer_phone}</div>
+        {loan.loan_name && (
+          <div style={{
+            fontSize: '16px',
+            fontWeight: 600,
+            color: '#3b82f6',
+            marginTop: '8px',
+            padding: '8px 12px',
+            background: '#dbeafe',
+            borderRadius: '8px',
+            textAlign: 'center'
+          }}>
+            {loan.loan_name}
+          </div>
+        )}
 
         <div className="loan-amount-grid">
           <div className="loan-stat">

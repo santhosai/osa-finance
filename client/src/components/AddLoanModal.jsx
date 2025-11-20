@@ -4,6 +4,7 @@ import { API_URL } from '../config';
 function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSuccess }) {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(customerId || '');
+  const [loanName, setLoanName] = useState('');
   const [loanAmount, setLoanAmount] = useState('');
   const [weeklyAmount, setWeeklyAmount] = useState('');
   const [loanGivenDate, setLoanGivenDate] = useState(new Date().toISOString().split('T')[0]);
@@ -104,6 +105,7 @@ Thank you for choosing our service!
         },
         body: JSON.stringify({
           customer_id: selectedCustomerId,
+          loan_name: loanName.trim() || 'General Loan', // Default if empty
           loan_amount: parseInt(loanAmount),
           weekly_amount: parseInt(weeklyAmount),
           loan_given_date: loanGivenDate,
@@ -206,6 +208,21 @@ Thank you for choosing our service!
                 ))}
               </select>
             )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Loan Name / Purpose</label>
+            <input
+              type="text"
+              className="form-input"
+              value={loanName}
+              onChange={(e) => setLoanName(e.target.value)}
+              placeholder="e.g., Shop Expansion, Medical Emergency, Festival"
+              maxLength="50"
+            />
+            <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+              Optional - helps identify loan when customer has multiple loans
+            </small>
           </div>
 
           <div className="form-group">
