@@ -9,6 +9,7 @@ import VaddiList from './components/VaddiList';
 import SundayCollections from './components/SundayCollections';
 import OverduePayments from './components/OverduePayments';
 import MonthlyFinanceView from './components/MonthlyFinanceView';
+import WeeklyFinanceView from './components/WeeklyFinanceView';
 import './App.css';
 
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
@@ -77,6 +78,7 @@ function App() {
       {currentView === 'overdue-payments' && <OverduePayments navigateTo={navigateTo} />}
       {currentView === 'payment-tracker' && <PaymentTracker navigateTo={navigateTo} />}
       {currentView === 'vaddi-list' && <VaddiList navigateTo={navigateTo} />}
+      {currentView === 'weekly-finance' && <WeeklyFinanceView navigateTo={navigateTo} />}
       {currentView === 'monthly-finance' && <MonthlyFinanceView navigateTo={navigateTo} />}
       {currentView === 'loan-details' && selectedLoanId && (
         <LoanDetails loanId={selectedLoanId} navigateTo={navigateTo} />
