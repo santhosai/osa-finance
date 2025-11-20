@@ -264,9 +264,11 @@ function PaymentTracker({ navigateTo }) {
                 <div style={{ fontWeight: 600, fontSize: '16px', color: '#1f2937', marginBottom: '4px' }}>
                   {customer.name}
                 </div>
-                <div style={{ fontSize: '13px', color: '#3b82f6', fontWeight: 600, marginBottom: '4px' }}>
-                  {customer.loan_name}
-                </div>
+                {customer.loan_name && customer.loan_name !== 'General Loan' && (
+                  <div style={{ fontSize: '13px', color: '#3b82f6', fontWeight: 600, marginBottom: '4px' }}>
+                    {customer.loan_name}
+                  </div>
+                )}
                 <div style={{ fontSize: '14px', color: '#6b7280' }}>
                   📱 {customer.phone}
                 </div>
