@@ -65,12 +65,15 @@ function ExcelPaymentTracker({ navigateTo }) {
           });
         }
 
-        const totalPeriods = loanType === 'Weekly' ? 10 : 5;
+        // Use LOAN's actual type, not filter selection!
+        const loanActualType = loanDetails.loan_type || 'Weekly'; // Default to Weekly if not set
+        const totalPeriods = loanActualType === 'Monthly' ? 5 : 10;
         const periodsPaid = loanDetails.payments ? loanDetails.payments.length : 0;
 
         rows.push({
           customerName,
           friendName,
+          loanType: loanActualType, // Store actual loan type
           totalPeriods,
           periodsPaid,
           loanAmount: loanDetails.loan_amount,
@@ -108,7 +111,7 @@ function ExcelPaymentTracker({ navigateTo }) {
     const wsData = [];
 
     // Header row
-    const headers = ['Date', 'Customer Name', 'Friend/Loan Name', loanType === 'Weekly' ? 'Weeks' : 'Months', ...dates, 'Total Paid'];
+    const headers = ['Date', 'Customer Name', 'Friend/Loan Name', 'Type', 'Periods', ...dates, 'Total Paid'];
     wsData.push(headers);
 
     // Data rows
@@ -117,7 +120,8 @@ function ExcelPaymentTracker({ navigateTo }) {
         new Date().toLocaleDateString('en-IN'),
         row.customerName,
         row.friendName,
-        row.periodsPaid,
+        row.loanType === 'Monthly' ? 'Monthly' : 'Weekly',
+        `${row.periodsPaid}/${row.totalPeriods}`,
         ...dates.map(date => row.paymentsByDate[date] || 0),
         row.totalPaid
       ];
@@ -133,7 +137,8 @@ function ExcelPaymentTracker({ navigateTo }) {
       { wch: 12 }, // Date
       { wch: 20 }, // Customer Name
       { wch: 15 }, // Friend Name
-      { wch: 10 }, // Weeks/Months
+      { wch: 10 }, // Type
+      { wch: 10 }, // Periods
       ...dates.map(() => ({ wch: 12 })), // Payment columns
       { wch: 15 } // Total Paid
     ];
@@ -502,7 +507,8 @@ function ExcelPaymentTracker({ navigateTo }) {
                       <th style={{ padding: '10px', textAlign: 'left', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>Date</th>
                       <th style={{ padding: '10px', textAlign: 'left', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>Customer Name</th>
                       <th style={{ padding: '10px', textAlign: 'left', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>Friend/Loan Name</th>
-                      <th style={{ padding: '10px', textAlign: 'center', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>{loanType === 'Weekly' ? 'Weeks' : 'Months'}</th>
+                      <th style={{ padding: '10px', textAlign: 'center', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>Type</th>
+                      <th style={{ padding: '10px', textAlign: 'center', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>Periods</th>
                       {gridData.dates.map((date, idx) => (
                         <th key={idx} style={{ padding: '10px', textAlign: 'right', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>{date}</th>
                       ))}
@@ -527,8 +533,11 @@ function ExcelPaymentTracker({ navigateTo }) {
                         <td style={{ padding: '8px', borderRight: '1px solid #e5e7eb', color: '#6b7280', whiteSpace: 'nowrap' }}>
                           {row.friendName || '-'}
                         </td>
+                        <td style={{ padding: '8px', borderRight: '1px solid #e5e7eb', textAlign: 'center', fontWeight: 600, color: row.loanType === 'Monthly' ? '#8b5cf6' : '#3b82f6' }}>
+                          {row.loanType === 'Monthly' ? '💰 Monthly' : '📅 Weekly'}
+                        </td>
                         <td style={{ padding: '8px', borderRight: '1px solid #e5e7eb', textAlign: 'center', fontWeight: 600 }}>
-                          {row.periodsPaid}
+                          {row.periodsPaid}/{row.totalPeriods}
                         </td>
                         {gridData.dates.map((date, dateIdx) => {
                           const amount = row.paymentsByDate[date] || 0;

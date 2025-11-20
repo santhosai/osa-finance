@@ -31,46 +31,59 @@ function SundayCollections({ navigateTo }) {
       const response = await fetch(`${API_URL}/customers`);
       const allCustomers = await response.json();
 
-      // Filter customers with active loans
-      const customersWithLoans = allCustomers.filter(c => c.loan_id && c.balance > 0);
+      // Collect all weekly loans from all customers
+      const weeklyLoansPromises = [];
 
-      // Get payment details for each customer
-      const customerPromises = customersWithLoans.map(async (customer) => {
-        try {
-          const loanResponse = await fetch(`${API_URL}/loans/${customer.loan_id}`);
-          const loanData = await loanResponse.json();
+      allCustomers.forEach(customer => {
+        if (customer.loans && customer.loans.length > 0) {
+          customer.loans.forEach(loan => {
+            // Only show Weekly loans with balance > 0
+            const isWeekly = !loan.loan_type || loan.loan_type === 'Weekly';
+            const hasBalance = loan.balance > 0;
 
-          // Check if customer has already paid on the selected Sunday
-          const paidOnSelectedSunday = loanData.payments?.some(
-            payment => payment.payment_date === selectedSunday
-          );
+            if (isWeekly && hasBalance) {
+              const promise = (async () => {
+                try {
+                  const loanResponse = await fetch(`${API_URL}/loans/${loan.loan_id}`);
+                  const loanData = await loanResponse.json();
 
-          // Calculate which week number this would be
-          const startDate = new Date(loanData.start_date);
-          const selectedDate = new Date(selectedSunday);
-          const weeksDiff = Math.floor((selectedDate - startDate) / (7 * 24 * 60 * 60 * 1000));
+                  // Check if customer has already paid on the selected Sunday
+                  const paidOnSelectedSunday = loanData.payments?.some(
+                    payment => payment.payment_date === selectedSunday
+                  );
 
-          // Include all customers with balance > 0 (already filtered at line 35)
-          // Customers continue showing until fully paid, regardless of week number
-          if (weeksDiff >= 0) {
-            return {
-              name: customer.name,
-              phone: customer.phone,
-              weeklyAmount: customer.weekly_amount,
-              weekNumber: weeksDiff + 1,
-              isPaid: paidOnSelectedSunday,
-              loanId: customer.loan_id,
-              customerId: customer.id
-            };
-          }
-          return null;
-        } catch (error) {
-          console.error('Error fetching loan details:', error);
-          return null;
+                  // Calculate which week number this would be
+                  const startDate = new Date(loanData.start_date);
+                  const selectedDate = new Date(selectedSunday);
+                  const weeksDiff = Math.floor((selectedDate - startDate) / (7 * 24 * 60 * 60 * 1000));
+
+                  // Include all loans with balance > 0
+                  // Loans continue showing until fully paid, regardless of week number
+                  if (weeksDiff >= 0) {
+                    return {
+                      name: customer.name,
+                      phone: customer.phone,
+                      weeklyAmount: loan.weekly_amount || loanData.weekly_amount,
+                      weekNumber: weeksDiff + 1,
+                      isPaid: paidOnSelectedSunday,
+                      loanId: loan.loan_id,
+                      customerId: customer.id,
+                      loanName: loan.loan_name || 'General Loan'
+                    };
+                  }
+                  return null;
+                } catch (error) {
+                  console.error('Error fetching loan details:', error);
+                  return null;
+                }
+              })();
+              weeklyLoansPromises.push(promise);
+            }
+          });
         }
       });
 
-      const results = await Promise.all(customerPromises);
+      const results = await Promise.all(weeklyLoansPromises);
       const dueCustomers = results.filter(c => c !== null);
       setSundayCustomers(dueCustomers);
       setCurrentPage(1); // Reset to page 1 when date changes
