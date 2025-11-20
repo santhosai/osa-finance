@@ -13,7 +13,7 @@ import WeeklyFinanceView from './components/WeeklyFinanceView';
 import './App.css';
 
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
-const CURRENT_PASSWORD_VERSION = '2025-01-18-v2';
+const CURRENT_PASSWORD_VERSION = '2025-01-21-v1';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
