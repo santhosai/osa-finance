@@ -265,13 +265,13 @@ Thank you for choosing our service!
           </div>
 
           <div className="form-group">
-            <label className="form-label">Loan Name / Purpose</label>
+            <label className="form-label">Friend Name</label>
             <input
               type="text"
               className="form-input"
               value={loanName}
               onChange={(e) => setLoanName(e.target.value)}
-              placeholder="e.g., Shop Expansion, Medical Emergency, Festival"
+              placeholder="e.g., Ravi, Lakshmi, Karthik"
               maxLength="50"
             />
             <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
