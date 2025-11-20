@@ -629,43 +629,6 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// ============ SETTINGS (Dashboard Image) ============
-
-// Get dashboard image
-app.get('/api/settings/dashboard-image', async (req, res) => {
-  try {
-    const settingsDoc = await db.collection('settings').doc('dashboard').get();
-
-    if (!settingsDoc.exists) {
-      return res.json({ image: null });
-    }
-
-    res.json({ image: settingsDoc.data().image || null });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Save dashboard image (base64)
-app.post('/api/settings/dashboard-image', async (req, res) => {
-  try {
-    const { image } = req.body;
-
-    if (!image) {
-      return res.status(400).json({ error: 'Image data is required' });
-    }
-
-    await db.collection('settings').doc('dashboard').set({
-      image,
-      updated_at: new Date().toISOString()
-    });
-
-    res.json({ message: 'Dashboard image saved successfully', image });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ============ SUNDAY COLLECTIONS (OPTIMIZED) ============
 
 // Get all customers due for payment on a specific Sunday

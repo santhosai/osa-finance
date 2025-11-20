@@ -11,8 +11,6 @@ function Dashboard({ navigateTo }) {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [dashboardImage, setDashboardImage] = useState(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -20,71 +18,6 @@ function Dashboard({ navigateTo }) {
     revalidateOnFocus: false, // Don't auto-refresh on focus (save bandwidth)
     dedupingInterval: 2000, // Prevent duplicate requests within 2s
   });
-
-  // Fetch dashboard image on mount
-  useEffect(() => {
-    const fetchDashboardImage = async () => {
-      try {
-        const response = await fetch(`${API_URL}/settings/dashboard-image`);
-        const data = await response.json();
-        if (data.image) {
-          setDashboardImage(data.image);
-        }
-      } catch (error) {
-        console.error('Error fetching dashboard image:', error);
-      }
-    };
-    fetchDashboardImage();
-  }, []);
-
-  const handleImageUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
-      return;
-    }
-
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Image size should be less than 2MB');
-      return;
-    }
-
-    setUploadingImage(true);
-
-    try {
-      // Convert to base64
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64Image = reader.result;
-
-        // Save to Firestore
-        const response = await fetch(`${API_URL}/settings/dashboard-image`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ image: base64Image })
-        });
-
-        if (response.ok) {
-          setDashboardImage(base64Image);
-          alert('Image uploaded successfully! It will sync across all devices.');
-        } else {
-          alert('Failed to upload image');
-        }
-        setUploadingImage(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      alert('Failed to upload image');
-      setUploadingImage(false);
-    }
-  };
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -272,46 +205,6 @@ function Dashboard({ navigateTo }) {
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
             👥 Customers
-          </button>
-
-          <button
-            onClick={() => { setShowSidebar(false); setShowAddCustomerModal(true); }}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              background: 'transparent',
-              color: 'white',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-              transition: 'background 0.15s'
-            }}
-            onMouseOver={(e) => e.target.style.background = '#334155'}
-            onMouseOut={(e) => e.target.style.background = 'transparent'}
-          >
-            ➕ Add Customer
-          </button>
-
-          <button
-            onClick={() => { setShowSidebar(false); downloadAllData(); }}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              background: 'transparent',
-              color: 'white',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-              transition: 'background 0.15s'
-            }}
-            onMouseOver={(e) => e.target.style.background = '#334155'}
-            onMouseOut={(e) => e.target.style.background = 'transparent'}
-          >
-            📥 Export Data
           </button>
 
           <button
@@ -552,90 +445,6 @@ function Dashboard({ navigateTo }) {
               }}>
                 <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>Total Customers</div>
                 <div style={{ fontSize: '20px', fontWeight: 700 }}>{stats.totalCustomers}</div>
-              </div>
-
-              {/* Dashboard Image */}
-              <div style={{
-                background: 'white',
-                padding: '16px',
-                borderRadius: '12px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                textAlign: 'center'
-              }}>
-                {dashboardImage ? (
-                  <div>
-                    <img
-                      src={dashboardImage}
-                      alt="Dashboard"
-                      style={{
-                        width: '100%',
-                        maxHeight: '200px',
-                        objectFit: 'contain',
-                        borderRadius: '8px',
-                        marginBottom: '12px'
-                      }}
-                    />
-                    <label
-                      htmlFor="dashboard-image-upload"
-                      style={{
-                        display: 'inline-block',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        color: 'white',
-                        padding: '8px 16px',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: uploadingImage ? 'not-allowed' : 'pointer',
-                        opacity: uploadingImage ? 0.6 : 1
-                      }}
-                    >
-                      {uploadingImage ? 'Uploading...' : 'Change Image'}
-                    </label>
-                    <input
-                      id="dashboard-image-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      disabled={uploadingImage}
-                      style={{ display: 'none' }}
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontSize: '48px', marginBottom: '12px' }}>🖼️</div>
-                    <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px', fontWeight: 600 }}>
-                      Add Your Family Photo
-                    </div>
-                    <label
-                      htmlFor="dashboard-image-upload"
-                      style={{
-                        display: 'inline-block',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        color: 'white',
-                        padding: '10px 20px',
-                        borderRadius: '8px',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        cursor: uploadingImage ? 'not-allowed' : 'pointer',
-                        opacity: uploadingImage ? 0.6 : 1,
-                        boxShadow: '0 2px 6px rgba(102, 126, 234, 0.3)'
-                      }}
-                    >
-                      {uploadingImage ? 'Uploading...' : '📸 Upload Image'}
-                    </label>
-                    <input
-                      id="dashboard-image-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      disabled={uploadingImage}
-                      style={{ display: 'none' }}
-                    />
-                    <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px' }}>
-                      Syncs across all devices
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           )}

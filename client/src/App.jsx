@@ -4,7 +4,7 @@ import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
 import CustomerLoans from './components/CustomerLoans';
 import LoanDetails from './components/LoanDetails';
-import PaymentTracker from './components/PaymentTracker';
+import ExcelPaymentTracker from './components/ExcelPaymentTracker';
 import VaddiList from './components/VaddiList';
 import SundayCollections from './components/SundayCollections';
 import OverduePayments from './components/OverduePayments';
@@ -76,7 +76,7 @@ function App() {
       )}
       {currentView === 'sunday-collections' && <SundayCollections navigateTo={navigateTo} />}
       {currentView === 'overdue-payments' && <OverduePayments navigateTo={navigateTo} />}
-      {currentView === 'payment-tracker' && <PaymentTracker navigateTo={navigateTo} />}
+      {currentView === 'payment-tracker' && <ExcelPaymentTracker navigateTo={navigateTo} />}
       {currentView === 'vaddi-list' && <VaddiList navigateTo={navigateTo} />}
       {currentView === 'weekly-finance' && <WeeklyFinanceView navigateTo={navigateTo} />}
       {currentView === 'monthly-finance' && <MonthlyFinanceView navigateTo={navigateTo} />}
