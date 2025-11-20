@@ -14,8 +14,8 @@ function Dashboard({ navigateTo }) {
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
-    refreshInterval: 0, // Manual refresh only (faster performance)
-    revalidateOnFocus: false, // Don't auto-refresh on focus (save bandwidth)
+    refreshInterval: 30000, // Auto-refresh every 30 seconds
+    revalidateOnFocus: true, // Auto-refresh when user returns to tab
     dedupingInterval: 2000, // Prevent duplicate requests within 2s
   });
 

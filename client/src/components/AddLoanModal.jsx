@@ -339,7 +339,6 @@ Thank you for choosing our service!
                 placeholder="Auto-calculated (Loan ÷ 10)"
                 min="1"
                 step="1"
-                required
               />
               <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
                 Auto-calculated as Loan Amount ÷ 10 weeks (editable)
@@ -358,7 +357,6 @@ Thank you for choosing our service!
                 placeholder="Auto-calculated (Loan ÷ 5)"
                 min="1"
                 step="1"
-                required
               />
               <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
                 Auto-calculated as Loan Amount ÷ 5 months (editable)

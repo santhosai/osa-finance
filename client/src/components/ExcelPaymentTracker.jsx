@@ -14,8 +14,8 @@ function ExcelPaymentTracker({ navigateTo }) {
 
   // Fetch all customers with loans
   const { data: customers, error, isLoading } = useSWR(`${API_URL}/customers`, fetcher, {
-    refreshInterval: 0,
-    revalidateOnFocus: false,
+    refreshInterval: 30000, // Auto-refresh every 30 seconds
+    revalidateOnFocus: true, // Auto-refresh when user returns to tab
   });
 
   // Process data for grid display

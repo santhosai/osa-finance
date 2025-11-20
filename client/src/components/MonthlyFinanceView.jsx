@@ -15,8 +15,8 @@ function MonthlyFinanceView({ navigateTo }) {
     `${API_URL}/customers`,
     fetcher,
     {
-      refreshInterval: 0,
-      revalidateOnFocus: true,
+      refreshInterval: 30000, // Auto-refresh every 30 seconds
+      revalidateOnFocus: true, // Auto-refresh when user returns to tab
       dedupingInterval: 2000,
     }
   );
