@@ -1,41 +1,91 @@
-# Finance Tracker Application
+# 🏦 OM SAI MURUGAN FINANCE
 
-A comprehensive finance tracking application for managing customer loans, weekly payments, and WhatsApp notifications.
+A comprehensive finance tracking application for managing Weekly (10 weeks) and Monthly (5 months) loans with WhatsApp integration and cloud sync.
 
-## Features
+**Version 4.0.0** | **Last Updated: January 2025**
+
+## ⚡ Quick Start
+
+```bash
+# 1. Install dependencies
+cd server && npm install
+cd ../client && npm install
+
+# 2. Setup Firestore (see SETUP.md)
+
+# 3. Start application
+cd server && npm run dev    # Terminal 1
+cd client && npm run dev     # Terminal 2
+
+# 4. Open http://localhost:5173
+# Login: santhosh123
+```
+
+**📖 Full Setup Guide**: See [SETUP.md](./SETUP.md)
+
+---
+
+## ✨ Features
 
 ### 📊 Dashboard
-- View active loans count
-- Track outstanding balance
-- Monitor weekly payments
-- See total customers
-- View recent payment activities
+- Real-time loan statistics
+- Active loans counter
+- Outstanding balance tracking
+- Payments this week
+- Total customers count
+- **🖼️ Dashboard Image Upload** (NEW!) - Upload family/god photos that sync across all devices
 
-### 👥 Customers Management
-- Add new customers with phone numbers
-- Search customers by name or phone
-- View customer loan status
-- Track active loans per customer
+### 👥 Customer Management
+- Add/Edit/Delete customers
+- Multiple loans per customer
+- Search by name or phone
+- View customer loan details
+- Track "Loan Given" amount (NEW!)
+- Export customer data as CSV
 
 ### 💰 Loan Management
-- Create new loans with custom weekly payment amounts
-- Track loan balance and progress
-- View payment history
+#### Weekly Finance (10 weeks)
+- Sunday payments only
+- Auto-calculate weekly amount (Loan ÷ 10)
+- Track weeks paid/remaining
+- Progress bars
+
+#### Monthly Finance (5 months) (NEW!)
+- Any date payments
+- Auto-calculate monthly amount (Loan ÷ 5)
+- Calendar month calculation (accurate dates)
+- Track months paid/remaining
+
+#### Common Features
+- **Friend Name** - Identify loans when customer has multiple
+- Multiple loans per customer
 - Top-up existing loans
-- Automatic calculation of weeks and completion dates
+- Close completed loans
+- View payment history
 
 ### 💳 Payment Tracking
-- Record payments with automatic calculations
-- Track weeks covered by each payment
-- Monitor payment week numbers
-- Update loan balance automatically
-- Close loans when fully paid
+- Record payments with date
+- Offline + Online amount split
+- Auto-update loan balance
+- Payment receipts
+- WhatsApp integration
+- Payment history with CSV export
+
+### 📅 Views
+- **Dashboard** - Overview & statistics
+- **Sunday Collections** - Who pays this Sunday? (download sheet)
+- **Weekly Finance** (NEW!) - All weekly loans
+- **Monthly Finance** (NEW!) - All monthly loans
+- **Overdue Payments** - Track late payments
+- **Vaddi List** - Interest tracking
+- **Payment Tracker** - Check payment status by date
+- **Customers** - Complete customer list
 
 ### 📱 WhatsApp Integration
-- Send payment receipts via WhatsApp
-- Share loan details with customers
-- One-click WhatsApp messaging
-- Professional payment notifications
+- One-click payment receipts
+- Loan confirmation messages
+- Professional formatted messages
+- Direct WhatsApp links (wa.me)
 
 ## Tech Stack
 
@@ -162,6 +212,34 @@ Open your browser and navigate to:
 ```
 http://localhost:5173
 ```
+
+**Default Login**: `santhosh123`
+
+---
+
+## 🖼️ Dashboard Image Feature (NEW!)
+
+### Where to Find It:
+1. Login to application
+2. Go to **Dashboard** (main screen)
+3. **Scroll down** below "Total Customers" card
+4. You'll see either:
+   - 🖼️ "Add Your Family Photo" button (if no image)
+   - Your uploaded image with "Change Image" button
+
+### How to Upload:
+1. Click "📸 Upload Image" button
+2. Select image from your device
+3. Max size: 2MB
+4. Supported formats: JPG, PNG, GIF, WebP
+5. Image uploads to Firestore
+6. **Syncs across all devices automatically!**
+
+### Can't See It?
+- Press **Ctrl+Shift+R** (Windows) or **Cmd+Shift+R** (Mac) to hard refresh
+- Make sure you're logged in
+- Look below the "Total Customers" card in Dashboard
+- Check browser console (F12) for errors
 
 ## API Endpoints
 
