@@ -92,6 +92,27 @@ const MonthlyFinance = ({ navigateTo }) => {
     const updatedCustomers = [...customers, newCustomer];
     saveCustomers(updatedCustomers);
 
+    // Send WhatsApp message if phone number provided
+    if (formData.phone) {
+      const message = `HI ${formData.name},
+
+You have received a loan of ₹${amount.toLocaleString('en-IN')} from Om Sai Murugan Finance.
+
+Monthly payment: ₹${monthlyInstallment.toLocaleString('en-IN')}
+Total months: ${totalMonths}
+Payment starts from: ${new Date(formData.date).toLocaleDateString('en-IN')}
+
+Thank you for choosing our service!
+
+- Om Sai Murugan Finance`;
+
+      const cleanPhone = formData.phone.replace(/\D/g, '');
+      const phoneWithCountryCode = `91${cleanPhone}`;
+      const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+
+      window.open(whatsappUrl, '_blank');
+    }
+
     // Reset form
     setFormData({ name: '', amount: '', date: '', monthlyInstallment: '', totalMonths: '5', phone: '' });
     setShowForm(false);
