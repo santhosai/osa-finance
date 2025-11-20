@@ -5,11 +5,12 @@ import db from './firestore.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ⚡ DEPLOYMENT v3.3.0 - Jan 19, 2025 23:50 - FORCE REBUILD
+// ⚡ DEPLOYMENT v4.0.0 - Jan 20, 2025 - UNIFIED LOAN SYSTEM (Weekly + Monthly)
 // CONFIRMED: NO phone uniqueness check - Duplicate phones ARE ALLOWED
 // Using Firestore (NOT SQLite) - NO UNIQUE constraint on phone field
-const VERSION = '3.3.0';
-console.log(`🚀 Backend v${VERSION} - DUPLICATE PHONES ALLOWED`);
+// NEW: Supports both Weekly (10 weeks) and Monthly (5 months) loan types
+const VERSION = '4.0.0';
+console.log(`🚀 Backend v${VERSION} - UNIFIED LOAN SYSTEM (Weekly + Monthly)`);
 
 // CORS configuration for production
 const corsOptions = {
@@ -99,9 +100,11 @@ app.get('/api/customers', async (req, res) => {
           loans.push({
             loan_id: loanDoc.id,
             loan_name: loanData.loan_name || 'General Loan', // Include loan name
+            loan_type: loanData.loan_type || 'Weekly', // Default to Weekly for old loans
             loan_amount: loanData.loan_amount,
             balance: loanData.balance,
-            weekly_amount: loanData.weekly_amount,
+            weekly_amount: loanData.weekly_amount || 0,
+            monthly_amount: loanData.monthly_amount || 0,
             status: loanData.status,
             start_date: loanData.start_date,
             loan_given_date: loanData.loan_given_date,
@@ -269,8 +272,18 @@ app.get('/api/loans/:id', async (req, res) => {
     // Calculate additional statistics
     const totalPaid = loanData.loan_amount - loanData.balance;
     const progressPercent = (totalPaid / loanData.loan_amount) * 100;
-    const totalWeeks = Math.ceil(loanData.loan_amount / loanData.weekly_amount);
-    const weeksRemaining = Math.ceil(loanData.balance / loanData.weekly_amount);
+
+    // Calculate periods based on loan type
+    const loanType = loanData.loan_type || 'Weekly';
+    let totalPeriods, periodsRemaining;
+
+    if (loanType === 'Weekly') {
+      totalPeriods = Math.ceil(loanData.loan_amount / loanData.weekly_amount);
+      periodsRemaining = Math.ceil(loanData.balance / loanData.weekly_amount);
+    } else if (loanType === 'Monthly') {
+      totalPeriods = Math.ceil(loanData.loan_amount / loanData.monthly_amount);
+      periodsRemaining = Math.ceil(loanData.balance / loanData.monthly_amount);
+    }
 
     res.json({
       id: loanDoc.id,
@@ -280,8 +293,11 @@ app.get('/api/loans/:id', async (req, res) => {
       payments,
       totalPaid,
       progressPercent,
-      totalWeeks,
-      weeksRemaining
+      totalPeriods, // Can be weeks or months
+      periodsRemaining, // Can be weeks or months
+      // Keep old field names for backward compatibility
+      totalWeeks: totalPeriods,
+      weeksRemaining: periodsRemaining
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -291,27 +307,42 @@ app.get('/api/loans/:id', async (req, res) => {
 // Create new loan
 app.post('/api/loans', async (req, res) => {
   try {
-    const { customer_id, loan_name, loan_amount, weekly_amount, loan_given_date, start_date } = req.body;
+    const { customer_id, loan_name, loan_type, loan_amount, weekly_amount, monthly_amount, loan_given_date, start_date } = req.body;
 
-    if (!customer_id || !loan_amount || !weekly_amount || !loan_given_date || !start_date) {
-      return res.status(400).json({ error: 'All fields are required' });
+    if (!customer_id || !loan_amount || !loan_given_date || !start_date) {
+      return res.status(400).json({ error: 'Customer ID, loan amount, loan given date, and start date are required' });
     }
 
-    // Validate that start_date is a Sunday
-    const startDate = new Date(start_date);
-    if (startDate.getDay() !== 0) {
-      return res.status(400).json({ error: 'Loans can only start on Sundays' });
+    const loanTypeValue = loan_type || 'Weekly'; // Default to Weekly
+
+    // Validate based on loan type
+    if (loanTypeValue === 'Weekly') {
+      if (!weekly_amount) {
+        return res.status(400).json({ error: 'Weekly amount is required for Weekly loans' });
+      }
+      // Validate that start_date is a Sunday for Weekly loans
+      const startDate = new Date(start_date);
+      if (startDate.getDay() !== 0) {
+        return res.status(400).json({ error: 'Weekly loans can only start on Sundays' });
+      }
+    } else if (loanTypeValue === 'Monthly') {
+      if (!monthly_amount) {
+        return res.status(400).json({ error: 'Monthly amount is required for Monthly loans' });
+      }
+      // Monthly loans can start on any date (no Sunday restriction)
     }
 
     // ALLOW MULTIPLE LOANS: Customer can have multiple active loans
     // Each loan is tracked separately with its own loan_id
-    console.log(`✅ Creating new loan "${loan_name || 'General Loan'}" for customer ${customer_id} (multiple loans allowed)`);
+    console.log(`✅ Creating new ${loanTypeValue} loan "${loan_name || 'General Loan'}" for customer ${customer_id} (multiple loans allowed)`);
 
     const loanData = {
       customer_id,
       loan_name: loan_name || 'General Loan', // Default name if not provided
+      loan_type: loanTypeValue,
       loan_amount,
-      weekly_amount,
+      weekly_amount: weekly_amount || 0,
+      monthly_amount: monthly_amount || 0,
       balance: loan_amount,
       loan_given_date,
       start_date,
@@ -442,12 +473,6 @@ app.post('/api/payments', async (req, res) => {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
-    // Validate that payment_date is a Sunday
-    const paymentDate = new Date(payment_date);
-    if (paymentDate.getDay() !== 0) {
-      return res.status(400).json({ error: 'Payments can only be made on Sundays' });
-    }
-
     // Get loan details
     const loanDoc = await db.collection('loans').doc(loan_id).get();
 
@@ -456,6 +481,17 @@ app.post('/api/payments', async (req, res) => {
     }
 
     const loanData = loanDoc.data();
+    const loanType = loanData.loan_type || 'Weekly';
+
+    // Validate payment date based on loan type
+    const paymentDate = new Date(payment_date);
+    if (loanType === 'Weekly') {
+      // Weekly loans: Payments must be on Sundays
+      if (paymentDate.getDay() !== 0) {
+        return res.status(400).json({ error: 'Weekly loan payments can only be made on Sundays' });
+      }
+    }
+    // Monthly loans: Payments can be on any date (no restriction)
 
     if (loanData.status !== 'active') {
       return res.status(400).json({ error: 'Loan is not active' });
@@ -465,15 +501,21 @@ app.post('/api/payments', async (req, res) => {
       return res.status(400).json({ error: 'Payment amount exceeds loan balance' });
     }
 
-    // Calculate payment details
-    const weeksCovered = amount / loanData.weekly_amount;
+    // Calculate payment details based on loan type
+    let periodsCovered = 0;
+    if (loanType === 'Weekly') {
+      periodsCovered = amount / loanData.weekly_amount;
+    } else if (loanType === 'Monthly') {
+      periodsCovered = amount / loanData.monthly_amount;
+    }
+
     const newBalance = loanData.balance - amount;
 
-    // Get current week number (count existing payments + 1)
+    // Get current period number (count existing payments + 1)
     const paymentsSnapshot = await db.collection('payments')
       .where('loan_id', '==', loan_id)
       .get();
-    const weekNumber = paymentsSnapshot.size + 1;
+    const periodNumber = paymentsSnapshot.size + 1;
 
     // Create payment data
     const paymentData = {
@@ -483,8 +525,8 @@ app.post('/api/payments', async (req, res) => {
       payment_mode: payment_mode || 'cash',
       offline_amount: offline_amount || 0,
       online_amount: online_amount || 0,
-      weeks_covered: weeksCovered,
-      week_number: weekNumber,
+      periods_covered: periodsCovered, // Can be weeks or months depending on loan type
+      period_number: periodNumber,
       balance_after: newBalance,
       created_at: new Date().toISOString()
     };

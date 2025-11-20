@@ -49,11 +49,14 @@ function PaymentTracker({ navigateTo }) {
                 phone: customer.phone,
                 loan_id: loan.loan_id,
                 loan_name: loan.loan_name || 'General Loan',
+                loan_type: loan.loan_type || 'Weekly',
                 paidOnDate,
                 paidAmount: paymentOnDate?.amount || 0,
                 offlineAmount: paymentOnDate?.offline_amount || 0,
                 onlineAmount: paymentOnDate?.online_amount || 0,
+                paymentAmount: loan.loan_type === 'Monthly' ? loan.monthly_amount : loan.weekly_amount,
                 weeklyAmount: loan.weekly_amount,
+                monthlyAmount: loan.monthly_amount,
                 balance: loan.balance
               };
             });
@@ -72,10 +75,10 @@ function PaymentTracker({ navigateTo }) {
   };
 
   const downloadReport = () => {
-    const csvHeader = 'Customer Name,Phone,Weekly Amount,Balance,Paid Amount,Status\n';
+    const csvHeader = 'Customer Name,Phone,Loan Type,Payment Amount,Balance,Paid Amount,Status\n';
     const csvRows = customers.map(customer => {
       const status = customer.paidOnDate ? 'PAID' : 'NOT PAID';
-      return `${customer.name},${customer.phone},${customer.weeklyAmount},${customer.balance},${customer.paidAmount},${status}`;
+      return `${customer.name},${customer.phone},${customer.loan_type},${customer.paymentAmount},${customer.balance},${customer.paidAmount},${status}`;
     }).join('\n');
 
     const csvContent = csvHeader + csvRows;
@@ -273,7 +276,7 @@ function PaymentTracker({ navigateTo }) {
                   📱 {customer.phone}
                 </div>
                 <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
-                  Weekly: {formatCurrency(customer.weeklyAmount)} | Balance: {formatCurrency(customer.balance)}
+                  {customer.loan_type === 'Monthly' ? 'Monthly' : 'Weekly'}: {formatCurrency(customer.paymentAmount)} | Balance: {formatCurrency(customer.balance)}
                 </div>
               </div>
 
@@ -535,7 +538,7 @@ Thank you for your payment!
             📱 {customer.phone}
           </div>
           <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
-            Weekly: {formatCurrency(customer.weeklyAmount)}
+            {customer.loan_type === 'Monthly' ? 'Monthly' : 'Weekly'}: {formatCurrency(customer.paymentAmount)}
           </div>
           <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
             Balance: {formatCurrency(customer.balance)}

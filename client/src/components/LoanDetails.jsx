@@ -61,7 +61,11 @@ function LoanDetails({ loanId, navigateTo }) {
   };
 
   const sendWhatsAppMessage = (payment) => {
-    const message = `Payment Receipt\n\nCustomer: ${loan.customer_name}\nAmount: ${formatCurrency(payment.amount)}\nDate: ${formatDate(payment.payment_date)}\nWeek: ${payment.week_number}\nBalance Remaining: ${formatCurrency(payment.balance_after)}\n\nThank you for your payment!`;
+    const loanType = loan.loan_type || 'Weekly';
+    const periodLabel = loanType === 'Weekly' ? 'Week' : 'Month';
+    const periodNumber = payment.period_number || payment.week_number;
+
+    const message = `Payment Receipt\n\nCustomer: ${loan.customer_name}\nAmount: ${formatCurrency(payment.amount)}\nDate: ${formatDate(payment.payment_date)}\n${periodLabel}: ${periodNumber}\nBalance Remaining: ${formatCurrency(payment.balance_after)}\n\nThank you for your payment!`;
 
     const phoneNumber = loan.customer_phone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/91${phoneNumber}?text=${encodeURIComponent(message)}`;
@@ -126,11 +130,15 @@ function LoanDetails({ loanId, navigateTo }) {
   };
 
   const downloadPaymentHistory = () => {
+    const loanType = loan.loan_type || 'Weekly';
+    const periodLabel = loanType === 'Weekly' ? 'Week' : 'Month';
+    const paymentAmount = loanType === 'Weekly' ? loan.weekly_amount : loan.monthly_amount;
+
     // Create CSV content with more detailed information
-    const csvHeader = 'Payment Date,Week Number,Amount Paid,Weeks Covered,Balance After Payment,Customer Name,Phone,Loan Start Date,Total Loan Amount,Weekly Payment\n';
+    const csvHeader = `Payment Date,${periodLabel} Number,Amount Paid,${periodLabel}s Covered,Balance After Payment,Customer Name,Phone,Loan Start Date,Total Loan Amount,${periodLabel}ly Payment\n`;
     const csvRows = loan.payments.map(payment => {
       const date = payment.payment_date;
-      return `${date},${payment.week_number},${payment.amount},${payment.weeks_covered},${payment.balance_after},${loan.customer_name},${loan.customer_phone},${loan.start_date},${loan.loan_amount},${loan.weekly_amount}`;
+      return `${date},${payment.period_number || payment.week_number},${payment.amount},${payment.periods_covered || payment.weeks_covered},${payment.balance_after},${loan.customer_name},${loan.customer_phone},${loan.start_date},${loan.loan_amount},${paymentAmount}`;
     }).join('\n');
 
     const csvContent = csvHeader + csvRows;
@@ -260,12 +268,14 @@ function LoanDetails({ loanId, navigateTo }) {
             <div className="loan-stat-label">Balance</div>
           </div>
           <div className="loan-stat">
-            <div className="loan-stat-value">{formatCurrency(loan.weekly_amount)}</div>
-            <div className="loan-stat-label">Weekly</div>
+            <div className="loan-stat-value">
+              {formatCurrency((loan.loan_type === 'Monthly' ? loan.monthly_amount : loan.weekly_amount) || 0)}
+            </div>
+            <div className="loan-stat-label">{loan.loan_type === 'Monthly' ? 'Monthly' : 'Weekly'}</div>
           </div>
           <div className="loan-stat">
-            <div className="loan-stat-value">{loan.weeksRemaining}</div>
-            <div className="loan-stat-label">Weeks Left</div>
+            <div className="loan-stat-value">{loan.periodsRemaining || loan.weeksRemaining}</div>
+            <div className="loan-stat-label">{loan.loan_type === 'Monthly' ? 'Months Left' : 'Weeks Left'}</div>
           </div>
         </div>
       </div>

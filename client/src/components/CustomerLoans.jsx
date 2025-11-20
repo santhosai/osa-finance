@@ -167,9 +167,11 @@ function CustomerLoans({ navigateTo, customerId }) {
       <div style={{ padding: '0 16px 80px 16px' }}>
         {customer.loans && customer.loans.length > 0 ? (
           customer.loans.map((loan, index) => {
+            const loanType = loan.loan_type || 'Weekly';
             const progress = ((loan.loan_amount - loan.balance) / loan.loan_amount) * 100;
-            const weeksPaid = Math.floor((loan.loan_amount - loan.balance) / loan.weekly_amount);
-            const totalWeeks = Math.ceil(loan.loan_amount / loan.weekly_amount);
+            const paymentAmount = loanType === 'Weekly' ? loan.weekly_amount : loan.monthly_amount;
+            const periodsPaid = Math.floor((loan.loan_amount - loan.balance) / paymentAmount);
+            const totalPeriods = Math.ceil(loan.loan_amount / paymentAmount);
 
             return (
               <div
@@ -245,10 +247,10 @@ function CustomerLoans({ navigateTo, customerId }) {
                   </div>
                   <div>
                     <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
-                      Weekly
+                      {loanType === 'Weekly' ? 'Weekly' : 'Monthly'}
                     </div>
                     <div style={{ fontSize: '18px', fontWeight: 600, color: '#059669' }}>
-                      {formatCurrency(loan.weekly_amount)}
+                      {formatCurrency(paymentAmount)}
                     </div>
                   </div>
                 </div>

@@ -6,7 +6,6 @@ import CustomerLoans from './components/CustomerLoans';
 import LoanDetails from './components/LoanDetails';
 import PaymentTracker from './components/PaymentTracker';
 import VaddiList from './components/VaddiList';
-import MonthlyFinance from './components/MonthlyFinance';
 import SundayCollections from './components/SundayCollections';
 import OverduePayments from './components/OverduePayments';
 import './App.css';
@@ -77,7 +76,6 @@ function App() {
       {currentView === 'overdue-payments' && <OverduePayments navigateTo={navigateTo} />}
       {currentView === 'payment-tracker' && <PaymentTracker navigateTo={navigateTo} />}
       {currentView === 'vaddi-list' && <VaddiList navigateTo={navigateTo} />}
-      {currentView === 'monthly-finance' && <MonthlyFinance navigateTo={navigateTo} />}
       {currentView === 'loan-details' && selectedLoanId && (
         <LoanDetails loanId={selectedLoanId} navigateTo={navigateTo} />
       )}

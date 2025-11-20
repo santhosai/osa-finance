@@ -11,7 +11,6 @@ function Dashboard({ navigateTo }) {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [monthlyFinanceBalance, setMonthlyFinanceBalance] = useState(0);
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -19,26 +18,6 @@ function Dashboard({ navigateTo }) {
     revalidateOnFocus: false, // Don't auto-refresh on focus (save bandwidth)
     dedupingInterval: 2000, // Prevent duplicate requests within 2s
   });
-
-  const calculateMonthlyFinanceBalance = () => {
-    try {
-      const monthlyFinanceData = localStorage.getItem('monthlyFinanceCustomers');
-      if (monthlyFinanceData) {
-        const customers = JSON.parse(monthlyFinanceData);
-        const totalBalance = customers.reduce((sum, customer) => sum + (customer.balance || 0), 0);
-        setMonthlyFinanceBalance(totalBalance);
-      } else {
-        setMonthlyFinanceBalance(0);
-      }
-    } catch (error) {
-      console.error('Error calculating monthly finance balance:', error);
-      setMonthlyFinanceBalance(0);
-    }
-  };
-
-  useEffect(() => {
-    calculateMonthlyFinanceBalance();
-  }, []);
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -308,25 +287,6 @@ function Dashboard({ navigateTo }) {
             📝 Vaddi List
           </button>
 
-          <button
-            onClick={() => { setShowSidebar(false); navigateTo('monthly-finance'); }}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              background: 'transparent',
-              color: 'white',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-              transition: 'background 0.15s'
-            }}
-            onMouseOver={(e) => e.target.style.background = '#334155'}
-            onMouseOut={(e) => e.target.style.background = 'transparent'}
-          >
-            💰 Monthly Finance
-          </button>
         </div>
 
         <button
@@ -444,26 +404,8 @@ function Dashboard({ navigateTo }) {
                 color: 'white'
               }}>
                 <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>Total Outstanding</div>
-                <div style={{ fontSize: '20px', fontWeight: 700, marginBottom: '6px' }}>
-                  {formatCurrency((stats.outstanding || 0) + monthlyFinanceBalance)}
-                </div>
-                <div style={{
-                  fontSize: '9px',
-                  opacity: 0.85,
-                  borderTop: '1px solid rgba(255,255,255,0.2)',
-                  paddingTop: '6px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '3px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Weekly:</span>
-                    <span style={{ fontWeight: 600 }}>{formatCurrency(stats.outstanding || 0)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Monthly:</span>
-                    <span style={{ fontWeight: 600 }}>{formatCurrency(monthlyFinanceBalance)}</span>
-                  </div>
+                <div style={{ fontSize: '20px', fontWeight: 700 }}>
+                  {formatCurrency(stats.outstanding || 0)}
                 </div>
               </div>
 
