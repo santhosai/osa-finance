@@ -287,6 +287,26 @@ function Dashboard({ navigateTo }) {
             📝 Vaddi List
           </button>
 
+          <button
+            onClick={() => { setShowSidebar(false); navigateTo('monthly-finance'); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'transparent',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#334155'}
+            onMouseOut={(e) => e.target.style.background = 'transparent'}
+          >
+            💰 Monthly Finance
+          </button>
+
         </div>
 
         <button
