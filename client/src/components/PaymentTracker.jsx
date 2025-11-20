@@ -19,39 +19,51 @@ function PaymentTracker({ navigateTo }) {
       const customersResponse = await fetch(`${API_URL}/customers`);
       const allCustomers = await customersResponse.json();
 
-      // For each customer with loan, check if they paid on selected date
-      const customerStatusPromises = allCustomers.map(async (customer) => {
-        if (!customer.loan_id) return null;
-        if (customer.balance === 0) return null; // Skip completed loans
+      // For each customer, check all their active loans
+      const loanStatusPromises = [];
 
-        // Get all payments for this loan
-        const loanResponse = await fetch(`${API_URL}/loans/${customer.loan_id}`);
-        const loanData = await loanResponse.json();
+      allCustomers.forEach((customer) => {
+        // Check if customer has loans array (new structure)
+        if (!customer.loans || customer.loans.length === 0) return;
 
-        // Check if any payment was made on selected date
-        const paidOnDate = loanData.payments?.some(
-          payment => payment.payment_date === selectedDate
-        );
+        // For each active loan
+        customer.loans.forEach((loan) => {
+          if (loan.balance === 0) return; // Skip completed loans
 
-        // Get the actual payment amount if paid
-        const paymentOnDate = loanData.payments?.find(
-          payment => payment.payment_date === selectedDate
-        );
+          const promise = fetch(`${API_URL}/loans/${loan.loan_id}`)
+            .then(res => res.json())
+            .then(loanData => {
+              // Check if any payment was made on selected date
+              const paidOnDate = loanData.payments?.some(
+                payment => payment.payment_date === selectedDate
+              );
 
-        return {
-          ...customer,
-          paidOnDate,
-          paidAmount: paymentOnDate?.amount || 0,
-          offlineAmount: paymentOnDate?.offline_amount || 0,
-          onlineAmount: paymentOnDate?.online_amount || 0,
-          weeklyAmount: customer.weekly_amount,
-          balance: customer.balance
-        };
+              // Get the actual payment amount if paid
+              const paymentOnDate = loanData.payments?.find(
+                payment => payment.payment_date === selectedDate
+              );
+
+              return {
+                id: loan.loan_id,
+                name: customer.name,
+                phone: customer.phone,
+                loan_id: loan.loan_id,
+                loan_name: loan.loan_name || 'General Loan',
+                paidOnDate,
+                paidAmount: paymentOnDate?.amount || 0,
+                offlineAmount: paymentOnDate?.offline_amount || 0,
+                onlineAmount: paymentOnDate?.online_amount || 0,
+                weeklyAmount: loan.weekly_amount,
+                balance: loan.balance
+              };
+            });
+
+          loanStatusPromises.push(promise);
+        });
       });
 
-      const results = await Promise.all(customerStatusPromises);
-      const customersWithLoans = results.filter(c => c !== null);
-      setCustomers(customersWithLoans);
+      const results = await Promise.all(loanStatusPromises);
+      setCustomers(results);
     } catch (error) {
       console.error('Error fetching payment status:', error);
     } finally {
@@ -252,11 +264,14 @@ function PaymentTracker({ navigateTo }) {
                 <div style={{ fontWeight: 600, fontSize: '16px', color: '#1f2937', marginBottom: '4px' }}>
                   {customer.name}
                 </div>
+                <div style={{ fontSize: '13px', color: '#3b82f6', fontWeight: 600, marginBottom: '4px' }}>
+                  {customer.loan_name}
+                </div>
                 <div style={{ fontSize: '14px', color: '#6b7280' }}>
                   📱 {customer.phone}
                 </div>
                 <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
-                  Weekly: {formatCurrency(customer.weeklyAmount)}
+                  Weekly: {formatCurrency(customer.weeklyAmount)} | Balance: {formatCurrency(customer.balance)}
                 </div>
               </div>
 
