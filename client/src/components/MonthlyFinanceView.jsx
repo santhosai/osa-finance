@@ -21,13 +21,17 @@ function MonthlyFinanceView({ navigateTo }) {
     }
   );
 
-  // Filter only Monthly Finance loans
+  // Show ALL loans (Monthly type or loans without type field)
   const monthlyLoans = useMemo(() => {
     const loans = [];
     allCustomers.forEach(customer => {
       if (customer.loans && customer.loans.length > 0) {
         customer.loans.forEach(loan => {
-          if (loan.loan_type === 'Monthly' && loan.status === 'active') {
+          // Show loans that are Monthly type OR don't have loan_type (old loans)
+          const isMonthly = !loan.loan_type || loan.loan_type === 'Monthly';
+          const hasBalance = loan.balance > 0;
+
+          if (isMonthly && hasBalance) {
             loans.push({
               ...loan,
               customer_name: customer.name,

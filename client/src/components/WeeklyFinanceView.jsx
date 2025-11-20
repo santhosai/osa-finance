@@ -21,13 +21,17 @@ function WeeklyFinanceView({ navigateTo }) {
     }
   );
 
-  // Filter only Weekly Finance loans
+  // Show ALL loans (Weekly type or loans without type field)
   const weeklyLoans = useMemo(() => {
     const loans = [];
     allCustomers.forEach(customer => {
       if (customer.loans && customer.loans.length > 0) {
         customer.loans.forEach(loan => {
-          if (loan.loan_type === 'Weekly' && loan.status === 'active') {
+          // Show loans that are Weekly type OR don't have loan_type (old loans)
+          const isWeekly = !loan.loan_type || loan.loan_type === 'Weekly';
+          const hasBalance = loan.balance > 0;
+
+          if (isWeekly && hasBalance) {
             loans.push({
               ...loan,
               customer_name: customer.name,
