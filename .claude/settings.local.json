@@ -22,7 +22,11 @@
       "Bash(del database.js 2)",
       "Bash(nul)",
       "Bash(del finance.db 2)",
-      "Bash(python -m json.tool:*)"
+      "Bash(python -m json.tool:*)",
+      "Bash(You have received a loan of ₹4,000 from Om Sai Murugan Finance.)",
+      "Bash(Monthly payment: ₹1,000)",
+      "Bash(Total months: 5)",
+      "Bash(...\"\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

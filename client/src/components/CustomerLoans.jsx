@@ -302,9 +302,9 @@ function CustomerLoans({ navigateTo, customerId }) {
                     </div>
                   </div>
                   <div>
-                    <div>Weeks</div>
+                    <div>{loanType === 'Weekly' ? 'Weeks' : 'Months'}</div>
                     <div style={{ color: '#1f2937', fontWeight: 600 }}>
-                      {weeksPaid}/{totalWeeks}
+                      {periodsPaid}/{totalPeriods}
                     </div>
                   </div>
                 </div>

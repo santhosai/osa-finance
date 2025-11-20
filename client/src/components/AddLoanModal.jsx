@@ -420,10 +420,16 @@ Thank you for choosing our service!
               <div className="calc-row">
                 <span className="calc-label">Estimated completion:</span>
                 <span className="calc-value">
-                  {new Date(
-                    new Date(startDate).getTime() +
-                    totalPeriods * (loanType === 'Weekly' ? 7 : 30) * 24 * 60 * 60 * 1000
-                  ).toLocaleDateString('en-IN')}
+                  {(() => {
+                    const completionDate = new Date(startDate);
+                    if (loanType === 'Weekly') {
+                      completionDate.setDate(completionDate.getDate() + (totalPeriods * 7));
+                    } else {
+                      // Monthly: Add calendar months (not fixed 30 days)
+                      completionDate.setMonth(completionDate.getMonth() + totalPeriods);
+                    }
+                    return completionDate.toLocaleDateString('en-IN');
+                  })()}
                 </span>
               </div>
             </div>

@@ -286,6 +286,12 @@ function Customers({ navigateTo }) {
                 </div>
               </div>
               <div className="loan-info">
+                <div className="loan-label">Loan Given</div>
+                <div className="loan-value">
+                  {formatCurrency(customer.loans.reduce((sum, loan) => sum + loan.loan_amount, 0))}
+                </div>
+              </div>
+              <div className="loan-info">
                 <div className="loan-label">Total Balance</div>
                 <div className="loan-value">{formatCurrency(customer.total_balance)}</div>
               </div>
