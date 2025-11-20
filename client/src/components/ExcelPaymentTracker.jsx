@@ -8,7 +8,7 @@ const fetcher = (url) => fetch(url).then(res => res.json());
 
 function ExcelPaymentTracker({ navigateTo }) {
   const [showSidebar, setShowSidebar] = useState(false);
-  const [loanType, setLoanType] = useState('Weekly'); // 'Weekly' or 'Monthly'
+  const [loanType, setLoanType] = useState('All'); // 'All', 'Weekly', or 'Monthly'
   const [gridData, setGridData] = useState({ rows: [], dates: [] });
   const [loading, setLoading] = useState(true);
 
@@ -33,7 +33,11 @@ function ExcelPaymentTracker({ navigateTo }) {
       customers.forEach(customer => {
         if (customer.loans && customer.loans.length > 0) {
           customer.loans.forEach((loan) => {
-            if (loan.loan_type === loanType && loan.status === 'active') {
+            // Show ALL loans (Weekly/Monthly/any type) - only filter by selected type if loan_type exists
+            const matchesType = !loan.loan_type || loan.loan_type === loanType || loanType === 'All';
+            const isActive = loan.balance > 0; // Show loans with remaining balance
+
+            if (matchesType && isActive) {
               loanPromises.push(
                 fetch(`${API_URL}/loans/${loan.loan_id}`)
                   .then(res => res.json())
@@ -416,6 +420,22 @@ function ExcelPaymentTracker({ navigateTo }) {
         <div style={{ padding: '12px', background: '#1e293b' }}>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
+              onClick={() => setLoanType('All')}
+              style={{
+                flex: 1,
+                padding: '8px',
+                background: loanType === 'All' ? '#10b981' : '#374151',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              📊 All Loans
+            </button>
+            <button
               onClick={() => setLoanType('Weekly')}
               style={{
                 flex: 1,
@@ -429,7 +449,7 @@ function ExcelPaymentTracker({ navigateTo }) {
                 cursor: 'pointer'
               }}
             >
-              📅 Weekly (10 weeks)
+              📅 Weekly
             </button>
             <button
               onClick={() => setLoanType('Monthly')}
@@ -445,7 +465,7 @@ function ExcelPaymentTracker({ navigateTo }) {
                 cursor: 'pointer'
               }}
             >
-              💰 Monthly (5 months)
+              💰 Monthly
             </button>
           </div>
         </div>
