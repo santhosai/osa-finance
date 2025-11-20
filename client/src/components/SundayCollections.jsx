@@ -10,6 +10,7 @@ function SundayCollections({ navigateTo }) {
   const [selectedCustomerForPayment, setSelectedCustomerForPayment] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const customersPerPage = 20;
+  const [dateError, setDateError] = useState('');
 
   // Helper function to get next Sunday
   function getNextSunday() {
@@ -26,6 +27,15 @@ function SundayCollections({ navigateTo }) {
   }, [selectedSunday]);
 
   const fetchSundayCustomers = async () => {
+    // Validate that selected date is a Sunday
+    const selectedDate = new Date(selectedSunday + 'T00:00:00');
+    if (selectedDate.getDay() !== 0) {
+      setDateError('⚠️ Please select a Sunday. Collections are only on Sundays.');
+      setSundayCustomers([]);
+      return;
+    }
+    setDateError('');
+
     setLoadingSundayCustomers(true);
     try {
       const response = await fetch(`${API_URL}/customers`);
@@ -196,10 +206,26 @@ function SundayCollections({ navigateTo }) {
               width: '100%',
               padding: '12px',
               borderRadius: '8px',
-              border: '1px solid #d1d5db',
-              fontSize: '16px'
+              border: dateError ? '2px solid #dc2626' : '1px solid #d1d5db',
+              fontSize: '16px',
+              backgroundColor: dateError ? '#fef2f2' : 'white'
             }}
           />
+          {dateError && (
+            <div style={{
+              marginTop: '8px',
+              padding: '12px',
+              background: '#fee2e2',
+              border: '1px solid #dc2626',
+              borderRadius: '8px',
+              color: '#991b1b',
+              fontSize: '14px',
+              fontWeight: 600,
+              textAlign: 'center'
+            }}>
+              {dateError}
+            </div>
+          )}
         </div>
 
         {/* Stats Summary */}

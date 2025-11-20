@@ -407,6 +407,10 @@ function Dashboard({ navigateTo }) {
                 <div style={{ fontSize: '20px', fontWeight: 700 }}>
                   {formatCurrency(stats.outstanding || 0)}
                 </div>
+                <div style={{ fontSize: '9px', opacity: 0.8, marginTop: '4px' }}>
+                  <span>Weekly: {formatCurrency(stats.weeklyOutstanding || 0)}</span>
+                  <span> | Monthly: {formatCurrency(stats.monthlyOutstanding || 0)}</span>
+                </div>
               </div>
 
               <div

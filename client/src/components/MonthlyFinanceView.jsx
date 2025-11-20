@@ -350,6 +350,7 @@ function MonthlyFinanceView({ navigateTo }) {
 
       {showAddLoanModal && (
         <AddLoanModal
+          defaultLoanType="Monthly"
           onClose={() => setShowAddLoanModal(false)}
           onSuccess={() => {
             setShowAddLoanModal(false);

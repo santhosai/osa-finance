@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 import AddCustomerModal from './AddCustomerModal';
 
-function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSuccess }) {
+function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSuccess, defaultLoanType }) {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(customerId || '');
-  const [loanType, setLoanType] = useState('Weekly'); // Weekly or Monthly
+  const [loanType, setLoanType] = useState(defaultLoanType || 'Weekly'); // Weekly or Monthly
   const [loanName, setLoanName] = useState('');
   const [loanAmount, setLoanAmount] = useState('');
   const [weeklyAmount, setWeeklyAmount] = useState('');
@@ -14,6 +14,7 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
 
   useEffect(() => {
     if (!customerId) {
@@ -233,21 +234,36 @@ Thank you for choosing our service!
                 <div className="customer-info-phone">📱 {customerPhone}</div>
               </div>
             ) : (
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
-                <select
+              <div>
+                <input
+                  type="text"
                   className="form-input"
-                  value={selectedCustomerId}
-                  onChange={(e) => setSelectedCustomerId(e.target.value)}
-                  required
-                  style={{ flex: 1 }}
-                >
-                  <option value="">Select a customer</option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} ({customer.phone})
-                    </option>
-                  ))}
-                </select>
+                  placeholder="🔍 Search customer by name or phone..."
+                  value={customerSearchTerm}
+                  onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                  style={{ marginBottom: '8px', fontSize: '14px' }}
+                />
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                  <select
+                    className="form-input"
+                    value={selectedCustomerId}
+                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                    required
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">Select a customer</option>
+                    {customers
+                      .filter(customer => {
+                        const searchLower = customerSearchTerm.toLowerCase();
+                        return customer.name.toLowerCase().includes(searchLower) ||
+                               customer.phone.includes(customerSearchTerm);
+                      })
+                      .map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name} ({customer.phone})
+                        </option>
+                      ))}
+                  </select>
                 <button
                   type="button"
                   onClick={() => setShowAddCustomerModal(true)}
@@ -278,6 +294,7 @@ Thank you for choosing our service!
                 >
                   +
                 </button>
+              </div>
               </div>
             )}
           </div>

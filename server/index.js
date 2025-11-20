@@ -600,8 +600,21 @@ app.get('/api/stats', async (req, res) => {
 
     // Outstanding balance (sum of all active loan balances)
     let outstanding = 0;
+    let weeklyOutstanding = 0;
+    let monthlyOutstanding = 0;
+
     activeLoansSnapshot.forEach(doc => {
-      outstanding += doc.data().balance;
+      const loan = doc.data();
+      const balance = loan.balance || 0;
+      outstanding += balance;
+
+      // Categorize by loan type (default to Weekly for old loans)
+      const loanType = loan.loan_type || 'Weekly';
+      if (loanType === 'Monthly') {
+        monthlyOutstanding += balance;
+      } else {
+        weeklyOutstanding += balance;
+      }
     });
 
     // Total customers count
@@ -621,6 +634,8 @@ app.get('/api/stats', async (req, res) => {
     res.json({
       activeLoans,
       outstanding,
+      weeklyOutstanding,
+      monthlyOutstanding,
       totalCustomers,
       paymentsThisWeek
     });

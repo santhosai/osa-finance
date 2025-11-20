@@ -106,50 +106,53 @@
 
 .customer-card {
   background: white;
-  margin: 0 16px 12px;
-  padding: 16px;
-  border-radius: 12px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin: 0 12px 10px;
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   cursor: pointer;
   transition: transform 0.2s;
 }
 
 .customer-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.12);
 }
 
 .customer-name {
   font-weight: 600;
+  font-size: 14px;
   color: #1f2937;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .customer-phone {
-  font-size: 14px;
+  font-size: 12px;
   color: #6b7280;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .customer-loan {
   display: flex;
   justify-content: space-between;
-  padding-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid #e5e7eb;
 }
 
 .loan-info {
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .loan-label {
   color: #6b7280;
+  font-size: 9px;
 }
 
 .loan-value {
   font-weight: 600;
   color: #1f2937;
-  margin-top: 4px;
+  margin-top: 3px;
+  font-size: 11px;
 }
 
 /* Loan Details */
