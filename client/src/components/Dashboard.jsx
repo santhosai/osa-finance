@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import AddCustomerModal from './AddCustomerModal';
 import PaymentsThisWeekModal from './PaymentsThisWeekModal';
-import VaddiCalculator from './VaddiCalculator';
 import { API_URL } from '../config';
 
 // Fetcher function for SWR
@@ -11,14 +10,13 @@ const fetcher = (url) => fetch(url).then(res => res.json());
 function Dashboard({ navigateTo }) {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
-  const [showCalculator, setShowCalculator] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [monthlyFinanceBalance, setMonthlyFinanceBalance] = useState(0);
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
-    refreshInterval: 5000, // Auto-refresh every 5 seconds
-    revalidateOnFocus: true, // Refresh when user returns to tab
+    refreshInterval: 0, // Manual refresh only (faster performance)
+    revalidateOnFocus: false, // Don't auto-refresh on focus (save bandwidth)
     dedupingInterval: 2000, // Prevent duplicate requests within 2s
   });
 
@@ -40,13 +38,6 @@ function Dashboard({ navigateTo }) {
 
   useEffect(() => {
     calculateMonthlyFinanceBalance();
-
-    // Auto-refresh monthly finance balance every 5 seconds
-    const interval = setInterval(() => {
-      calculateMonthlyFinanceBalance();
-    }, 5000);
-
-    return () => clearInterval(interval);
   }, []);
 
   const formatCurrency = (amount) => {
@@ -151,25 +142,25 @@ function Dashboard({ navigateTo }) {
           boxShadow: '2px 0 10px rgba(0,0,0,0.3)'
         }}
       >
-        <div style={{ padding: '20px', borderBottom: '1px solid #334155' }}>
-          <h3 style={{ color: '#d97706', margin: 0, fontSize: '20px', fontWeight: 700 }}>OM SAI MURUGAN</h3>
-          <p style={{ color: '#94a3b8', margin: '5px 0 0', fontSize: '12px' }}>FINANCE</p>
+        <div style={{ padding: '14px', borderBottom: '1px solid #334155' }}>
+          <h3 style={{ color: '#d97706', margin: 0, fontSize: '16px', fontWeight: 700 }}>OM SAI MURUGAN</h3>
+          <p style={{ color: '#94a3b8', margin: '3px 0 0', fontSize: '10px' }}>FINANCE</p>
         </div>
 
-        <div style={{ padding: '10px 0' }}>
+        <div style={{ padding: '6px 0' }}>
           <button
             onClick={() => { setShowSidebar(false); }}
             style={{
               width: '100%',
-              padding: '15px 20px',
+              padding: '10px 14px',
               background: '#1e40af',
               color: 'white',
               border: 'none',
               textAlign: 'left',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              transition: 'background 0.2s'
+              transition: 'background 0.15s'
             }}
             onMouseOver={(e) => e.target.style.background = '#1e3a8a'}
             onMouseOut={(e) => e.target.style.background = '#1e40af'}
@@ -181,15 +172,15 @@ function Dashboard({ navigateTo }) {
             onClick={() => { setShowSidebar(false); navigateTo('sunday-collections'); }}
             style={{
               width: '100%',
-              padding: '15px 20px',
+              padding: '10px 14px',
               background: 'transparent',
               color: 'white',
               border: 'none',
               textAlign: 'left',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              transition: 'background 0.2s'
+              transition: 'background 0.15s'
             }}
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
@@ -201,15 +192,15 @@ function Dashboard({ navigateTo }) {
             onClick={() => { setShowSidebar(false); navigateTo('overdue-payments'); }}
             style={{
               width: '100%',
-              padding: '15px 20px',
+              padding: '10px 14px',
               background: 'transparent',
               color: 'white',
               border: 'none',
               textAlign: 'left',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              transition: 'background 0.2s'
+              transition: 'background 0.15s'
             }}
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
@@ -221,15 +212,15 @@ function Dashboard({ navigateTo }) {
             onClick={() => { setShowSidebar(false); navigateTo('customers'); }}
             style={{
               width: '100%',
-              padding: '15px 20px',
+              padding: '10px 14px',
               background: 'transparent',
               color: 'white',
               border: 'none',
               textAlign: 'left',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              transition: 'background 0.2s'
+              transition: 'background 0.15s'
             }}
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
@@ -241,15 +232,15 @@ function Dashboard({ navigateTo }) {
             onClick={() => { setShowSidebar(false); setShowAddCustomerModal(true); }}
             style={{
               width: '100%',
-              padding: '15px 20px',
+              padding: '10px 14px',
               background: 'transparent',
               color: 'white',
               border: 'none',
               textAlign: 'left',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              transition: 'background 0.2s'
+              transition: 'background 0.15s'
             }}
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
@@ -261,15 +252,15 @@ function Dashboard({ navigateTo }) {
             onClick={() => { setShowSidebar(false); downloadAllData(); }}
             style={{
               width: '100%',
-              padding: '15px 20px',
+              padding: '10px 14px',
               background: 'transparent',
               color: 'white',
               border: 'none',
               textAlign: 'left',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              transition: 'background 0.2s'
+              transition: 'background 0.15s'
             }}
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
@@ -281,15 +272,15 @@ function Dashboard({ navigateTo }) {
             onClick={() => { setShowSidebar(false); navigateTo('payment-tracker'); }}
             style={{
               width: '100%',
-              padding: '15px 20px',
+              padding: '10px 14px',
               background: 'transparent',
               color: 'white',
               border: 'none',
               textAlign: 'left',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              transition: 'background 0.2s'
+              transition: 'background 0.15s'
             }}
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
@@ -301,15 +292,15 @@ function Dashboard({ navigateTo }) {
             onClick={() => { setShowSidebar(false); navigateTo('vaddi-list'); }}
             style={{
               width: '100%',
-              padding: '15px 20px',
+              padding: '10px 14px',
               background: 'transparent',
               color: 'white',
               border: 'none',
               textAlign: 'left',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              transition: 'background 0.2s'
+              transition: 'background 0.15s'
             }}
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
@@ -321,40 +312,20 @@ function Dashboard({ navigateTo }) {
             onClick={() => { setShowSidebar(false); navigateTo('monthly-finance'); }}
             style={{
               width: '100%',
-              padding: '15px 20px',
+              padding: '10px 14px',
               background: 'transparent',
               color: 'white',
               border: 'none',
               textAlign: 'left',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              transition: 'background 0.2s'
+              transition: 'background 0.15s'
             }}
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
             💰 Monthly Finance
-          </button>
-
-          <button
-            onClick={() => { setShowSidebar(false); setShowCalculator(true); }}
-            style={{
-              width: '100%',
-              padding: '15px 20px',
-              background: 'transparent',
-              color: 'white',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: 600,
-              transition: 'background 0.2s'
-            }}
-            onMouseOver={(e) => e.target.style.background = '#334155'}
-            onMouseOut={(e) => e.target.style.background = 'transparent'}
-          >
-            🧮 Vaddi Calculator
           </button>
         </div>
 
@@ -362,16 +333,16 @@ function Dashboard({ navigateTo }) {
           onClick={handleLogout}
           style={{
             position: 'absolute',
-            bottom: '20px',
-            left: '20px',
-            right: '20px',
-            padding: '12px',
+            bottom: '14px',
+            left: '14px',
+            right: '14px',
+            padding: '10px',
             background: '#dc2626',
             color: 'white',
             border: 'none',
-            borderRadius: '8px',
+            borderRadius: '6px',
             cursor: 'pointer',
-            fontSize: '16px',
+            fontSize: '13px',
             fontWeight: 600
           }}
         >
@@ -400,13 +371,13 @@ function Dashboard({ navigateTo }) {
         {/* Header */}
         <div style={{
           background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-          padding: '16px',
+          padding: '10px 12px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={() => setShowSidebar(true)}
               style={{
@@ -414,15 +385,15 @@ function Dashboard({ navigateTo }) {
                 border: 'none',
                 color: 'white',
                 cursor: 'pointer',
-                fontSize: '24px',
-                padding: '4px',
+                fontSize: '20px',
+                padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
               }}
             >
               ☰
             </button>
-            <h2 style={{ margin: 0, color: 'white', fontSize: '20px', fontWeight: 700 }}>Dashboard</h2>
+            <h2 style={{ margin: 0, color: 'white', fontSize: '16px', fontWeight: 700 }}>Dashboard</h2>
           </div>
 
           <button
@@ -431,14 +402,14 @@ function Dashboard({ navigateTo }) {
               background: '#047857',
               color: 'white',
               border: 'none',
-              padding: '8px 12px',
-              borderRadius: '8px',
+              padding: '6px 10px',
+              borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '14px',
+              fontSize: '12px',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '4px'
             }}
           >
             🔄
@@ -446,51 +417,51 @@ function Dashboard({ navigateTo }) {
         </div>
 
         {/* Stats Grid */}
-        <div style={{ padding: '16px' }}>
+        <div style={{ padding: '10px' }}>
           {stats && (
             <div style={{
               display: 'grid',
               gridTemplateColumns: '1fr',
-              gap: '12px',
-              marginBottom: '16px'
+              gap: '8px',
+              marginBottom: '10px'
             }}>
               <div style={{
                 background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
-                padding: '16px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 12px rgba(30, 64, 175, 0.25)',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 6px rgba(30, 64, 175, 0.2)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Active Loans</div>
-                <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.activeLoans}</div>
+                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>Active Loans</div>
+                <div style={{ fontSize: '20px', fontWeight: 700 }}>{stats.activeLoans}</div>
               </div>
 
               <div style={{
                 background: 'linear-gradient(135deg, #b45309 0%, #92400e 100%)',
-                padding: '16px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 12px rgba(180, 83, 9, 0.25)',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 6px rgba(180, 83, 9, 0.2)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Total Outstanding</div>
-                <div style={{ fontSize: '28px', fontWeight: 700, marginBottom: '8px' }}>
+                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>Total Outstanding</div>
+                <div style={{ fontSize: '20px', fontWeight: 700, marginBottom: '6px' }}>
                   {formatCurrency((stats.outstanding || 0) + monthlyFinanceBalance)}
                 </div>
                 <div style={{
-                  fontSize: '11px',
+                  fontSize: '9px',
                   opacity: 0.85,
                   borderTop: '1px solid rgba(255,255,255,0.2)',
-                  paddingTop: '8px',
+                  paddingTop: '6px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '4px'
+                  gap: '3px'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Weekly Finance:</span>
+                    <span>Weekly:</span>
                     <span style={{ fontWeight: 600 }}>{formatCurrency(stats.outstanding || 0)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Monthly Finance:</span>
+                    <span>Monthly:</span>
                     <span style={{ fontWeight: 600 }}>{formatCurrency(monthlyFinanceBalance)}</span>
                   </div>
                 </div>
@@ -500,38 +471,38 @@ function Dashboard({ navigateTo }) {
                 onClick={() => setShowPaymentsThisWeekModal(true)}
                 style={{
                   background: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
-                  padding: '16px',
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 12px rgba(4, 120, 87, 0.25)',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 6px rgba(4, 120, 87, 0.2)',
                   color: 'white',
                   cursor: 'pointer',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease'
                 }}
                 onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = '0 8px 20px rgba(4, 120, 87, 0.35)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 120, 87, 0.3)';
                 }}
                 onMouseOut={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 120, 87, 0.25)';
+                  e.currentTarget.style.boxShadow = '0 2px 6px rgba(4, 120, 87, 0.2)';
                 }}
               >
-                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>
+                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>
                   Payments This Week
-                  <span style={{ marginLeft: '6px', fontSize: '10px', opacity: 0.8 }}>👆 Click to view</span>
+                  <span style={{ marginLeft: '4px', fontSize: '9px', opacity: 0.8 }}>👆 Click</span>
                 </div>
-                <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.paymentsThisWeek}</div>
+                <div style={{ fontSize: '20px', fontWeight: 700 }}>{stats.paymentsThisWeek}</div>
               </div>
 
               <div style={{
                 background: 'linear-gradient(135deg, #475569 0%, #334155 100%)',
-                padding: '16px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 12px rgba(71, 85, 105, 0.25)',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 6px rgba(71, 85, 105, 0.2)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '6px', fontWeight: 600 }}>Total Customers</div>
-                <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.totalCustomers}</div>
+                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>Total Customers</div>
+                <div style={{ fontSize: '20px', fontWeight: 700 }}>{stats.totalCustomers}</div>
               </div>
             </div>
           )}
@@ -552,12 +523,6 @@ function Dashboard({ navigateTo }) {
       {showPaymentsThisWeekModal && (
         <PaymentsThisWeekModal
           onClose={() => setShowPaymentsThisWeekModal(false)}
-        />
-      )}
-
-      {showCalculator && (
-        <VaddiCalculator
-          onClose={() => setShowCalculator(false)}
         />
       )}
     </div>
