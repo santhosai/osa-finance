@@ -949,6 +949,121 @@ app.get('/api/sunday-collections', async (req, res) => {
   }
 });
 
+// ============ VADDI (INTEREST) LIST ROUTES ============
+
+// Get all vaddi entries
+app.get('/api/vaddi-entries', async (req, res) => {
+  try {
+    const vaddiSnapshot = await db.collection('vaddi_entries')
+      .orderBy('date', 'asc')
+      .get();
+
+    const entries = [];
+    vaddiSnapshot.forEach(doc => {
+      entries.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    res.json(entries);
+  } catch (error) {
+    console.error('Error fetching vaddi entries:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new vaddi entry
+app.post('/api/vaddi-entries', async (req, res) => {
+  try {
+    const { name, amount, date, expectedReturnMonth, phone } = req.body;
+
+    // Validate required fields
+    if (!name || !amount || !date || !expectedReturnMonth) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate phone if provided
+    if (phone && phone.length !== 10) {
+      return res.status(400).json({ error: 'Phone number must be 10 digits' });
+    }
+
+    const newEntry = {
+      name,
+      amount: parseFloat(amount),
+      date,
+      expectedReturnMonth,
+      phone: phone || '',
+      paid: false,
+      paidDate: null,
+      createdAt: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('vaddi_entries').add(newEntry);
+
+    res.status(201).json({
+      id: docRef.id,
+      ...newEntry
+    });
+  } catch (error) {
+    console.error('Error creating vaddi entry:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update vaddi entry (mark as paid/unpaid)
+app.put('/api/vaddi-entries/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paid, paidDate } = req.body;
+
+    const entryRef = db.collection('vaddi_entries').doc(id);
+    const entryDoc = await entryRef.get();
+
+    if (!entryDoc.exists) {
+      return res.status(404).json({ error: 'Vaddi entry not found' });
+    }
+
+    const updateData = {
+      paid,
+      paidDate: paid ? (paidDate || new Date().toISOString().split('T')[0]) : null,
+      updatedAt: new Date().toISOString()
+    };
+
+    await entryRef.update(updateData);
+
+    res.json({
+      id,
+      ...entryDoc.data(),
+      ...updateData
+    });
+  } catch (error) {
+    console.error('Error updating vaddi entry:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete vaddi entry
+app.delete('/api/vaddi-entries/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const entryRef = db.collection('vaddi_entries').doc(id);
+    const entryDoc = await entryRef.get();
+
+    if (!entryDoc.exists) {
+      return res.status(404).json({ error: 'Vaddi entry not found' });
+    }
+
+    await entryRef.delete();
+
+    res.json({ message: 'Vaddi entry deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting vaddi entry:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

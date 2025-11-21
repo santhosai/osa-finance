@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
+import useSWR from 'swr';
+import { API_URL } from '../config';
+
+// Fetcher function for SWR
+const fetcher = (url) => fetch(url).then(res => res.json());
 
 const VaddiList = ({ navigateTo }) => {
-  const [entries, setEntries] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
@@ -11,32 +15,31 @@ const VaddiList = ({ navigateTo }) => {
   });
   const [showReminder, setShowReminder] = useState(false);
   const [todaysReminders, setTodaysReminders] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Load entries from localStorage on mount
+  // Use SWR for data fetching with auto-refresh
+  const { data: entries = [], error, isLoading, mutate } = useSWR(`${API_URL}/vaddi-entries`, fetcher, {
+    refreshInterval: 30000, // Auto-refresh every 30 seconds
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
+  });
+
+  // Check for reminders on mount and when entries change
   useEffect(() => {
-    const savedEntries = localStorage.getItem('monthlyTrackerEntries');
-    if (savedEntries) {
-      const parsedEntries = JSON.parse(savedEntries);
-      setEntries(parsedEntries);
-      checkReminders(parsedEntries);
+    if (entries.length > 0) {
+      checkReminders(entries);
     }
-  }, []);
+  }, [entries]);
 
   // Check for reminders on current date
   const checkReminders = (entriesList) => {
     const today = new Date().toISOString().split('T')[0];
-    const reminders = entriesList.filter(entry => entry.date === today);
+    const reminders = entriesList.filter(entry => !entry.paid && entry.date === today);
 
     if (reminders.length > 0) {
       setTodaysReminders(reminders);
       setShowReminder(true);
     }
-  };
-
-  // Save entries to localStorage
-  const saveEntries = (newEntries) => {
-    localStorage.setItem('monthlyTrackerEntries', JSON.stringify(newEntries));
-    setEntries(newEntries);
   };
 
   // Handle form input changes
@@ -48,8 +51,8 @@ const VaddiList = ({ navigateTo }) => {
     }));
   };
 
-  // Add new entry (allows duplicates)
-  const handleAddEntry = (e) => {
+  // Add new entry
+  const handleAddEntry = async (e) => {
     e.preventDefault();
 
     if (!formData.name || !formData.amount || !formData.date || !formData.expectedReturnMonth) {
@@ -63,53 +66,120 @@ const VaddiList = ({ navigateTo }) => {
       return;
     }
 
-    const newEntry = {
-      id: Date.now(),
-      name: formData.name,
-      amount: parseFloat(formData.amount),
-      date: formData.date,
-      expectedReturnMonth: formData.expectedReturnMonth,
-      phone: formData.phone || '',
-      paid: false,
-      paidDate: null
-    };
+    setLoading(true);
 
-    const updatedEntries = [...entries, newEntry];
-    // Sort by date
-    updatedEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
+    try {
+      const response = await fetch(`${API_URL}/vaddi-entries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
 
-    saveEntries(updatedEntries);
+      if (!response.ok) {
+        throw new Error('Failed to create vaddi entry');
+      }
 
-    // Reset form
-    setFormData({ name: '', amount: '', date: '', expectedReturnMonth: '', phone: '' });
+      // Refresh data
+      mutate();
+
+      // Reset form
+      setFormData({ name: '', amount: '', date: '', expectedReturnMonth: '', phone: '' });
+
+      // Send WhatsApp notification if phone exists
+      if (formData.phone) {
+        const message = `New Vaddi Entry Created
+
+Name: ${formData.name}
+Interest Amount: ₹${parseFloat(formData.amount).toLocaleString('en-IN')}
+Interest Date: ${new Date(formData.date).toLocaleDateString('en-IN')}
+Expected Return: ${new Date(formData.expectedReturnMonth + '-01').toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}
+
+- Om Sai Murugan Finance`;
+
+        const cleanPhone = formData.phone.replace(/\D/g, '');
+        const phoneWithCountryCode = `91${cleanPhone}`;
+        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error creating vaddi entry:', error);
+      alert('Failed to create entry: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Delete entry
-  const handleDelete = (id) => {
-    const updatedEntries = entries.filter(entry => entry.id !== id);
-    saveEntries(updatedEntries);
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this entry?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/vaddi-entries/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete vaddi entry');
+      }
+
+      // Refresh data
+      mutate();
+    } catch (error) {
+      console.error('Error deleting vaddi entry:', error);
+      alert('Failed to delete entry: ' + error.message);
+    }
   };
 
   // Mark as paid and send receipt
-  const markAsPaid = (entry) => {
+  const markAsPaid = async (entry) => {
     if (!entry.phone) {
       const confirmed = window.confirm('No phone number for this entry. Mark as paid anyway?');
       if (!confirmed) return;
     }
 
-    const updatedEntries = entries.map(e => {
-      if (e.id === entry.id) {
-        return { ...e, paid: true, paidDate: new Date().toISOString().split('T')[0] };
-      }
-      return e;
-    });
-    saveEntries(updatedEntries);
+    setLoading(true);
 
-    // Send WhatsApp receipt if phone available
-    if (entry.phone) {
-      const message = `Payment Receipt - Monthly Interest\n\nName: ${entry.name}\nAmount Paid: ₹${entry.amount.toLocaleString('en-IN')}\nPaid Date: ${new Date().toLocaleDateString('en-IN')}\n\nThank you for your payment!\n\n- Om Sai Murugan Finance`;
-      const whatsappUrl = `https://wa.me/91${entry.phone}?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank');
+    try {
+      const response = await fetch(`${API_URL}/vaddi-entries/${entry.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paid: true,
+          paidDate: new Date().toISOString().split('T')[0]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update vaddi entry');
+      }
+
+      // Refresh data
+      mutate();
+
+      // Send WhatsApp receipt if phone available
+      if (entry.phone) {
+        const message = `Payment Receipt - Monthly Interest
+
+Name: ${entry.name}
+Amount Paid: ₹${entry.amount.toLocaleString('en-IN')}
+Paid Date: ${new Date().toLocaleDateString('en-IN')}
+
+Thank you for your payment!
+
+- Om Sai Murugan Finance`;
+
+        const cleanPhone = entry.phone.replace(/\D/g, '');
+        const phoneWithCountryCode = `91${cleanPhone}`;
+        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error marking as paid:', error);
+      alert('Failed to mark as paid: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -120,9 +190,27 @@ const VaddiList = ({ navigateTo }) => {
       return;
     }
 
-    const message = `Reminder: Your interest payment of ₹${entry.amount.toLocaleString('en-IN')} is due today.\n\nExpected return month: ${entry.expectedReturnMonth}\n\nThank you!`;
-    const whatsappUrl = `https://wa.me/91${entry.phone}?text=${encodeURIComponent(message)}`;
+    const message = `Reminder: Your interest payment of ₹${entry.amount.toLocaleString('en-IN')} is due today.
+
+Expected return month: ${new Date(entry.expectedReturnMonth + '-01').toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}
+
+Thank you!
+
+- Om Sai Murugan Finance`;
+
+    const cleanPhone = entry.phone.replace(/\D/g, '');
+    const phoneWithCountryCode = `91${cleanPhone}`;
+    const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
+  };
+
+  // Open phone contact
+  const openContact = (phone) => {
+    if (!phone) {
+      alert('No phone number available');
+      return;
+    }
+    window.location.href = `tel:${phone}`;
   };
 
   // Calculate total
@@ -137,12 +225,12 @@ const VaddiList = ({ navigateTo }) => {
       return;
     }
 
-    const csvHeader = 'Name,Amount,Date,Expected Return Month,Phone\n';
+    const csvHeader = 'Name,Amount,Date,Expected Return Month,Phone,Status\n';
     const csvRows = entries.map(entry =>
-      `${entry.name},₹${entry.amount},${entry.date},${entry.expectedReturnMonth},${entry.phone || 'N/A'}`
+      `${entry.name},₹${entry.amount},${entry.date},${entry.expectedReturnMonth},${entry.phone || 'N/A'},${entry.paid ? 'PAID' : 'UNPAID'}`
     ).join('\n');
 
-    const csvContent = csvHeader + csvRows + `\n\nTotal Amount,₹${calculateTotal()},,`;
+    const csvContent = csvHeader + csvRows + `\n\nTotal Amount,₹${calculateTotal()},,,,`;
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -156,6 +244,33 @@ const VaddiList = ({ navigateTo }) => {
     link.click();
     document.body.removeChild(link);
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: 'white' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+          <div style={{ fontSize: '18px', fontWeight: 600 }}>Loading Vaddi List...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: 'white' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
+          <div style={{ fontSize: '18px', fontWeight: 600 }}>Failed to load Vaddi List</div>
+          <button onClick={() => mutate()} style={{ marginTop: '16px', padding: '10px 20px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)' }}>
@@ -196,7 +311,7 @@ const VaddiList = ({ navigateTo }) => {
               borderRadius: '12px',
               fontWeight: 600,
               verticalAlign: 'middle'
-            }}>v3.0 📱</span>
+            }}>☁️ Firestore</span>
           </h2>
         </div>
       </div>
@@ -288,15 +403,17 @@ const VaddiList = ({ navigateTo }) => {
           </h3>
           <button
             onClick={handleDownload}
+            disabled={loading}
             style={{
               background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
               color: 'white',
               border: 'none',
               padding: '10px 20px',
               borderRadius: '8px',
-              cursor: 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
               fontWeight: 600,
-              fontSize: '14px'
+              fontSize: '14px',
+              opacity: loading ? 0.6 : 1
             }}
           >
             📥 Download CSV
@@ -320,6 +437,7 @@ const VaddiList = ({ navigateTo }) => {
             value={formData.name}
             onChange={handleInputChange}
             required
+            disabled={loading}
             style={{
               padding: '12px',
               border: '1px solid #ddd',
@@ -334,6 +452,7 @@ const VaddiList = ({ navigateTo }) => {
             value={formData.amount}
             onChange={handleInputChange}
             required
+            disabled={loading}
             style={{
               padding: '12px',
               border: '1px solid #ddd',
@@ -348,6 +467,7 @@ const VaddiList = ({ navigateTo }) => {
             value={formData.date}
             onChange={handleInputChange}
             required
+            disabled={loading}
             style={{
               padding: '12px',
               border: '1px solid #ddd',
@@ -362,6 +482,7 @@ const VaddiList = ({ navigateTo }) => {
             value={formData.expectedReturnMonth}
             onChange={handleInputChange}
             required
+            disabled={loading}
             style={{
               padding: '12px',
               border: '1px solid #ddd',
@@ -377,6 +498,7 @@ const VaddiList = ({ navigateTo }) => {
             onChange={handleInputChange}
             pattern="[0-9]{10}"
             maxLength="10"
+            disabled={loading}
             style={{
               padding: '12px',
               border: '1px solid #ddd',
@@ -384,17 +506,18 @@ const VaddiList = ({ navigateTo }) => {
               fontSize: '14px'
             }}
           />
-          <button type="submit" style={{
+          <button type="submit" disabled={loading} style={{
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
             border: 'none',
             padding: '12px',
             borderRadius: '6px',
-            cursor: 'pointer',
+            cursor: loading ? 'not-allowed' : 'pointer',
             fontWeight: 600,
-            fontSize: '14px'
+            fontSize: '14px',
+            opacity: loading ? 0.6 : 1
           }}>
-            + Add Entry
+            {loading ? 'Adding...' : '+ Add Entry'}
           </button>
         </form>
 
@@ -416,9 +539,9 @@ const VaddiList = ({ navigateTo }) => {
                   borderLeft: entry.paid ? '4px solid #10b981' : '4px solid #667eea',
                   opacity: entry.paid ? 0.7 : 1
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
                         <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b' }}>
                           {entry.name}
                         </div>
@@ -450,16 +573,33 @@ const VaddiList = ({ navigateTo }) => {
                         </div>
                       )}
                       {entry.phone && (
-                        <div style={{ fontSize: '13px', color: '#64748b' }}>
-                          📱 Phone: {entry.phone}
+                        <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>📱 Phone: {entry.phone}</span>
+                          <button
+                            onClick={() => openContact(entry.phone)}
+                            style={{
+                              background: '#3b82f6',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '2px 8px',
+                              fontSize: '11px',
+                              cursor: 'pointer',
+                              fontWeight: 600
+                            }}
+                            title="Call"
+                          >
+                            📞 Call
+                          </button>
                         </div>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                       {!entry.paid ? (
                         <>
                           <button
                             onClick={() => markAsPaid(entry)}
+                            disabled={loading}
                             style={{
                               background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                               color: 'white',
@@ -467,9 +607,10 @@ const VaddiList = ({ navigateTo }) => {
                               borderRadius: '6px',
                               padding: '8px 12px',
                               fontSize: '14px',
-                              cursor: 'pointer',
+                              cursor: loading ? 'not-allowed' : 'pointer',
                               fontWeight: 600,
-                              whiteSpace: 'nowrap'
+                              whiteSpace: 'nowrap',
+                              opacity: loading ? 0.6 : 1
                             }}
                             title="Mark as Paid & Send Receipt"
                           >
@@ -544,6 +685,10 @@ const VaddiList = ({ navigateTo }) => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '14px', opacity: 0.9 }}>Entries with Phone:</span>
                 <span style={{ fontSize: '18px', fontWeight: 700 }}>{entries.filter(e => e.phone).length}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', opacity: 0.9 }}>Paid Entries:</span>
+                <span style={{ fontSize: '18px', fontWeight: 700 }}>{entries.filter(e => e.paid).length}</span>
               </div>
               <div style={{
                 borderTop: '1px solid rgba(255,255,255,0.3)',
