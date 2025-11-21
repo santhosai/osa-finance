@@ -143,7 +143,8 @@ const VaddiList = ({ navigateTo }) => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create vaddi entry');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
       // Refresh data
@@ -616,86 +617,86 @@ Thank you!
         {/* Add Entry Form */}
         <form onSubmit={handleAddEntry} style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-          marginBottom: '20px',
-          padding: '20px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '10px',
+          marginBottom: '16px',
+          padding: '12px',
           background: '#f8f9fa',
-          borderRadius: '8px'
+          borderRadius: '6px'
         }}>
           {/* Customer Name */}
           <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
-              👤 Customer Name *
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
+              👤 Name *
             </label>
             <input
               type="text"
               name="name"
-              placeholder="Enter customer name"
+              placeholder="Name"
               value={formData.name}
               onChange={handleInputChange}
               required
               disabled={loading}
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '8px',
                 border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px'
+                borderRadius: '4px',
+                fontSize: '13px'
               }}
             />
           </div>
 
           {/* Principal Amount */}
           <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
-              💰 Principal Amount Lent *
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
+              💰 Principal *
             </label>
             <input
               type="number"
               name="principalAmount"
-              placeholder="Amount you lent"
+              placeholder="₹ Amount"
               value={formData.principalAmount}
               onChange={handleInputChange}
               required
               disabled={loading}
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '8px',
                 border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px'
+                borderRadius: '4px',
+                fontSize: '13px'
               }}
             />
           </div>
 
           {/* Monthly Interest */}
           <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
-              📈 Monthly Interest Amount *
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
+              📈 Interest *
             </label>
             <input
               type="number"
               name="monthlyInterest"
-              placeholder="Interest per month"
+              placeholder="₹ /month"
               value={formData.monthlyInterest}
               onChange={handleInputChange}
               required
               disabled={loading}
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '8px',
                 border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px'
+                borderRadius: '4px',
+                fontSize: '13px'
               }}
             />
           </div>
 
           {/* Start Date */}
           <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
-              📅 Start Date *
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
+              📅 Date *
             </label>
             <input
               type="date"
@@ -706,24 +707,24 @@ Thank you!
               disabled={loading}
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '8px',
                 border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px'
+                borderRadius: '4px',
+                fontSize: '13px'
               }}
             />
           </div>
 
           {/* Phone Number */}
           <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
-              📱 Phone Number *
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
+              📱 Phone *
             </label>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'stretch' }}>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'stretch' }}>
               <input
                 type="tel"
                 name="phone"
-                placeholder="10-digit mobile"
+                placeholder="10 digits"
                 value={formData.phone}
                 onChange={handleInputChange}
                 required
@@ -732,10 +733,10 @@ Thank you!
                 disabled={loading}
                 style={{
                   flex: 1,
-                  padding: '12px',
+                  padding: '8px',
                   border: '1px solid #ddd',
-                  borderRadius: '6px',
-                  fontSize: '14px'
+                  borderRadius: '4px',
+                  fontSize: '13px'
                 }}
               />
               <button
@@ -746,17 +747,17 @@ Thank you!
                   background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '6px',
-                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  padding: '8px 10px',
                   cursor: loading ? 'not-allowed' : 'pointer',
-                  fontSize: '13px',
+                  fontSize: '11px',
                   fontWeight: 600,
                   whiteSpace: 'nowrap',
                   opacity: loading ? 0.6 : 1
                 }}
                 title="Select from Contacts"
               >
-                👤 Contacts
+                👤
               </button>
             </div>
           </div>
@@ -766,15 +767,15 @@ Thank you!
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
             border: 'none',
-            padding: '14px',
-            borderRadius: '6px',
+            padding: '10px',
+            borderRadius: '4px',
             cursor: loading ? 'not-allowed' : 'pointer',
-            fontWeight: 700,
-            fontSize: '15px',
+            fontWeight: 600,
+            fontSize: '12px',
             opacity: loading ? 0.6 : 1,
             alignSelf: 'end'
           }}>
-            {loading ? 'Adding...' : '+ Add Vaddi Entry'}
+            {loading ? 'Adding...' : '+ Add Entry'}
           </button>
         </form>
 
