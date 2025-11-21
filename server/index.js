@@ -551,7 +551,8 @@ app.post('/api/payments', async (req, res) => {
       id: newPaymentDoc.id,
       ...newPaymentDoc.data(),
       customer_name: customerData.name,
-      customer_phone: customerData.phone
+      customer_phone: customerData.phone,
+      week_number: periodNumber // Alias for period_number for WhatsApp message compatibility
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
