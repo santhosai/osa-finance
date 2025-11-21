@@ -979,12 +979,12 @@ app.post('/api/vaddi-entries', async (req, res) => {
     const { name, amount, date, expectedReturnMonth, phone } = req.body;
 
     // Validate required fields
-    if (!name || !amount || !date || !expectedReturnMonth) {
+    if (!name || !amount || !date || !expectedReturnMonth || !phone) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Validate phone if provided
-    if (phone && phone.length !== 10) {
+    // Validate phone number format
+    if (phone.length !== 10) {
       return res.status(400).json({ error: 'Phone number must be 10 digits' });
     }
 
@@ -993,7 +993,7 @@ app.post('/api/vaddi-entries', async (req, res) => {
       amount: parseFloat(amount),
       date,
       expectedReturnMonth,
-      phone: phone || '',
+      phone,
       paid: false,
       paidDate: null,
       createdAt: new Date().toISOString()

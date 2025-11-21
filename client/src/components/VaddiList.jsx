@@ -537,9 +537,10 @@ Thank you!
             <input
               type="tel"
               name="phone"
-              placeholder="Phone (Optional)"
+              placeholder="Phone *"
               value={formData.phone}
               onChange={handleInputChange}
+              required
               pattern="[0-9]{10}"
               maxLength="10"
               disabled={loading}
