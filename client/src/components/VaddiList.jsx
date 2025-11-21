@@ -98,13 +98,13 @@ const VaddiList = ({ navigateTo }) => {
   const handleAddEntry = async (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.amount || !formData.date || !formData.expectedReturnMonth) {
+    if (!formData.name || !formData.amount || !formData.date || !formData.expectedReturnMonth || !formData.phone) {
       alert('Please fill all required fields');
       return;
     }
 
-    // Validate phone if provided
-    if (formData.phone && formData.phone.length !== 10) {
+    // Validate phone number
+    if (formData.phone.length !== 10) {
       alert('Phone number must be 10 digits');
       return;
     }
