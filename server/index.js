@@ -802,13 +802,45 @@ app.get('/api/stats', async (req, res) => {
 
     const paymentsThisWeek = paymentsSnapshot.size + monthlyPaymentsSnapshot.size;
 
+    // Database size statistics
+    // Count total documents across all collections
+    const loansCount = await db.collection('loans').get().then(snap => snap.size);
+    const allPaymentsCount = await db.collection('payments').get().then(snap => snap.size);
+    const monthlyPaymentsCount = await db.collection('monthly_finance_payments').get().then(snap => snap.size);
+
+    const totalDocuments = customersSnapshot.size +
+                          monthlyFinanceSnapshot.size +
+                          loansCount +
+                          allPaymentsCount +
+                          monthlyPaymentsCount;
+
+    // Estimate database size (rough calculation: ~0.5KB per document average)
+    // This is an approximation for Firestore
+    const estimatedSizeMB = (totalDocuments * 0.5) / 1024; // Convert KB to MB
+    const limitMB = 500; // Free tier limit
+    const usagePercent = (estimatedSizeMB / limitMB) * 100;
+
     res.json({
       activeLoans,
       outstanding,
       weeklyOutstanding,
       monthlyOutstanding,
       totalCustomers,
-      paymentsThisWeek
+      paymentsThisWeek,
+      // Database statistics
+      database: {
+        totalDocuments,
+        estimatedSizeMB: Math.round(estimatedSizeMB * 100) / 100, // Round to 2 decimals
+        limitMB,
+        usagePercent: Math.round(usagePercent * 100) / 100, // Round to 2 decimals
+        collections: {
+          customers: customersSnapshot.size,
+          monthlyFinanceCustomers: monthlyFinanceSnapshot.size,
+          loans: loansCount,
+          payments: allPaymentsCount,
+          monthlyFinancePayments: monthlyPaymentsCount
+        }
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

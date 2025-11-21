@@ -41,6 +41,20 @@ function Dashboard({ navigateTo }) {
     window.location.reload();
   };
 
+  // Check if backup reminder should be shown
+  const shouldShowBackupReminder = () => {
+    const today = new Date();
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const lastDownload = localStorage.getItem('lastBackupDownload');
+
+    // Show reminder if:
+    // 1. Never downloaded before, OR
+    // 2. Haven't downloaded this month yet
+    return !lastDownload || !lastDownload.startsWith(currentMonth);
+  };
+
+  const [showBackupReminder, setShowBackupReminder] = useState(shouldShowBackupReminder());
+
   const downloadAllData = async () => {
     try {
       const response = await fetch(`${API_URL}/customers`);
@@ -107,6 +121,12 @@ function Dashboard({ navigateTo }) {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      // Record download date and hide backup reminder
+      const today = new Date();
+      const downloadDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      localStorage.setItem('lastBackupDownload', downloadDate);
+      setShowBackupReminder(false);
     } catch (error) {
       console.error('Error downloading data:', error);
       alert('Failed to download report');
@@ -365,25 +385,87 @@ function Dashboard({ navigateTo }) {
             <h2 style={{ margin: 0, color: 'white', fontSize: '16px', fontWeight: 700 }}>Dashboard</h2>
           </div>
 
-          <button
-            onClick={handleRefresh}
+          {/* Database Size Monitor */}
+          <div
             style={{
-              background: '#047857',
+              background: 'linear-gradient(135deg, #0369a1 0%, #075985 100%)',
               color: 'white',
-              border: 'none',
-              padding: '6px 10px',
+              padding: '4px 8px',
               borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '12px',
+              fontSize: '10px',
               fontWeight: 600,
               display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              minWidth: '80px',
+              cursor: 'pointer'
             }}
+            onClick={handleRefresh}
+            title="Click to refresh. Auto-refreshes every 30s"
           >
-            🔄
-          </button>
+            {stats && stats.database ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
+                  <span>💾</span>
+                  <span>{stats.database.estimatedSizeMB}MB / {stats.database.limitMB}MB</span>
+                </div>
+                <div style={{ width: '100%', height: '3px', background: 'rgba(255,255,255,0.3)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${Math.min(stats.database.usagePercent, 100)}%`,
+                      height: '100%',
+                      background: stats.database.usagePercent > 80 ? '#ef4444' : stats.database.usagePercent > 60 ? '#f59e0b' : '#10b981',
+                      transition: 'width 0.3s ease'
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              <span>Loading...</span>
+            )}
+          </div>
         </div>
+
+        {/* Monthly Backup Reminder Banner */}
+        {showBackupReminder && (
+          <div style={{
+            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+            padding: '12px 16px',
+            margin: '10px 10px 0 10px',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            animation: 'slideIn 0.3s ease'
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: 'white', fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>
+                🔔 Monthly Backup Reminder
+              </div>
+              <div style={{ color: 'white', fontSize: '11px', opacity: 0.95 }}>
+                Download your data backup to keep your records safe
+              </div>
+            </div>
+            <button
+              onClick={downloadAllData}
+              style={{
+                background: 'white',
+                color: '#d97706',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+              }}
+            >
+              📥 Download Now
+            </button>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div style={{ padding: '10px' }}>
