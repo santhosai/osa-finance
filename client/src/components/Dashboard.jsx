@@ -84,11 +84,18 @@ function Dashboard({ navigateTo }) {
                     return paymentDate === sundayDate;
                   }) || false;
 
+                  // Calculate total weeks and remaining weeks
+                  const totalWeeks = 10; // Weekly loans are 10 weeks
+                  const remainingWeeks = totalWeeks - weekNumber;
+
                   return {
                     customer,
                     loan: { ...loan, ...loanData },
                     weekNumber,
+                    totalWeeks,
+                    remainingWeeks,
                     paymentAmount: loan.weekly_amount,
+                    balance: loan.balance,
                     isPaid
                   };
                 })
@@ -122,6 +129,17 @@ function Dashboard({ navigateTo }) {
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
+  };
+
+  // Helper function to determine card background color based on outstanding balance
+  const getUnpaidCardColor = (balance) => {
+    if (balance > 10000) {
+      return 'linear-gradient(135deg, #fee2e2 0%, #fca5a5 100%)'; // Red for high balance
+    }
+    if (balance > 5000) {
+      return 'linear-gradient(135deg, #fed7aa 0%, #fb923c 100%)'; // Orange for medium balance
+    }
+    return 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'; // Light red for low balance
   };
 
   const handleRefresh = () => {
@@ -749,32 +767,43 @@ function Dashboard({ navigateTo }) {
                       ✓ PAID ({paidLoans.length})
                     </h4>
                     <div style={{ display: 'grid', gap: '6px' }}>
-                      {paidLoans.map(({ customer, loan, paymentAmount }) => (
+                      {paidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
                         <div
                           key={loan.loan_id}
                           onClick={() => navigateTo('loan-details', loan.loan_id)}
                           style={{
-                            background: 'white',
-                            padding: '8px',
+                            background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
+                            padding: '10px',
                             borderRadius: '6px',
                             cursor: 'pointer',
-                            border: '1px solid #d1fae5',
+                            border: '1px solid #6ee7b7',
                             transition: 'all 0.15s'
                           }}
                           onMouseOver={(e) => {
                             e.currentTarget.style.transform = 'scale(1.02)';
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.2)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
                           }}
                           onMouseOut={(e) => {
                             e.currentTarget.style.transform = 'scale(1)';
                             e.currentTarget.style.boxShadow = 'none';
                           }}
                         >
-                          <div style={{ fontWeight: 600, fontSize: '12px', color: '#1e293b', marginBottom: '2px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '13px', color: '#065f46', marginBottom: '6px' }}>
                             {customer.name}
                           </div>
-                          <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>
-                            {formatCurrency(paymentAmount)}
+                          <div style={{ display: 'grid', gap: '3px', fontSize: '11px' }}>
+                            <div style={{ color: '#047857', fontWeight: 600 }}>
+                              📅 Week {weekNumber} of {totalWeeks}
+                            </div>
+                            <div style={{ color: '#059669', fontWeight: 600 }}>
+                              💰 Payment: {formatCurrency(paymentAmount)}
+                            </div>
+                            <div style={{ color: '#0d9488', fontWeight: 600 }}>
+                              💵 Balance: {formatCurrency(balance)}
+                            </div>
+                            <div style={{ color: '#0891b2', fontWeight: 600 }}>
+                              ⏳ Remaining: {remainingWeeks} week{remainingWeeks !== 1 ? 's' : ''}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -798,32 +827,47 @@ function Dashboard({ navigateTo }) {
                       ✗ UNPAID ({unpaidLoans.length})
                     </h4>
                     <div style={{ display: 'grid', gap: '6px' }}>
-                      {unpaidLoans.map(({ customer, loan, paymentAmount }) => (
+                      {unpaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
                         <div
                           key={loan.loan_id}
                           onClick={() => navigateTo('loan-details', loan.loan_id)}
                           style={{
-                            background: 'white',
-                            padding: '8px',
+                            background: getUnpaidCardColor(balance),
+                            padding: '10px',
                             borderRadius: '6px',
                             cursor: 'pointer',
-                            border: '1px solid #fecaca',
+                            border: balance > 10000
+                              ? '1px solid #fca5a5'
+                              : balance > 5000
+                                ? '1px solid #fb923c'
+                                : '1px solid #fecaca',
                             transition: 'all 0.15s'
                           }}
                           onMouseOver={(e) => {
                             e.currentTarget.style.transform = 'scale(1.02)';
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.2)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
                           }}
                           onMouseOut={(e) => {
                             e.currentTarget.style.transform = 'scale(1)';
                             e.currentTarget.style.boxShadow = 'none';
                           }}
                         >
-                          <div style={{ fontWeight: 600, fontSize: '12px', color: '#1e293b', marginBottom: '2px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '13px', color: '#7f1d1d', marginBottom: '6px' }}>
                             {customer.name}
                           </div>
-                          <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>
-                            {formatCurrency(paymentAmount)}
+                          <div style={{ display: 'grid', gap: '3px', fontSize: '11px' }}>
+                            <div style={{ color: '#991b1b', fontWeight: 600 }}>
+                              📅 Week {weekNumber} of {totalWeeks}
+                            </div>
+                            <div style={{ color: '#b91c1c', fontWeight: 600 }}>
+                              💰 Due: {formatCurrency(paymentAmount)}
+                            </div>
+                            <div style={{ color: '#dc2626', fontWeight: 700, fontSize: '12px' }}>
+                              ⚠️ Outstanding: {formatCurrency(balance)}
+                            </div>
+                            <div style={{ color: '#ea580c', fontWeight: 600 }}>
+                              ⏳ Remaining: {remainingWeeks} week{remainingWeeks !== 1 ? 's' : ''}
+                            </div>
                           </div>
                         </div>
                       ))}
