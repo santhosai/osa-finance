@@ -22,14 +22,20 @@ const VaddiList = ({ navigateTo }) => {
     refreshInterval: 30000, // Auto-refresh every 30 seconds
     revalidateOnFocus: true,
     dedupingInterval: 2000,
+    onError: (err) => {
+      console.error('SWR Error fetching vaddi entries:', err);
+    }
   });
+
+  // Ensure entries is always an array
+  const safeEntries = Array.isArray(entries) ? entries : [];
 
   // Check for reminders on mount and when entries change
   useEffect(() => {
-    if (entries.length > 0) {
-      checkReminders(entries);
+    if (safeEntries.length > 0) {
+      checkReminders(safeEntries);
     }
-  }, [entries]);
+  }, [safeEntries]);
 
   // Check for reminders on current date
   const checkReminders = (entriesList) => {
@@ -372,7 +378,7 @@ Thank you!
 
   // Calculate total
   const calculateTotal = () => {
-    return entries.reduce((sum, entry) => {
+    return safeEntries.reduce((sum, entry) => {
       const amount = entry.principalAmount || entry.amount || 0;
       return sum + amount;
     }, 0);
@@ -380,13 +386,13 @@ Thank you!
 
   // Download as CSV
   const handleDownload = () => {
-    if (entries.length === 0) {
+    if (safeEntries.length === 0) {
       alert('No data to download');
       return;
     }
 
     const csvHeader = 'Name,Principal Amount,Monthly Interest,Start Date,Phone,Status\n';
-    const csvRows = entries.map(entry => {
+    const csvRows = safeEntries.map(entry => {
       const principalAmount = entry.principalAmount || entry.amount || 0;
       const monthlyInterest = entry.monthlyInterest || 0;
       const isPaid = entry.principalReturned || entry.paid || false;
@@ -756,13 +762,13 @@ Thank you!
 
         {/* Entries List */}
         <div style={{ marginBottom: '16px' }}>
-          {entries.length === 0 ? (
+          {safeEntries.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#999', fontStyle: 'italic', padding: '20px' }}>
               No entries yet. Add your first entry above!
             </p>
           ) : (
             <div style={{ display: 'grid', gap: '12px' }}>
-              {entries.map(entry => {
+              {safeEntries.map(entry => {
                 // Handle both old and new field structures
                 const principalAmount = entry.principalAmount || entry.amount || 0;
                 const monthlyInterest = entry.monthlyInterest || 0;
@@ -933,7 +939,7 @@ Thank you!
         </div>
 
         {/* Overall Amount Summary */}
-        {entries.length > 0 && (
+        {safeEntries.length > 0 && (
           <div style={{
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
@@ -947,15 +953,15 @@ Thank you!
             <div style={{ display: 'grid', gap: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '14px', opacity: 0.9 }}>Total Entries:</span>
-                <span style={{ fontSize: '18px', fontWeight: 700 }}>{entries.length}</span>
+                <span style={{ fontSize: '18px', fontWeight: 700 }}>{safeEntries.length}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '14px', opacity: 0.9 }}>Entries with Phone:</span>
-                <span style={{ fontSize: '18px', fontWeight: 700 }}>{entries.filter(e => e.phone).length}</span>
+                <span style={{ fontSize: '18px', fontWeight: 700 }}>{safeEntries.filter(e => e.phone).length}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '14px', opacity: 0.9 }}>Paid Entries:</span>
-                <span style={{ fontSize: '18px', fontWeight: 700 }}>{entries.filter(e => e.paid).length}</span>
+                <span style={{ fontSize: '18px', fontWeight: 700 }}>{safeEntries.filter(e => e.paid).length}</span>
               </div>
               <div style={{
                 borderTop: '1px solid rgba(255,255,255,0.3)',

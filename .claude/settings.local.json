@@ -5,7 +5,9 @@
       "Bash(powershell -Command \"$response = Invoke-WebRequest -Uri ''https://client-santhosais-projects.vercel.app/vaddi-list'' -UseBasicParsing; $response.Content | Select-String -Pattern ''Phone.*Optional'' -Context 0,3\")",
       "Bash(powershell -Command:*)",
       "Bash(cmd.exe //c taskkill //F //PID 4104)",
-      "Bash(cmd.exe //c taskkill //F //PID 50692)"
+      "Bash(cmd.exe //c taskkill //F //PID 50692)",
+      "Bash(npx vercel inspect:*)",
+      "Bash(npx vercel:*)"
     ],
     "deny": [],
     "ask": []

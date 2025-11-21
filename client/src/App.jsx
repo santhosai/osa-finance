@@ -12,6 +12,7 @@ import OverduePayments from './components/OverduePayments';
 import MonthlyFinanceView from './components/MonthlyFinanceView';
 import WeeklyFinanceView from './components/WeeklyFinanceView';
 import InvestmentsList from './components/InvestmentsList';
+import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
@@ -57,7 +58,11 @@ function ExcelPaymentTrackerWrapper() {
 
 function VaddiListWrapper() {
   const navigate = useNavigate();
-  return <VaddiList navigateTo={(path) => navigate(`/${path}`)} />;
+  return (
+    <ErrorBoundary>
+      <VaddiList navigateTo={(path) => navigate(`/${path}`)} />
+    </ErrorBoundary>
+  );
 }
 
 function WeeklyFinanceViewWrapper() {
