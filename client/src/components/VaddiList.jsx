@@ -27,8 +27,26 @@ const VaddiList = ({ navigateTo }) => {
     }
   });
 
-  // Ensure entries is always an array
-  const safeEntries = Array.isArray(entries) ? entries : [];
+  // Ensure entries is always an array and filter out invalid entries
+  const safeEntries = Array.isArray(entries)
+    ? entries.filter(entry => {
+        // Filter out entries that are null, undefined, or missing critical fields
+        if (!entry || typeof entry !== 'object') {
+          console.warn('Invalid entry (not an object):', entry);
+          return false;
+        }
+        if (!entry.id || !entry.name || !entry.date) {
+          console.warn('Entry missing required fields (id, name, or date):', entry);
+          return false;
+        }
+        return true;
+      })
+    : [];
+
+  // Log filtered entries count for debugging
+  if (Array.isArray(entries) && entries.length !== safeEntries.length) {
+    console.warn(`Filtered out ${entries.length - safeEntries.length} invalid entries`);
+  }
 
   // Check for reminders on mount and when entries change
   useEffect(() => {
