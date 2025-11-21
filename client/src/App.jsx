@@ -11,6 +11,7 @@ import SundayCollections from './components/SundayCollections';
 import OverduePayments from './components/OverduePayments';
 import MonthlyFinanceView from './components/MonthlyFinanceView';
 import WeeklyFinanceView from './components/WeeklyFinanceView';
+import InvestmentsList from './components/InvestmentsList';
 import './App.css';
 
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
@@ -69,6 +70,11 @@ function MonthlyFinanceViewWrapper() {
   return <MonthlyFinanceView navigateTo={(path) => navigate(`/${path}`)} />;
 }
 
+function InvestmentsListWrapper() {
+  const navigate = useNavigate();
+  return <InvestmentsList navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     // Check localStorage for existing login session
@@ -115,6 +121,7 @@ function App() {
           <Route path="/vaddi-list" element={<VaddiListWrapper />} />
           <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
           <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
+          <Route path="/investments" element={<InvestmentsListWrapper />} />
         </Routes>
       </div>
     </BrowserRouter>

@@ -1064,6 +1064,131 @@ app.delete('/api/vaddi-entries/:id', async (req, res) => {
   }
 });
 
+// ============ INVESTMENTS TRACKING ROUTES ============
+
+// Get all investments
+app.get('/api/investments', async (req, res) => {
+  try {
+    const investmentsSnapshot = await db.collection('investments')
+      .orderBy('investmentDate', 'desc')
+      .get();
+
+    const investments = [];
+    investmentsSnapshot.forEach(doc => {
+      investments.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    res.json(investments);
+  } catch (error) {
+    console.error('Error fetching investments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new investment
+app.post('/api/investments', async (req, res) => {
+  try {
+    const {
+      investorName,
+      phone,
+      investmentAmount,
+      investmentDate,
+      returnAmount,
+      expectedReturnDate,
+      notes
+    } = req.body;
+
+    // Validate required fields
+    if (!investorName || !investmentAmount || !investmentDate || !returnAmount || !expectedReturnDate) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate phone if provided
+    if (phone && phone.length !== 10) {
+      return res.status(400).json({ error: 'Phone number must be 10 digits' });
+    }
+
+    const newInvestment = {
+      investorName,
+      phone: phone || '',
+      investmentAmount: parseFloat(investmentAmount),
+      investmentDate,
+      returnAmount: parseFloat(returnAmount),
+      expectedReturnDate,
+      notes: notes || '',
+      status: 'pending',
+      returnedDate: null,
+      createdAt: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('investments').add(newInvestment);
+
+    res.status(201).json({
+      id: docRef.id,
+      ...newInvestment
+    });
+  } catch (error) {
+    console.error('Error creating investment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update investment (mark as returned/pending)
+app.put('/api/investments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, returnedDate } = req.body;
+
+    const investmentRef = db.collection('investments').doc(id);
+    const investmentDoc = await investmentRef.get();
+
+    if (!investmentDoc.exists) {
+      return res.status(404).json({ error: 'Investment not found' });
+    }
+
+    const updateData = {
+      status,
+      returnedDate: status === 'returned' ? (returnedDate || new Date().toISOString().split('T')[0]) : null,
+      updatedAt: new Date().toISOString()
+    };
+
+    await investmentRef.update(updateData);
+
+    res.json({
+      id,
+      ...investmentDoc.data(),
+      ...updateData
+    });
+  } catch (error) {
+    console.error('Error updating investment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete investment
+app.delete('/api/investments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const investmentRef = db.collection('investments').doc(id);
+    const investmentDoc = await investmentRef.get();
+
+    if (!investmentDoc.exists) {
+      return res.status(404).json({ error: 'Investment not found' });
+    }
+
+    await investmentRef.delete();
+
+    res.json({ message: 'Investment deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting investment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

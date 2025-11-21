@@ -427,6 +427,26 @@ function Dashboard({ navigateTo }) {
             💰 Monthly Finance
           </button>
 
+          <button
+            onClick={() => { setShowSidebar(false); navigateTo('investments'); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'transparent',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#334155'}
+            onMouseOut={(e) => e.target.style.background = 'transparent'}
+          >
+            💰 Investments
+          </button>
+
         </div>
 
         <button
