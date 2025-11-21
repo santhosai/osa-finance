@@ -58,8 +58,12 @@ function SundayCollections({ navigateTo }) {
                   const loanData = await loanResponse.json();
 
                   // Check if customer has already paid on the selected Sunday
+                  // Normalize dates to YYYY-MM-DD format for accurate comparison
                   const paidOnSelectedSunday = loanData.payments?.some(
-                    payment => payment.payment_date === selectedSunday
+                    payment => {
+                      const paymentDate = payment.payment_date?.split('T')[0]; // Extract date part only
+                      return paymentDate === selectedSunday;
+                    }
                   );
 
                   // Calculate which week number this would be
