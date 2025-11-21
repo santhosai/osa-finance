@@ -4,9 +4,10 @@ import './index.css'
 import App from './App.jsx'
 import eruda from 'eruda'
 
-// Initialize mobile debugger (Eruda) - shows console on mobile devices
+// Initialize mobile debugger (Eruda) - ONLY IN DEVELOPMENT
 // This will add a floating button on the page to open the console
-if (typeof window !== 'undefined') {
+// In production, this will not run - no debug button will appear
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
   eruda.init();
   console.log('Mobile debugger (Eruda) initialized - tap the green icon to open console');
 }
