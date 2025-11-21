@@ -265,6 +265,49 @@ function AddMonthlyCustomerModal({ formData, setFormData, onClose, onSuccess }) 
     ? Math.round(parseFloat(formData.loanAmount) / formData.totalMonths)
     : 0;
 
+  // Select contact from phone's contact list
+  const selectFromContacts = async () => {
+    // Check if Contact Picker API is supported
+    if (!('contacts' in navigator)) {
+      alert('Contact picker is not supported on this device/browser. Please use Chrome on Android for best experience.');
+      return;
+    }
+
+    try {
+      const props = ['name', 'tel'];
+      const opts = { multiple: false };
+
+      const contacts = await navigator.contacts.select(props, opts);
+
+      if (contacts && contacts.length > 0) {
+        const contact = contacts[0];
+
+        // Extract phone number (remove all non-digits)
+        let phone = '';
+        if (contact.tel && contact.tel.length > 0) {
+          phone = contact.tel[0].replace(/\D/g, ''); // Remove all non-digits
+          // Get last 10 digits if number is longer (for country codes)
+          if (phone.length > 10) {
+            phone = phone.slice(-10);
+          }
+        }
+
+        // Update form with contact data
+        setFormData({
+          ...formData,
+          name: contact.name && contact.name[0] ? contact.name[0] : formData.name,
+          phone: phone
+        });
+      }
+    } catch (error) {
+      // User cancelled the picker or error occurred
+      if (error.name !== 'AbortError') {
+        console.error('Error selecting contact:', error);
+        alert('Failed to select contact: ' + error.message);
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -418,19 +461,44 @@ Thank you for choosing us!
             }}>
               Phone Number *
             </label>
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              required
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #d1d5db',
-                borderRadius: '8px',
-                fontSize: '14px'
-              }}
-            />
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'stretch' }}>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                required
+                pattern="[0-9]{10}"
+                maxLength="10"
+                disabled={loading}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px'
+                }}
+              />
+              <button
+                type="button"
+                onClick={selectFromContacts}
+                disabled={loading}
+                style={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  opacity: loading ? 0.6 : 1
+                }}
+                title="Select from Contacts"
+              >
+                👤 Contacts
+              </button>
+            </div>
           </div>
 
           <div style={{ marginBottom: '16px' }}>
