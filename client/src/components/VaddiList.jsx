@@ -205,10 +205,11 @@ Please pay monthly interest until principal is returned.
 
       // Send WhatsApp receipt if phone available
       if (entry.phone) {
+        const principalAmount = entry.principalAmount || entry.amount || 0;
         const message = `Payment Receipt - Monthly Interest
 
 Name: ${entry.name}
-Amount Paid: ₹${entry.amount.toLocaleString('en-IN')}
+Amount Paid: ₹${principalAmount.toLocaleString('en-IN')}
 Paid Date: ${new Date().toLocaleDateString('en-IN')}
 
 Thank you for your payment!
@@ -371,7 +372,10 @@ Thank you!
 
   // Calculate total
   const calculateTotal = () => {
-    return entries.reduce((sum, entry) => sum + entry.amount, 0);
+    return entries.reduce((sum, entry) => {
+      const amount = entry.principalAmount || entry.amount || 0;
+      return sum + amount;
+    }, 0);
   };
 
   // Download as CSV
@@ -381,10 +385,13 @@ Thank you!
       return;
     }
 
-    const csvHeader = 'Name,Amount,Date,Expected Return Month,Phone,Status\n';
-    const csvRows = entries.map(entry =>
-      `${entry.name},₹${entry.amount},${entry.date},${entry.expectedReturnMonth},${entry.phone || 'N/A'},${entry.paid ? 'PAID' : 'UNPAID'}`
-    ).join('\n');
+    const csvHeader = 'Name,Principal Amount,Monthly Interest,Start Date,Phone,Status\n';
+    const csvRows = entries.map(entry => {
+      const principalAmount = entry.principalAmount || entry.amount || 0;
+      const monthlyInterest = entry.monthlyInterest || 0;
+      const isPaid = entry.principalReturned || entry.paid || false;
+      return `${entry.name},₹${principalAmount},₹${monthlyInterest},${entry.date},${entry.phone || 'N/A'},${isPaid ? 'RETURNED' : 'ACTIVE'}`;
+    }).join('\n');
 
     const csvContent = csvHeader + csvRows + `\n\nTotal Amount,₹${calculateTotal()},,,,`;
 
@@ -502,19 +509,22 @@ Thank you!
               <p style={{ fontWeight: 600, color: '#333', marginBottom: '15px', fontSize: '16px' }}>
                 Today's Payments Due:
               </p>
-              {todaysReminders.map(reminder => (
-                <div key={reminder.id} style={{
-                  background: '#f5f5f5',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  marginBottom: '10px',
-                  fontSize: '16px',
-                  color: '#333',
-                  borderLeft: '4px solid #667eea'
-                }}>
-                  📌 <strong>{reminder.name}</strong> - ₹{reminder.amount.toLocaleString('en-IN')}
-                </div>
-              ))}
+              {todaysReminders.map(reminder => {
+                const reminderAmount = reminder.principalAmount || reminder.amount || 0;
+                return (
+                  <div key={reminder.id} style={{
+                    background: '#f5f5f5',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    marginBottom: '10px',
+                    fontSize: '16px',
+                    color: '#333',
+                    borderLeft: '4px solid #667eea'
+                  }}>
+                    📌 <strong>{reminder.name}</strong> - ₹{reminderAmount.toLocaleString('en-IN')}
+                  </div>
+                );
+              })}
               <div style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: 'white',
@@ -524,7 +534,10 @@ Thank you!
                 fontSize: '18px',
                 marginTop: '15px'
               }}>
-                <strong>Total Due: ₹{todaysReminders.reduce((sum, r) => sum + r.amount, 0).toLocaleString('en-IN')}</strong>
+                <strong>Total Due: ₹{todaysReminders.reduce((sum, r) => {
+                  const amount = r.principalAmount || r.amount || 0;
+                  return sum + amount;
+                }, 0).toLocaleString('en-IN')}</strong>
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
