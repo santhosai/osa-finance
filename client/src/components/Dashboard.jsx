@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import AddCustomerModal from './AddCustomerModal';
 import PaymentsThisWeekModal from './PaymentsThisWeekModal';
+import DatabaseMonitorModal from './DatabaseMonitorModal';
 import { API_URL } from '../config';
 
 // Fetcher function for SWR
@@ -10,6 +11,7 @@ const fetcher = (url) => fetch(url).then(res => res.json());
 function Dashboard({ navigateTo }) {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
+  const [showDatabaseMonitorModal, setShowDatabaseMonitorModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -400,8 +402,8 @@ function Dashboard({ navigateTo }) {
               minWidth: '80px',
               cursor: 'pointer'
             }}
-            onClick={handleRefresh}
-            title="Click to refresh. Auto-refreshes every 30s"
+            onClick={() => setShowDatabaseMonitorModal(true)}
+            title="Click to view details and add notes. Auto-refreshes every 30s"
           >
             {stats && stats.database ? (
               <>
@@ -810,6 +812,14 @@ function Dashboard({ navigateTo }) {
       {showPaymentsThisWeekModal && (
         <PaymentsThisWeekModal
           onClose={() => setShowPaymentsThisWeekModal(false)}
+        />
+      )}
+
+      {showDatabaseMonitorModal && (
+        <DatabaseMonitorModal
+          stats={stats}
+          onClose={() => setShowDatabaseMonitorModal(false)}
+          onRefresh={handleRefresh}
         />
       )}
     </div>
