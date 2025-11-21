@@ -8,9 +8,9 @@ const fetcher = (url) => fetch(url).then(res => res.json());
 const VaddiList = ({ navigateTo }) => {
   const [formData, setFormData] = useState({
     name: '',
-    amount: '',
+    principalAmount: '',
+    monthlyInterest: '',
     date: '',
-    expectedReturnMonth: '',
     phone: ''
   });
   const [showReminder, setShowReminder] = useState(false);
@@ -98,7 +98,7 @@ const VaddiList = ({ navigateTo }) => {
   const handleAddEntry = async (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.amount || !formData.date || !formData.expectedReturnMonth || !formData.phone) {
+    if (!formData.name || !formData.principalAmount || !formData.monthlyInterest || !formData.date || !formData.phone) {
       alert('Please fill all required fields');
       return;
     }
@@ -126,16 +126,18 @@ const VaddiList = ({ navigateTo }) => {
       mutate();
 
       // Reset form
-      setFormData({ name: '', amount: '', date: '', expectedReturnMonth: '', phone: '' });
+      setFormData({ name: '', principalAmount: '', monthlyInterest: '', date: '', phone: '' });
 
       // Send WhatsApp notification if phone exists
       if (formData.phone) {
         const message = `New Vaddi Entry Created
 
 Name: ${formData.name}
-Interest Amount: ₹${parseFloat(formData.amount).toLocaleString('en-IN')}
-Interest Date: ${new Date(formData.date).toLocaleDateString('en-IN')}
-Expected Return: ${new Date(formData.expectedReturnMonth + '-01').toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}
+Principal Amount Lent: ₹${parseFloat(formData.principalAmount).toLocaleString('en-IN')}
+Monthly Interest: ₹${parseFloat(formData.monthlyInterest).toLocaleString('en-IN')}
+Start Date: ${new Date(formData.date).toLocaleDateString('en-IN')}
+
+Please pay monthly interest until principal is returned.
 
 - Om Sai Murugan Finance`;
 
@@ -226,6 +228,110 @@ Thank you for your payment!
     }
   };
 
+  // Record interest payment
+  const recordInterestPayment = async (entry) => {
+    const principalAmount = entry.principalAmount || entry.amount || 0;
+    const monthlyInterest = entry.monthlyInterest || 0;
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/vaddi-entries/${entry.id}/interest-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentDate: new Date().toISOString().split('T')[0],
+          amount: monthlyInterest
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to record interest payment');
+      }
+
+      // Refresh data
+      mutate();
+
+      // Send WhatsApp receipt if phone available
+      if (entry.phone) {
+        const message = `Payment Receipt - Monthly Interest
+
+Name: ${entry.name}
+Interest Paid: ₹${monthlyInterest.toLocaleString('en-IN')}
+Payment Date: ${new Date().toLocaleDateString('en-IN')}
+Principal Amount: ₹${principalAmount.toLocaleString('en-IN')}
+
+Thank you for your payment!
+
+- Om Sai Murugan Finance`;
+
+        const cleanPhone = entry.phone.replace(/\D/g, '');
+        const phoneWithCountryCode = `91${cleanPhone}`;
+        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
+
+      alert('Interest payment recorded successfully!');
+    } catch (error) {
+      console.error('Error recording interest payment:', error);
+      alert('Failed to record interest payment: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Mark principal as returned
+  const markPrincipalReturned = async (entry) => {
+    const confirmed = window.confirm('Mark the principal amount as RETURNED? This means the customer has paid back the full amount.');
+    if (!confirmed) return;
+
+    const principalAmount = entry.principalAmount || entry.amount || 0;
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/vaddi-entries/${entry.id}/principal-returned`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          returnDate: new Date().toISOString().split('T')[0]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to mark principal as returned');
+      }
+
+      // Refresh data
+      mutate();
+
+      // Send WhatsApp receipt if phone available
+      if (entry.phone) {
+        const message = `Receipt - Principal Amount Returned
+
+Name: ${entry.name}
+Principal Amount: ₹${principalAmount.toLocaleString('en-IN')}
+Return Date: ${new Date().toLocaleDateString('en-IN')}
+
+Thank you for returning the principal amount!
+
+- Om Sai Murugan Finance`;
+
+        const cleanPhone = entry.phone.replace(/\D/g, '');
+        const phoneWithCountryCode = `91${cleanPhone}`;
+        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
+
+      alert('Principal marked as returned successfully!');
+    } catch (error) {
+      console.error('Error marking principal as returned:', error);
+      alert('Failed to mark principal as returned: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Send WhatsApp reminder (for unpaid entries)
   const sendWhatsAppReminder = (entry) => {
     if (!entry.phone) {
@@ -233,9 +339,16 @@ Thank you for your payment!
       return;
     }
 
-    const message = `Reminder: Your interest payment of ₹${entry.amount.toLocaleString('en-IN')} is due today.
+    const principalAmount = entry.principalAmount || entry.amount || 0;
+    const monthlyInterest = entry.monthlyInterest || 0;
 
-Expected return month: ${new Date(entry.expectedReturnMonth + '-01').toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}
+    const message = `Payment Reminder - Monthly Interest
+
+Name: ${entry.name}
+Principal Amount: ₹${principalAmount.toLocaleString('en-IN')}
+Monthly Interest Due: ₹${monthlyInterest.toLocaleString('en-IN')}
+
+Please pay your monthly interest.
 
 Thank you!
 
@@ -466,125 +579,165 @@ Thank you!
         {/* Add Entry Form */}
         <form onSubmit={handleAddEntry} style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: '12px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '16px',
           marginBottom: '20px',
-          padding: '16px',
+          padding: '20px',
           background: '#f8f9fa',
           borderRadius: '8px'
         }}>
-          <input
-            type="text"
-            name="name"
-            placeholder="Name *"
-            value={formData.name}
-            onChange={handleInputChange}
-            required
-            disabled={loading}
-            style={{
-              padding: '12px',
-              border: '1px solid #ddd',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          />
-          <input
-            type="number"
-            name="amount"
-            placeholder="Amount *"
-            value={formData.amount}
-            onChange={handleInputChange}
-            required
-            disabled={loading}
-            style={{
-              padding: '12px',
-              border: '1px solid #ddd',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          />
-          <input
-            type="date"
-            name="date"
-            placeholder="Interest Date *"
-            value={formData.date}
-            onChange={handleInputChange}
-            required
-            disabled={loading}
-            style={{
-              padding: '12px',
-              border: '1px solid #ddd',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          />
-          <input
-            type="month"
-            name="expectedReturnMonth"
-            placeholder="Expected Return Month *"
-            value={formData.expectedReturnMonth}
-            onChange={handleInputChange}
-            required
-            disabled={loading}
-            style={{
-              padding: '12px',
-              border: '1px solid #ddd',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          />
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'stretch' }}>
+          {/* Customer Name */}
+          <div>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
+              👤 Customer Name *
+            </label>
             <input
-              type="tel"
-              name="phone"
-              placeholder="Phone *"
-              value={formData.phone}
+              type="text"
+              name="name"
+              placeholder="Enter customer name"
+              value={formData.name}
               onChange={handleInputChange}
               required
-              pattern="[0-9]{10}"
-              maxLength="10"
               disabled={loading}
               style={{
-                flex: 1,
+                width: '100%',
                 padding: '12px',
                 border: '1px solid #ddd',
                 borderRadius: '6px',
                 fontSize: '14px'
               }}
             />
-            <button
-              type="button"
-              onClick={selectFromContacts}
+          </div>
+
+          {/* Principal Amount */}
+          <div>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
+              💰 Principal Amount Lent *
+            </label>
+            <input
+              type="number"
+              name="principalAmount"
+              placeholder="Amount you lent"
+              value={formData.principalAmount}
+              onChange={handleInputChange}
+              required
               disabled={loading}
               style={{
-                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                color: 'white',
-                border: 'none',
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #ddd',
                 borderRadius: '6px',
-                padding: '8px 12px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontSize: '14px',
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-                opacity: loading ? 0.6 : 1
+                fontSize: '14px'
               }}
-              title="Select from Contacts"
-            >
-              👤 Contacts
-            </button>
+            />
           </div>
+
+          {/* Monthly Interest */}
+          <div>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
+              📈 Monthly Interest Amount *
+            </label>
+            <input
+              type="number"
+              name="monthlyInterest"
+              placeholder="Interest per month"
+              value={formData.monthlyInterest}
+              onChange={handleInputChange}
+              required
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          {/* Start Date */}
+          <div>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
+              📅 Start Date *
+            </label>
+            <input
+              type="date"
+              name="date"
+              value={formData.date}
+              onChange={handleInputChange}
+              required
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          {/* Phone Number */}
+          <div>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151', fontSize: '13px' }}>
+              📱 Phone Number *
+            </label>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'stretch' }}>
+              <input
+                type="tel"
+                name="phone"
+                placeholder="10-digit mobile"
+                value={formData.phone}
+                onChange={handleInputChange}
+                required
+                pattern="[0-9]{10}"
+                maxLength="10"
+                disabled={loading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+              <button
+                type="button"
+                onClick={selectFromContacts}
+                disabled={loading}
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '8px 12px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  opacity: loading ? 0.6 : 1
+                }}
+                title="Select from Contacts"
+              >
+                👤 Contacts
+              </button>
+            </div>
+          </div>
+
+          {/* Submit Button */}
           <button type="submit" disabled={loading} style={{
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
             border: 'none',
-            padding: '12px',
+            padding: '14px',
             borderRadius: '6px',
             cursor: loading ? 'not-allowed' : 'pointer',
-            fontWeight: 600,
-            fontSize: '14px',
-            opacity: loading ? 0.6 : 1
+            fontWeight: 700,
+            fontSize: '15px',
+            opacity: loading ? 0.6 : 1,
+            alignSelf: 'end'
           }}>
-            {loading ? 'Adding...' : '+ Add Entry'}
+            {loading ? 'Adding...' : '+ Add Vaddi Entry'}
           </button>
         </form>
 
@@ -596,114 +749,147 @@ Thank you!
             </p>
           ) : (
             <div style={{ display: 'grid', gap: '12px' }}>
-              {entries.map(entry => (
-                <div key={entry.id} style={{
-                  padding: '16px',
-                  background: entry.paid
-                    ? 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)'
-                    : 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
-                  borderRadius: '8px',
-                  borderLeft: entry.paid ? '4px solid #10b981' : '4px solid #667eea',
-                  opacity: entry.paid ? 0.7 : 1
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                    <div style={{ flex: 1, minWidth: '200px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                        <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b' }}>
-                          {entry.name}
+              {entries.map(entry => {
+                // Handle both old and new field structures
+                const principalAmount = entry.principalAmount || entry.amount || 0;
+                const monthlyInterest = entry.monthlyInterest || 0;
+                const isPrincipalReturned = entry.principalReturned || entry.paid || false;
+                const interestPayments = entry.interestPayments || [];
+
+                return (
+                  <div key={entry.id} style={{
+                    padding: '16px',
+                    background: isPrincipalReturned
+                      ? 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)'
+                      : 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
+                    borderRadius: '8px',
+                    borderLeft: isPrincipalReturned ? '4px solid #10b981' : '4px solid #667eea',
+                    opacity: isPrincipalReturned ? 0.7 : 1
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                          <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b' }}>
+                            {entry.name}
+                          </div>
+                          {isPrincipalReturned && (
+                            <span style={{
+                              background: '#10b981',
+                              color: 'white',
+                              padding: '2px 8px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: 600
+                            }}>
+                              ✅ RETURNED
+                            </span>
+                          )}
                         </div>
-                        {entry.paid && (
-                          <span style={{
-                            background: '#10b981',
-                            color: 'white',
-                            padding: '2px 8px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: 600
-                          }}>
-                            ✓ PAID
-                          </span>
+                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                          💰 Principal Amount: ₹{principalAmount.toLocaleString('en-IN')}
+                        </div>
+                        {monthlyInterest > 0 && (
+                          <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                            📈 Monthly Interest: ₹{monthlyInterest.toLocaleString('en-IN')}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                          📅 Start Date: {new Date(entry.date).toLocaleDateString('en-IN')}
+                        </div>
+                        {interestPayments.length > 0 && (
+                          <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600, marginBottom: '4px' }}>
+                            💸 Interest Payments: {interestPayments.length} payment{interestPayments.length !== 1 ? 's' : ''}
+                          </div>
+                        )}
+                        {isPrincipalReturned && entry.principalReturnedDate && (
+                          <div style={{ fontSize: '13px', color: '#059669', fontWeight: 600, marginBottom: '4px' }}>
+                            ✅ Returned on: {new Date(entry.principalReturnedDate).toLocaleDateString('en-IN')}
+                          </div>
+                        )}
+                        {entry.phone && (
+                          <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>📱 Phone: {entry.phone}</span>
+                            <button
+                              onClick={() => openContact(entry.phone)}
+                              style={{
+                                background: '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '2px 8px',
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                fontWeight: 600
+                              }}
+                              title="Call"
+                            >
+                              📞 Call
+                            </button>
+                          </div>
                         )}
                       </div>
-                      <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
-                        💰 Amount: ₹{entry.amount.toLocaleString('en-IN')}
-                      </div>
-                      <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
-                        📅 Interest Date: {new Date(entry.date).toLocaleDateString('en-IN')}
-                      </div>
-                      <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
-                        📆 Expected Return: {new Date(entry.expectedReturnMonth + '-01').toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}
-                      </div>
-                      {entry.paid && entry.paidDate && (
-                        <div style={{ fontSize: '13px', color: '#059669', fontWeight: 600, marginBottom: '4px' }}>
-                          ✓ Paid on: {new Date(entry.paidDate).toLocaleDateString('en-IN')}
-                        </div>
-                      )}
-                      {entry.phone && (
-                        <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span>📱 Phone: {entry.phone}</span>
-                          <button
-                            onClick={() => openContact(entry.phone)}
-                            style={{
-                              background: '#3b82f6',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '2px 8px',
-                              fontSize: '11px',
-                              cursor: 'pointer',
-                              fontWeight: 600
-                            }}
-                            title="Call"
-                          >
-                            📞 Call
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      {!entry.paid ? (
-                        <>
-                          <button
-                            onClick={() => markAsPaid(entry)}
-                            disabled={loading}
-                            style={{
-                              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '6px',
-                              padding: '8px 12px',
-                              fontSize: '14px',
-                              cursor: loading ? 'not-allowed' : 'pointer',
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                              opacity: loading ? 0.6 : 1
-                            }}
-                            title="Mark as Paid & Send Receipt"
-                          >
-                            ✓ Mark Paid
-                          </button>
-                          {entry.phone && (
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {!isPrincipalReturned ? (
+                          <>
                             <button
-                              onClick={() => sendWhatsAppReminder(entry)}
+                              onClick={() => recordInterestPayment(entry)}
+                              disabled={loading}
                               style={{
-                                background: '#25D366',
+                                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '6px',
                                 padding: '8px 12px',
-                                fontSize: '14px',
-                                cursor: 'pointer',
+                                fontSize: '13px',
+                                cursor: loading ? 'not-allowed' : 'pointer',
                                 fontWeight: 600,
-                                whiteSpace: 'nowrap'
+                                whiteSpace: 'nowrap',
+                                opacity: loading ? 0.6 : 1
                               }}
-                              title="Send WhatsApp Reminder"
+                              title="Record monthly interest payment"
                             >
-                              📲 Remind
+                              💰 Interest Paid
                             </button>
-                          )}
-                        </>
-                      ) : null}
+                            <button
+                              onClick={() => markPrincipalReturned(entry)}
+                              disabled={loading}
+                              style={{
+                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '8px 12px',
+                                fontSize: '13px',
+                                cursor: loading ? 'not-allowed' : 'pointer',
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                                opacity: loading ? 0.6 : 1
+                              }}
+                              title="Mark principal amount as returned"
+                            >
+                              ✅ Principal Returned
+                            </button>
+                            {entry.phone && (
+                              <button
+                                onClick={() => sendWhatsAppReminder(entry)}
+                                style={{
+                                  background: '#25D366',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  padding: '8px 12px',
+                                  fontSize: '13px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600,
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title="Send WhatsApp Reminder"
+                              >
+                                📲 Remind
+                              </button>
+                            )}
+                          </>
+                        ) : null}
                       <button
                         onClick={() => handleDelete(entry.id)}
                         style={{

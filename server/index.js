@@ -976,10 +976,10 @@ app.get('/api/vaddi-entries', async (req, res) => {
 // Create new vaddi entry
 app.post('/api/vaddi-entries', async (req, res) => {
   try {
-    const { name, amount, date, expectedReturnMonth, phone } = req.body;
+    const { name, principalAmount, monthlyInterest, date, phone } = req.body;
 
     // Validate required fields
-    if (!name || !amount || !date || !expectedReturnMonth || !phone) {
+    if (!name || !principalAmount || !monthlyInterest || !date || !phone) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -990,12 +990,13 @@ app.post('/api/vaddi-entries', async (req, res) => {
 
     const newEntry = {
       name,
-      amount: parseFloat(amount),
+      principalAmount: parseFloat(principalAmount),
+      monthlyInterest: parseFloat(monthlyInterest),
       date,
-      expectedReturnMonth,
       phone,
-      paid: false,
-      paidDate: null,
+      principalReturned: false,
+      principalReturnedDate: null,
+      interestPayments: [], // Array to track monthly interest payments
       createdAt: new Date().toISOString()
     };
 
@@ -1039,6 +1040,75 @@ app.put('/api/vaddi-entries/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating vaddi entry:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Record interest payment
+app.post('/api/vaddi-entries/:id/interest-payment', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paymentDate, amount } = req.body;
+
+    const entryRef = db.collection('vaddi_entries').doc(id);
+    const entryDoc = await entryRef.get();
+
+    if (!entryDoc.exists) {
+      return res.status(404).json({ error: 'Vaddi entry not found' });
+    }
+
+    const entry = entryDoc.data();
+    const interestPayments = entry.interestPayments || [];
+
+    interestPayments.push({
+      date: paymentDate || new Date().toISOString().split('T')[0],
+      amount: amount || entry.monthlyInterest,
+      recordedAt: new Date().toISOString()
+    });
+
+    await entryRef.update({
+      interestPayments,
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({
+      id,
+      ...entry,
+      interestPayments
+    });
+  } catch (error) {
+    console.error('Error recording interest payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark principal as returned
+app.put('/api/vaddi-entries/:id/principal-returned', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { returnDate } = req.body;
+
+    const entryRef = db.collection('vaddi_entries').doc(id);
+    const entryDoc = await entryRef.get();
+
+    if (!entryDoc.exists) {
+      return res.status(404).json({ error: 'Vaddi entry not found' });
+    }
+
+    await entryRef.update({
+      principalReturned: true,
+      principalReturnedDate: returnDate || new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({
+      id,
+      ...entryDoc.data(),
+      principalReturned: true,
+      principalReturnedDate: returnDate || new Date().toISOString().split('T')[0]
+    });
+  } catch (error) {
+    console.error('Error marking principal as returned:', error);
     res.status(500).json({ error: error.message });
   }
 });

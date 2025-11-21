@@ -1,32 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install)",
-      "Bash(npm install:*)",
-      "Bash(node seed.js:*)",
-      "Bash(curl:*)",
-      "Bash(findstr:*)",
-      "Bash(netsh advfirewall show:*)",
-      "Bash(node index.js:*)",
-      "Bash(npm run dev:*)",
-      "Bash(npx vite:*)",
-      "Bash(git init:*)",
-      "Bash(git config:*)",
-      "Bash(vercel:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
-      "Bash(git restore:*)",
-      "Bash(npm run build:*)",
-      "Bash(git log:*)",
-      "Bash(del database.js 2)",
-      "Bash(nul)",
-      "Bash(del finance.db 2)",
-      "Bash(python -m json.tool:*)",
-      "Bash(You have received a loan of ₹4,000 from Om Sai Murugan Finance.)",
-      "Bash(Monthly payment: ₹1,000)",
-      "Bash(Total months: 5)",
-      "Bash(...\"\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(powershell -Command \"Invoke-WebRequest -Uri https://server-rho-cyan-11.vercel.app/api/migrate-customer-types -Method POST | Select-Object -ExpandProperty Content\")",
+      "Bash(powershell -Command \"$response = Invoke-WebRequest -Uri ''https://client-santhosais-projects.vercel.app/vaddi-list'' -UseBasicParsing; $response.Content | Select-String -Pattern ''Phone.*Optional'' -Context 0,3\")",
+      "Bash(powershell -Command:*)",
+      "Bash(cmd.exe //c taskkill //F //PID 4104)",
+      "Bash(cmd.exe //c taskkill //F //PID 50692)"
     ],
     "deny": [],
     "ask": []
