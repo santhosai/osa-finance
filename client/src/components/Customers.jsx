@@ -10,6 +10,7 @@ import { API_URL } from '../config';
 const fetcher = (url) => fetch(url).then(res => res.json());
 
 function Customers({ navigateTo }) {
+  const [activeTab, setActiveTab] = useState('weekly'); // 'weekly' or 'monthly'
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
@@ -21,16 +22,31 @@ function Customers({ navigateTo }) {
   const [currentPage, setCurrentPage] = useState(1);
   const customersPerPage = 20;
 
-  // Use SWR for automatic caching and re-fetching
-  const url = searchTerm
+  // Fetch Weekly customers
+  const weeklyUrl = searchTerm
     ? `${API_URL}/customers?search=${encodeURIComponent(searchTerm)}`
     : `${API_URL}/customers`;
 
-  const { data: customers = [], error, isLoading, mutate } = useSWR(url, fetcher, {
-    refreshInterval: 0, // Don't auto-refresh (save bandwidth)
-    revalidateOnFocus: true, // Refresh when user returns to tab
-    dedupingInterval: 2000, // Prevent duplicate requests within 2s
+  const { data: weeklyCustomers = [], error: weeklyError, isLoading: weeklyLoading, mutate: mutateWeekly } = useSWR(weeklyUrl, fetcher, {
+    refreshInterval: 30000, // Auto-refresh every 30 seconds
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
   });
+
+  // Fetch Monthly Finance customers
+  const monthlyUrl = `${API_URL}/monthly-finance/customers`;
+
+  const { data: monthlyCustomers = [], error: monthlyError, isLoading: monthlyLoading, mutate: mutateMonthly } = useSWR(monthlyUrl, fetcher, {
+    refreshInterval: 30000, // Auto-refresh every 30 seconds
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
+  });
+
+  // Use appropriate data based on active tab
+  const customers = activeTab === 'weekly' ? weeklyCustomers : monthlyCustomers;
+  const isLoading = activeTab === 'weekly' ? weeklyLoading : monthlyLoading;
+  const error = activeTab === 'weekly' ? weeklyError : monthlyError;
+  const mutate = activeTab === 'weekly' ? mutateWeekly : mutateMonthly;
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -54,7 +70,10 @@ function Customers({ navigateTo }) {
   };
 
   const handleCustomerClick = (customer) => {
-    if (customer.loans && customer.loans.length > 0) {
+    if (activeTab === 'monthly') {
+      // For Monthly Finance customers, navigate to Monthly Finance view
+      navigateTo('monthly-finance');
+    } else if (customer.loans && customer.loans.length > 0) {
       // Customer has loans - navigate to customer loans view
       navigateTo('customer-loans', customer.id);
     } else {
@@ -64,10 +83,36 @@ function Customers({ navigateTo }) {
     }
   };
 
-  const handleDeleteClick = (e, customer) => {
+  const handleDeleteClick = async (e, customer) => {
     e.stopPropagation(); // Prevent triggering handleCustomerClick
-    setCustomerToDelete(customer);
-    setShowDeleteModal(true);
+
+    if (activeTab === 'monthly') {
+      // Delete Monthly Finance customer directly
+      if (!window.confirm(`Are you sure you want to delete ${customer.name}?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/monthly-finance/customers/${customer.id}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete customer');
+        }
+
+        // Refresh the monthly customers list
+        mutateMonthly();
+        alert('Customer deleted successfully!');
+      } catch (error) {
+        console.error('Error deleting Monthly Finance customer:', error);
+        alert('Failed to delete customer: ' + error.message);
+      }
+    } else {
+      // Delete Weekly customer using modal
+      setCustomerToDelete(customer);
+      setShowDeleteModal(true);
+    }
   };
 
   const handleEditClick = (e, customer) => {
@@ -161,6 +206,56 @@ function Customers({ navigateTo }) {
         >
           <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
         </svg>
+      </div>
+
+      {/* Tabs for Weekly/Monthly */}
+      <div style={{
+        display: 'flex',
+        gap: '0',
+        padding: '0 16px',
+        background: '#f3f4f6',
+        borderBottom: '2px solid #e5e7eb'
+      }}>
+        <button
+          onClick={() => {
+            setActiveTab('weekly');
+            setCurrentPage(1);
+          }}
+          style={{
+            flex: 1,
+            padding: '14px 20px',
+            border: 'none',
+            background: activeTab === 'weekly' ? 'white' : 'transparent',
+            color: activeTab === 'weekly' ? '#1e40af' : '#6b7280',
+            fontWeight: activeTab === 'weekly' ? 700 : 600,
+            fontSize: '16px',
+            cursor: 'pointer',
+            borderBottom: activeTab === 'weekly' ? '3px solid #1e40af' : '3px solid transparent',
+            transition: 'all 0.2s'
+          }}
+        >
+          📅 Weekly ({weeklyCustomers.length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('monthly');
+            setCurrentPage(1);
+          }}
+          style={{
+            flex: 1,
+            padding: '14px 20px',
+            border: 'none',
+            background: activeTab === 'monthly' ? 'white' : 'transparent',
+            color: activeTab === 'monthly' ? '#7c3aed' : '#6b7280',
+            fontWeight: activeTab === 'monthly' ? 700 : 600,
+            fontSize: '16px',
+            cursor: 'pointer',
+            borderBottom: activeTab === 'monthly' ? '3px solid #7c3aed' : '3px solid transparent',
+            transition: 'all 0.2s'
+          }}
+        >
+          💰 Monthly ({monthlyCustomers.length})
+        </button>
       </div>
 
       <div className="search-bar">
@@ -277,7 +372,30 @@ function Customers({ navigateTo }) {
           </button>
           <div className="customer-name">{customer.name}</div>
           <div className="customer-phone">📱 {customer.phone}</div>
-          {customer.total_active_loans > 0 ? (
+
+          {/* Display different info for Weekly vs Monthly customers */}
+          {activeTab === 'monthly' ? (
+            <div className="customer-loan">
+              <div className="loan-info">
+                <div className="loan-label">Loan Amount</div>
+                <div className="loan-value">{formatCurrency(customer.loan_amount)}</div>
+              </div>
+              <div className="loan-info">
+                <div className="loan-label">Balance</div>
+                <div className="loan-value">{formatCurrency(customer.balance)}</div>
+              </div>
+              <div className="loan-info">
+                <div className="loan-label">Monthly Payment</div>
+                <div className="loan-value">{formatCurrency(customer.monthly_amount)}</div>
+              </div>
+              <div className="loan-info">
+                <div className="loan-label">Progress</div>
+                <div className="loan-value">
+                  {Math.floor((customer.loan_amount - customer.balance) / customer.monthly_amount)}/{customer.total_months} months
+                </div>
+              </div>
+            </div>
+          ) : customer.total_active_loans > 0 ? (
             <div className="customer-loan">
               <div className="loan-info">
                 <div className="loan-label">Active Loans</div>
@@ -389,7 +507,18 @@ function Customers({ navigateTo }) {
         </>
       )}
 
-      <button className="fab" onClick={() => setShowAddCustomerModal(true)}>
+      <button
+        className="fab"
+        onClick={() => {
+          if (activeTab === 'monthly') {
+            // Navigate to Monthly Finance view to add customer there
+            navigateTo('monthly-finance');
+          } else {
+            // Open Weekly customer modal
+            setShowAddCustomerModal(true);
+          }
+        }}
+      >
         +
       </button>
 

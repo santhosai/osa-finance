@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
@@ -15,6 +16,59 @@ import './App.css';
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
 const CURRENT_PASSWORD_VERSION = '2025-01-21-v1';
 
+// Wrapper components that use useNavigate
+function DashboardWrapper() {
+  const navigate = useNavigate();
+  return <Dashboard navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+function CustomersWrapper() {
+  const navigate = useNavigate();
+  return <Customers navigateTo={(path, id) => id ? navigate(`/${path}/${id}`) : navigate(`/${path}`)} />;
+}
+
+function CustomerLoansWrapper() {
+  const { customerId } = useParams();
+  const navigate = useNavigate();
+  return <CustomerLoans customerId={customerId} navigateTo={(path, id) => id ? navigate(`/${path}/${id}`) : navigate(`/${path}`)} />;
+}
+
+function LoanDetailsWrapper() {
+  const { loanId } = useParams();
+  const navigate = useNavigate();
+  return <LoanDetails loanId={loanId} navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+function SundayCollectionsWrapper() {
+  const navigate = useNavigate();
+  return <SundayCollections navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+function OverduePaymentsWrapper() {
+  const navigate = useNavigate();
+  return <OverduePayments navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+function ExcelPaymentTrackerWrapper() {
+  const navigate = useNavigate();
+  return <ExcelPaymentTracker navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+function VaddiListWrapper() {
+  const navigate = useNavigate();
+  return <VaddiList navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+function WeeklyFinanceViewWrapper() {
+  const navigate = useNavigate();
+  return <WeeklyFinanceView navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+function MonthlyFinanceViewWrapper() {
+  const navigate = useNavigate();
+  return <MonthlyFinanceView navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     // Check localStorage for existing login session
@@ -30,9 +84,6 @@ function App() {
 
     return loggedIn;
   });
-  const [currentView, setCurrentView] = useState('dashboard');
-  const [selectedLoanId, setSelectedLoanId] = useState(null);
-  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
 
   useEffect(() => {
     // Save login state to localStorage
@@ -42,24 +93,6 @@ function App() {
   const handleLogout = () => {
     setIsLoggedIn(false);
     localStorage.removeItem('isLoggedIn');
-    setCurrentView('dashboard');
-    setSelectedLoanId(null);
-    setSelectedCustomerId(null);
-  };
-
-  const navigateTo = (view, id = null) => {
-    setCurrentView(view);
-    // id could be either loanId or customerId depending on the view
-    if (view === 'loan-details') {
-      setSelectedLoanId(id);
-      setSelectedCustomerId(null);
-    } else if (view === 'customer-loans') {
-      setSelectedCustomerId(id);
-      setSelectedLoanId(null);
-    } else {
-      setSelectedLoanId(null);
-      setSelectedCustomerId(null);
-    }
   };
 
   // Show login page if not logged in
@@ -68,22 +101,23 @@ function App() {
   }
 
   return (
-    <div className="app">
-      {currentView === 'dashboard' && <Dashboard navigateTo={navigateTo} />}
-      {currentView === 'customers' && <Customers navigateTo={navigateTo} />}
-      {currentView === 'customer-loans' && selectedCustomerId && (
-        <CustomerLoans customerId={selectedCustomerId} navigateTo={navigateTo} />
-      )}
-      {currentView === 'sunday-collections' && <SundayCollections navigateTo={navigateTo} />}
-      {currentView === 'overdue-payments' && <OverduePayments navigateTo={navigateTo} />}
-      {currentView === 'payment-tracker' && <ExcelPaymentTracker navigateTo={navigateTo} />}
-      {currentView === 'vaddi-list' && <VaddiList navigateTo={navigateTo} />}
-      {currentView === 'weekly-finance' && <WeeklyFinanceView navigateTo={navigateTo} />}
-      {currentView === 'monthly-finance' && <MonthlyFinanceView navigateTo={navigateTo} />}
-      {currentView === 'loan-details' && selectedLoanId && (
-        <LoanDetails loanId={selectedLoanId} navigateTo={navigateTo} />
-      )}
-    </div>
+    <BrowserRouter>
+      <div className="app">
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardWrapper />} />
+          <Route path="/customers" element={<CustomersWrapper />} />
+          <Route path="/customer-loans/:customerId" element={<CustomerLoansWrapper />} />
+          <Route path="/loan-details/:loanId" element={<LoanDetailsWrapper />} />
+          <Route path="/sunday-collections" element={<SundayCollectionsWrapper />} />
+          <Route path="/overdue-payments" element={<OverduePaymentsWrapper />} />
+          <Route path="/payment-tracker" element={<ExcelPaymentTrackerWrapper />} />
+          <Route path="/vaddi-list" element={<VaddiListWrapper />} />
+          <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
+          <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
+        </Routes>
+      </div>
+    </BrowserRouter>
   );
 }
 

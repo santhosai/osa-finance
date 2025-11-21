@@ -11,6 +11,7 @@ function Dashboard({ navigateTo }) {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -19,12 +20,20 @@ function Dashboard({ navigateTo }) {
     dedupingInterval: 2000, // Prevent duplicate requests within 2s
   });
 
+  // Fetch customers with loans for the table
+  const { data: customers = [], mutate: mutateCustomers } = useSWR(`${API_URL}/customers`, fetcher, {
+    refreshInterval: 30000,
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
+  });
+
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
   };
 
   const handleRefresh = () => {
-    mutate(); // SWR: Re-fetch data automatically
+    mutate(); // SWR: Re-fetch stats
+    mutateCustomers(); // SWR: Re-fetch customers
   };
 
   const handleLogout = () => {
@@ -452,6 +461,256 @@ function Dashboard({ navigateTo }) {
               </div>
             </div>
           )}
+
+          {/* Weekly Payments Table */}
+          <div style={{
+            background: 'white',
+            borderRadius: '8px',
+            padding: '12px',
+            marginBottom: '10px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '10px',
+              flexWrap: 'wrap',
+              gap: '8px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '14px',
+                fontWeight: 700,
+                color: '#1e293b'
+              }}>
+                📅 Weekly Payments
+              </h3>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#1e293b'
+                }}
+              />
+            </div>
+
+{(() => {
+              // Get the selected date and check if it's a Sunday
+              const selected = new Date(selectedDate + 'T00:00:00');
+              const isSunday = selected.getDay() === 0;
+
+              if (!isSunday) {
+                return (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '20px',
+                    color: '#dc2626',
+                    fontSize: '13px',
+                    fontWeight: 600
+                  }}>
+                    ⚠️ Please select a Sunday. Collections are only on Sundays.
+                  </div>
+                );
+              }
+
+              // Get the Sunday's date for comparison
+              const sundayDate = selected.toISOString().split('T')[0];
+
+              // Helper function to get the first payment Sunday on or after the start date
+              const getFirstPaymentSunday = (startDateStr) => {
+                const date = new Date(startDateStr + 'T00:00:00');
+                const dayOfWeek = date.getDay();
+
+                if (dayOfWeek === 0) {
+                  // Start date is already a Sunday
+                  return date;
+                } else {
+                  // Move to next Sunday
+                  const daysUntilSunday = 7 - dayOfWeek;
+                  const firstSunday = new Date(date);
+                  firstSunday.setDate(date.getDate() + daysUntilSunday);
+                  return firstSunday;
+                }
+              };
+
+              // Collect loans with payments due on this Sunday
+              const paidLoans = [];
+              const unpaidLoans = [];
+
+              customers.forEach(customer => {
+                if (!customer.loans || customer.loans.length === 0) return;
+
+                customer.loans.forEach(loan => {
+                  if (loan.status === 'closed') return;
+
+                  // Only process Weekly loans (Monthly loans are collected on any day)
+                  if (loan.loan_type !== 'Weekly') return;
+
+                  // Get the first payment Sunday for this loan
+                  const firstPaymentSunday = getFirstPaymentSunday(loan.start_date);
+
+                  // Calculate days from first payment Sunday to selected Sunday
+                  const daysDiff = Math.floor((selected - firstPaymentSunday) / (24 * 60 * 60 * 1000));
+
+                  // Check if selected date is exactly a payment Sunday for this loan
+                  // (must be 0, 7, 14, 21, ... days from first payment Sunday)
+                  if (daysDiff >= 0 && daysDiff % 7 === 0) {
+                    const weekNumber = (daysDiff / 7) + 1; // 1-indexed week number
+                    const totalWeeks = 10; // Weekly loans are always 10 weeks
+
+                    // Only show if within the loan period
+                    if (weekNumber <= totalWeeks) {
+                      // Check if payment was made for this week
+                      const paymentAmount = loan.weekly_amount;
+                      const totalPaid = loan.loan_amount - loan.balance;
+                      const actualPayments = Math.floor(totalPaid / paymentAmount);
+                      const isPaid = actualPayments >= weekNumber;
+
+                      const loanData = {
+                        customer,
+                        loan,
+                        weekNumber,
+                        paymentAmount
+                      };
+
+                      if (isPaid) {
+                        paidLoans.push(loanData);
+                      } else {
+                        unpaidLoans.push(loanData);
+                      }
+                    }
+                  }
+                });
+              });
+
+              if (paidLoans.length === 0 && unpaidLoans.length === 0) {
+                return (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '20px',
+                    color: '#6b7280',
+                    fontSize: '13px'
+                  }}>
+                    No payments due for this Sunday
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '10px',
+                  overflowX: 'auto'
+                }}>
+                  {/* PAID Column */}
+                  <div style={{
+                    background: '#f0fdf4',
+                    borderRadius: '8px',
+                    padding: '10px',
+                    minWidth: '250px'
+                  }}>
+                    <h4 style={{
+                      margin: '0 0 8px 0',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#065f46',
+                      textAlign: 'center'
+                    }}>
+                      ✓ PAID ({paidLoans.length})
+                    </h4>
+                    <div style={{ display: 'grid', gap: '6px' }}>
+                      {paidLoans.map(({ customer, loan, paymentAmount }) => (
+                        <div
+                          key={loan.loan_id}
+                          onClick={() => navigateTo('loan-details', loan.loan_id)}
+                          style={{
+                            background: 'white',
+                            padding: '8px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            border: '1px solid #d1fae5',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.02)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.2)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: '12px', color: '#1e293b', marginBottom: '2px' }}>
+                            {customer.name}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>
+                            {formatCurrency(paymentAmount)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* UNPAID Column */}
+                  <div style={{
+                    background: '#fef2f2',
+                    borderRadius: '8px',
+                    padding: '10px',
+                    minWidth: '250px'
+                  }}>
+                    <h4 style={{
+                      margin: '0 0 8px 0',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#991b1b',
+                      textAlign: 'center'
+                    }}>
+                      ✗ UNPAID ({unpaidLoans.length})
+                    </h4>
+                    <div style={{ display: 'grid', gap: '6px' }}>
+                      {unpaidLoans.map(({ customer, loan, paymentAmount }) => (
+                        <div
+                          key={loan.loan_id}
+                          onClick={() => navigateTo('loan-details', loan.loan_id)}
+                          style={{
+                            background: 'white',
+                            padding: '8px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            border: '1px solid #fecaca',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.02)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.2)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: '12px', color: '#1e293b', marginBottom: '2px' }}>
+                            {customer.name}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>
+                            {formatCurrency(paymentAmount)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
 
         </div>
       </div>

@@ -588,21 +588,179 @@ app.delete('/api/payments/:id', async (req, res) => {
   }
 });
 
+// ============ MONTHLY FINANCE ROUTES (SEPARATE COLLECTION) ============
+
+// Get all Monthly Finance customers
+app.get('/api/monthly-finance/customers', async (req, res) => {
+  try {
+    const customersSnapshot = await db.collection('monthly_finance_customers')
+      .where('status', '==', 'active')
+      .get();
+
+    const customers = [];
+
+    for (const doc of customersSnapshot.docs) {
+      const customerData = doc.data();
+
+      // Get payments for this customer
+      const paymentsSnapshot = await db.collection('monthly_finance_payments')
+        .where('customer_id', '==', doc.id)
+        .get();
+
+      const payments = paymentsSnapshot.docs.map(paymentDoc => ({
+        id: paymentDoc.id,
+        ...paymentDoc.data()
+      })).sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
+
+      customers.push({
+        id: doc.id,
+        ...customerData,
+        payments
+      });
+    }
+
+    // Sort by name
+    customers.sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json(customers);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create Monthly Finance customer
+app.post('/api/monthly-finance/customers', async (req, res) => {
+  try {
+    console.log('🎯 CREATE MONTHLY FINANCE CUSTOMER:', req.body);
+    const { name, phone, loan_amount, monthly_amount, total_months, start_date } = req.body;
+
+    if (!name || !phone || !loan_amount || !monthly_amount || !total_months || !start_date) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    const customerData = {
+      name,
+      phone,
+      loan_amount: parseFloat(loan_amount),
+      balance: parseFloat(loan_amount),
+      monthly_amount: parseFloat(monthly_amount),
+      total_months: parseInt(total_months),
+      start_date,
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('monthly_finance_customers').add(customerData);
+    const newDoc = await docRef.get();
+
+    console.log('✅ Monthly Finance customer created successfully:', newDoc.id);
+    res.status(201).json({ id: newDoc.id, ...newDoc.data() });
+  } catch (error) {
+    console.error('❌ Error creating Monthly Finance customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add payment to Monthly Finance customer
+app.post('/api/monthly-finance/customers/:id/payments', async (req, res) => {
+  try {
+    const { amount, payment_date, payment_mode } = req.body;
+
+    if (!amount || !payment_date) {
+      return res.status(400).json({ error: 'Amount and payment date are required' });
+    }
+
+    // Get customer data
+    const customerDoc = await db.collection('monthly_finance_customers').doc(req.params.id).get();
+
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customerData = customerDoc.data();
+
+    if (customerData.status !== 'active') {
+      return res.status(400).json({ error: 'Customer loan is not active' });
+    }
+
+    if (amount > customerData.balance) {
+      return res.status(400).json({ error: 'Payment amount exceeds balance' });
+    }
+
+    const newBalance = customerData.balance - amount;
+
+    // Create payment record
+    const paymentData = {
+      customer_id: req.params.id,
+      amount: parseFloat(amount),
+      payment_date,
+      payment_mode: payment_mode || 'cash',
+      balance_after: newBalance,
+      created_at: new Date().toISOString()
+    };
+
+    await db.collection('monthly_finance_payments').add(paymentData);
+
+    // Update customer balance
+    const updateData = { balance: newBalance };
+    if (newBalance === 0) {
+      updateData.status = 'closed';
+    }
+    await db.collection('monthly_finance_customers').doc(req.params.id).update(updateData);
+
+    // Get updated customer data
+    const updatedDoc = await db.collection('monthly_finance_customers').doc(req.params.id).get();
+
+    res.status(201).json({ id: updatedDoc.id, ...updatedDoc.data() });
+  } catch (error) {
+    console.error('Error adding Monthly Finance payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete Monthly Finance customer
+app.delete('/api/monthly-finance/customers/:id', async (req, res) => {
+  try {
+    // Delete associated payments
+    const paymentsSnapshot = await db.collection('monthly_finance_payments')
+      .where('customer_id', '==', req.params.id)
+      .get();
+
+    for (const paymentDoc of paymentsSnapshot.docs) {
+      await paymentDoc.ref.delete();
+    }
+
+    // Delete customer
+    await db.collection('monthly_finance_customers').doc(req.params.id).delete();
+
+    res.json({ message: 'Monthly Finance customer deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ DASHBOARD STATS ============
 
 app.get('/api/stats', async (req, res) => {
   try {
-    // Active loans count
+    // Active Weekly loans count
     const activeLoansSnapshot = await db.collection('loans')
       .where('status', '==', 'active')
       .get();
-    const activeLoans = activeLoansSnapshot.size;
+
+    // Active Monthly Finance customers count
+    const monthlyFinanceSnapshot = await db.collection('monthly_finance_customers')
+      .where('status', '==', 'active')
+      .get();
+
+    const activeLoans = activeLoansSnapshot.size + monthlyFinanceSnapshot.size;
 
     // Outstanding balance (sum of all active loan balances)
     let outstanding = 0;
     let weeklyOutstanding = 0;
     let monthlyOutstanding = 0;
 
+    // Calculate Weekly outstanding
     activeLoansSnapshot.forEach(doc => {
       const loan = doc.data();
       const balance = loan.balance || 0;
@@ -617,9 +775,17 @@ app.get('/api/stats', async (req, res) => {
       }
     });
 
-    // Total customers count
+    // Calculate Monthly Finance outstanding (from separate collection)
+    monthlyFinanceSnapshot.forEach(doc => {
+      const customer = doc.data();
+      const balance = customer.balance || 0;
+      outstanding += balance;
+      monthlyOutstanding += balance;
+    });
+
+    // Total customers count (Weekly + Monthly Finance)
     const customersSnapshot = await db.collection('customers').get();
-    const totalCustomers = customersSnapshot.size;
+    const totalCustomers = customersSnapshot.size + monthlyFinanceSnapshot.size;
 
     // Payments this week
     const weekAgo = new Date();
@@ -629,7 +795,12 @@ app.get('/api/stats', async (req, res) => {
     const paymentsSnapshot = await db.collection('payments')
       .where('payment_date', '>=', weekAgoStr)
       .get();
-    const paymentsThisWeek = paymentsSnapshot.size;
+
+    const monthlyPaymentsSnapshot = await db.collection('monthly_finance_payments')
+      .where('payment_date', '>=', weekAgoStr)
+      .get();
+
+    const paymentsThisWeek = paymentsSnapshot.size + monthlyPaymentsSnapshot.size;
 
     res.json({
       activeLoans,

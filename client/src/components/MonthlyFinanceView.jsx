@@ -1,18 +1,24 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import useSWR from 'swr';
-import AddLoanModal from './AddLoanModal';
 import { API_URL } from '../config';
 
 // Fetcher function for SWR
 const fetcher = (url) => fetch(url).then(res => res.json());
 
 function MonthlyFinanceView({ navigateTo }) {
-  const [showAddLoanModal, setShowAddLoanModal] = useState(false);
-  const [selectedLoan, setSelectedLoan] = useState(null);
+  const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    loanAmount: '',
+    totalMonths: 5,
+    startDate: new Date().toISOString().split('T')[0]
+  });
 
-  // Fetch all customers with loans
-  const { data: allCustomers = [], error, isLoading, mutate } = useSWR(
-    `${API_URL}/customers`,
+  // Fetch Monthly Finance customers from separate collection
+  const { data: monthlyCustomers = [], error, isLoading, mutate } = useSWR(
+    `${API_URL}/monthly-finance/customers`,
     fetcher,
     {
       refreshInterval: 30000, // Auto-refresh every 30 seconds
@@ -21,30 +27,6 @@ function MonthlyFinanceView({ navigateTo }) {
     }
   );
 
-  // Show ONLY Monthly type loans (strict - no old loans)
-  const monthlyLoans = useMemo(() => {
-    const loans = [];
-    allCustomers.forEach(customer => {
-      if (customer.loans && customer.loans.length > 0) {
-        customer.loans.forEach(loan => {
-          // Show ONLY loans with loan_type === 'Monthly' (strict separation)
-          const isMonthly = loan.loan_type === 'Monthly';
-          const hasBalance = loan.balance > 0;
-
-          if (isMonthly && hasBalance) {
-            loans.push({
-              ...loan,
-              customer_name: customer.name,
-              customer_phone: customer.phone,
-              customer_id: customer.id
-            });
-          }
-        });
-      }
-    });
-    return loans.sort((a, b) => a.customer_name.localeCompare(b.customer_name));
-  }, [allCustomers]);
-
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
   };
@@ -52,10 +34,6 @@ function MonthlyFinanceView({ navigateTo }) {
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('en-IN');
-  };
-
-  const handleLoanClick = (loan) => {
-    navigateTo('loan-details', loan.loan_id);
   };
 
   const handleRefresh = () => {
@@ -86,87 +64,11 @@ function MonthlyFinanceView({ navigateTo }) {
     );
   }
 
-  // Detail view for selected loan
-  if (selectedLoan) {
-    return (
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-        <div className="navbar" style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' }}>
-          <svg
-            className="nav-icon"
-            fill="white"
-            viewBox="0 0 24 24"
-            onClick={() => setSelectedLoan(null)}
-            title="Back to List"
-          >
-            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-          </svg>
-          <h2 style={{ margin: 0, color: 'white', fontSize: '20px', fontWeight: 700 }}>
-            {selectedLoan.customer_name}
-          </h2>
-          <div style={{ width: '40px' }}></div>
-        </div>
-
-        <div style={{ padding: '16px' }}>
-          <div style={{
-            background: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            marginBottom: '20px'
-          }}>
-            <div style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              padding: '20px',
-              borderRadius: '12px',
-              marginBottom: '20px'
-            }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
-                <div>
-                  <div style={{ fontSize: '14px', opacity: 0.9 }}>Total Amount</div>
-                  <div style={{ fontSize: '20px', fontWeight: 700 }}>{formatCurrency(selectedLoan.loan_amount)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '14px', opacity: 0.9 }}>Monthly Payment</div>
-                  <div style={{ fontSize: '20px', fontWeight: 700 }}>{formatCurrency(selectedLoan.monthly_amount)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '14px', opacity: 0.9 }}>Balance</div>
-                  <div style={{ fontSize: '20px', fontWeight: 700 }}>{formatCurrency(selectedLoan.balance)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '14px', opacity: 0.9 }}>Friend Name</div>
-                  <div style={{ fontSize: '20px', fontWeight: 700 }}>
-                    {selectedLoan.loan_name !== 'General Loan' ? selectedLoan.loan_name : '-'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => handleLoanClick(selectedLoan)}
-              style={{
-                width: '100%',
-                padding: '16px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                fontSize: '16px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-              }}
-            >
-              View Full Details & Payments →
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  // Detail view for selected customer
+  if (selectedCustomer) {
+    return <MonthlyFinanceDetailView customer={selectedCustomer} onBack={() => setSelectedCustomer(null)} onUpdate={mutate} />;
   }
 
-  // List view
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
       <div className="navbar" style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' }}>
@@ -180,30 +82,24 @@ function MonthlyFinanceView({ navigateTo }) {
           <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
         </svg>
         <h2 style={{ margin: 0, color: 'white', fontSize: '20px', fontWeight: 700 }}>Monthly Finance</h2>
-        <button
+        <svg
+          className="nav-icon"
+          fill="white"
+          viewBox="0 0 24 24"
           onClick={handleRefresh}
-          style={{
-            background: '#047857',
-            color: 'white',
-            border: 'none',
-            padding: '6px 10px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: 600
-          }}
+          title="Refresh"
         >
-          🔄
-        </button>
+          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+        </svg>
       </div>
 
-      <div style={{ padding: '16px' }}>
+      <div style={{ padding: '16px', paddingBottom: '100px' }}>
         <div style={{
           background: 'white',
-          padding: '20px',
           borderRadius: '12px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-          marginBottom: '20px'
+          padding: '16px',
+          marginBottom: '20px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
         }}>
           <div style={{
             display: 'flex',
@@ -214,10 +110,10 @@ function MonthlyFinanceView({ navigateTo }) {
             gap: '10px'
           }}>
             <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>
-              💰 Monthly Finance ({monthlyLoans.length})
+              💰 Monthly Finance ({monthlyCustomers.length})
             </h3>
             <button
-              onClick={() => setShowAddLoanModal(true)}
+              onClick={() => setShowAddCustomerForm(true)}
               style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: 'white',
@@ -229,11 +125,11 @@ function MonthlyFinanceView({ navigateTo }) {
                 fontSize: '14px'
               }}
             >
-              + Add Monthly Loan
+              + Add Monthly Customer
             </button>
           </div>
 
-          {monthlyLoans.length === 0 ? (
+          {monthlyCustomers.length === 0 ? (
             <div style={{
               textAlign: 'center',
               padding: '40px 20px',
@@ -241,23 +137,22 @@ function MonthlyFinanceView({ navigateTo }) {
             }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>📝</div>
               <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
-                No Monthly Finance loans yet
+                No Monthly Finance customers yet
               </div>
               <div style={{ fontSize: '14px' }}>
-                Click "+ Add Monthly Loan" to create your first one
+                Click "+ Add Monthly Customer" to create your first one
               </div>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: '10px' }}>
-              {monthlyLoans.map(loan => {
-                const progress = ((loan.loan_amount - loan.balance) / loan.loan_amount) * 100;
-                const monthsPaid = Math.floor((loan.loan_amount - loan.balance) / loan.monthly_amount);
-                const totalMonths = Math.ceil(loan.loan_amount / loan.monthly_amount);
+              {monthlyCustomers.map(customer => {
+                const progress = ((customer.loan_amount - customer.balance) / customer.loan_amount) * 100;
+                const monthsPaid = Math.floor((customer.loan_amount - customer.balance) / customer.monthly_amount);
+                const totalMonths = customer.total_months;
 
                 return (
                   <div
-                    key={loan.loan_id}
-                    onClick={() => setSelectedLoan(loan)}
+                    key={customer.id}
                     style={{
                       padding: '16px',
                       background: 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
@@ -266,48 +161,36 @@ function MonthlyFinanceView({ navigateTo }) {
                       cursor: 'pointer',
                       transition: 'all 0.3s ease'
                     }}
-                    onMouseEnter={(e) => {
+                    onClick={() => setSelectedCustomer(customer)}
+                    onMouseOver={(e) => {
                       e.currentTarget.style.transform = 'translateX(5px)';
                       e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
                     }}
-                    onMouseLeave={(e) => {
+                    onMouseOut={(e) => {
                       e.currentTarget.style.transform = 'translateX(0)';
                       e.currentTarget.style.boxShadow = 'none';
                     }}
                   >
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'start',
-                      marginBottom: '12px'
-                    }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: '18px', color: '#1e293b', marginBottom: '8px' }}>
-                          {loan.customer_name}
+                          {customer.name}
                         </div>
-                        {loan.loan_name && loan.loan_name !== 'General Loan' && (
-                          <div style={{ fontSize: '14px', color: '#667eea', fontWeight: 600, marginBottom: '4px' }}>
-                            Friend: {loan.loan_name}
-                          </div>
-                        )}
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                          gap: '8px',
-                          fontSize: '13px',
-                          color: '#64748b'
-                        }}>
+                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                          📱 {customer.phone}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', fontSize: '13px', color: '#64748b' }}>
                           <div>
-                            <strong>Amount:</strong> {formatCurrency(loan.loan_amount)}
+                            <strong>Amount:</strong> {formatCurrency(customer.loan_amount)}
                           </div>
                           <div>
-                            <strong>Monthly:</strong> {formatCurrency(loan.monthly_amount)}
+                            <strong>Balance:</strong> <span style={{ color: '#dc2626', fontWeight: 600 }}>{formatCurrency(customer.balance)}</span>
                           </div>
                           <div>
-                            <strong>Balance:</strong> {formatCurrency(loan.balance)}
+                            <strong>Monthly:</strong> {formatCurrency(customer.monthly_amount)}
                           </div>
                           <div>
-                            <strong>Started:</strong> {formatDate(loan.start_date)}
+                            <strong>Started:</strong> {formatDate(customer.start_date)}
                           </div>
                         </div>
                       </div>
@@ -315,13 +198,7 @@ function MonthlyFinanceView({ navigateTo }) {
 
                     {/* Progress Bar */}
                     <div style={{ marginTop: '10px' }}>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: '12px',
-                        color: '#64748b',
-                        marginBottom: '4px'
-                      }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>
                         <span>Progress: {monthsPaid}/{totalMonths} months</span>
                         <span>{Math.round(progress)}%</span>
                       </div>
@@ -335,7 +212,7 @@ function MonthlyFinanceView({ navigateTo }) {
                         <div style={{
                           width: `${progress}%`,
                           height: '100%',
-                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
                           transition: 'width 0.3s ease'
                         }} />
                       </div>
@@ -348,16 +225,598 @@ function MonthlyFinanceView({ navigateTo }) {
         </div>
       </div>
 
-      {showAddLoanModal && (
-        <AddLoanModal
-          defaultLoanType="Monthly"
-          onClose={() => setShowAddLoanModal(false)}
+      {showAddCustomerForm && (
+        <AddMonthlyCustomerModal
+          formData={formData}
+          setFormData={setFormData}
+          onClose={() => {
+            setShowAddCustomerForm(false);
+            setFormData({
+              name: '',
+              phone: '',
+              loanAmount: '',
+              totalMonths: 5,
+              startDate: new Date().toISOString().split('T')[0]
+            });
+          }}
           onSuccess={() => {
-            setShowAddLoanModal(false);
+            setShowAddCustomerForm(false);
+            setFormData({
+              name: '',
+              phone: '',
+              loanAmount: '',
+              totalMonths: 5,
+              startDate: new Date().toISOString().split('T')[0]
+            });
             mutate();
           }}
         />
       )}
+    </div>
+  );
+}
+
+// Modal component for adding Monthly Finance customers
+function AddMonthlyCustomerModal({ formData, setFormData, onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const monthlyInstallment = formData.loanAmount && formData.totalMonths > 0
+    ? Math.round(parseFloat(formData.loanAmount) / formData.totalMonths)
+    : 0;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      // Create Monthly Finance customer using new API endpoint
+      const response = await fetch(`${API_URL}/monthly-finance/customers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone,
+          loan_amount: parseFloat(formData.loanAmount),
+          monthly_amount: monthlyInstallment,
+          total_months: formData.totalMonths,
+          start_date: formData.startDate
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create Monthly Finance customer');
+      }
+
+      // Send WhatsApp loan creation message if phone number exists
+      if (formData.phone) {
+        const message = `Loan Agreement - Monthly Finance
+
+Customer: ${formData.name}
+Loan Amount: ₹${parseFloat(formData.loanAmount).toLocaleString('en-IN')}
+Monthly Payment: ₹${monthlyInstallment.toLocaleString('en-IN')}
+Total Months: ${formData.totalMonths}
+Start Date: ${new Date(formData.startDate).toLocaleDateString('en-IN')}
+
+You have received a loan of ₹${parseFloat(formData.loanAmount).toLocaleString('en-IN')} from Om Sai Murugan Finance.
+Monthly payment: ₹${monthlyInstallment.toLocaleString('en-IN')}
+Total months: ${formData.totalMonths}
+
+Thank you for choosing us!
+
+- Om Sai Murugan Finance`;
+
+        const cleanPhone = formData.phone.replace(/\D/g, '');
+        const phoneWithCountryCode = `91${cleanPhone}`;
+        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
+
+      onSuccess();
+    } catch (err) {
+      console.error('Error creating Monthly Finance customer:', err);
+      setError(err.message || 'Failed to create Monthly Finance customer');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '20px'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        padding: '24px',
+        maxWidth: '500px',
+        width: '100%',
+        maxHeight: '90vh',
+        overflowY: 'auto'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px'
+        }}>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>
+            Add Monthly Finance Customer
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              color: '#6b7280'
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        {error && (
+          <div style={{
+            background: '#fef2f2',
+            border: '1px solid #fca5a5',
+            color: '#991b1b',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            fontSize: '14px'
+          }}>
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Customer Name *
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Phone Number *
+            </label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              required
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Loan Amount (₹) *
+            </label>
+            <input
+              type="number"
+              value={formData.loanAmount}
+              onChange={(e) => setFormData({ ...formData, loanAmount: e.target.value })}
+              required
+              min="0"
+              step="1"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Total Months *
+            </label>
+            <input
+              type="number"
+              value={formData.totalMonths}
+              onChange={(e) => setFormData({ ...formData, totalMonths: parseInt(e.target.value) || 5 })}
+              required
+              min="1"
+              max="12"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{
+            background: '#f0f9ff',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            border: '1px solid #bfdbfe'
+          }}>
+            <div style={{ fontSize: '12px', color: '#1e40af', marginBottom: '4px' }}>
+              Monthly Installment (Auto-calculated)
+            </div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#1e3a8a' }}>
+              ₹{monthlyInstallment.toLocaleString('en-IN')}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Start Date *
+            </label>
+            <input
+              type="date"
+              value={formData.startDate}
+              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              required
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                flex: 1,
+                padding: '12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                background: 'white',
+                color: '#374151',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                flex: 1,
+                padding: '12px',
+                border: 'none',
+                borderRadius: '8px',
+                background: loading ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {loading ? 'Creating...' : 'Create Customer'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Detail view component for a single Monthly Finance customer
+function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
+  const [loading, setLoading] = useState(false);
+
+  const formatCurrency = (amount) => {
+    return `₹${amount.toLocaleString('en-IN')}`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-IN');
+  };
+
+  // Generate payment schedule based on start date and total months
+  const generatePaymentSchedule = () => {
+    const schedule = [];
+    const startDate = new Date(customer.start_date);
+    const monthlyAmount = customer.monthly_amount;
+
+    for (let i = 0; i < customer.total_months; i++) {
+      const paymentDate = new Date(startDate);
+      paymentDate.setMonth(startDate.getMonth() + i);
+
+      // Check if this month's payment has been made based on balance
+      const totalPaid = customer.loan_amount - customer.balance;
+      const monthsPaid = Math.floor(totalPaid / monthlyAmount);
+      const isPaid = i < monthsPaid;
+
+      schedule.push({
+        month: i + 1,
+        date: paymentDate.toISOString().split('T')[0],
+        amount: monthlyAmount,
+        paid: isPaid
+      });
+    }
+
+    return schedule;
+  };
+
+  const paymentSchedule = generatePaymentSchedule();
+  const progress = ((customer.loan_amount - customer.balance) / customer.loan_amount) * 100;
+  const monthsPaid = paymentSchedule.filter(p => p.paid).length;
+
+  const handlePaymentToggle = async (monthIndex) => {
+    const payment = paymentSchedule[monthIndex];
+
+    if (payment.paid) {
+      // Cannot un-mark payments - would need delete payment API
+      alert('Cannot un-mark paid payments. Please contact support if you need to reverse a payment.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Add payment via API
+      const response = await fetch(`${API_URL}/monthly-finance/customers/${customer.id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: customer.monthly_amount,
+          payment_date: new Date().toISOString().split('T')[0],
+          payment_mode: 'cash'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to record payment');
+      }
+
+      // Send WhatsApp receipt if phone number exists
+      if (customer.phone) {
+        const newBalance = customer.balance - customer.monthly_amount;
+        const message = `Payment Receipt - Monthly Finance
+
+Customer: ${customer.name}
+Month ${payment.month} Payment: ₹${customer.monthly_amount.toLocaleString('en-IN')}
+Date: ${new Date().toLocaleDateString('en-IN')}
+Remaining Balance: ₹${newBalance.toLocaleString('en-IN')}
+
+Thank you for your payment!
+
+- Om Sai Murugan Finance`;
+
+        const cleanPhone = customer.phone.replace(/\D/g, '');
+        const phoneWithCountryCode = `91${cleanPhone}`;
+        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
+
+      // Refresh data
+      await onUpdate();
+
+      setLoading(false);
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      alert('Failed to record payment: ' + error.message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+      {/* Header */}
+      <div className="navbar" style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' }}>
+        <svg
+          className="nav-icon"
+          fill="white"
+          viewBox="0 0 24 24"
+          onClick={onBack}
+          title="Back to List"
+        >
+          <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+        </svg>
+        <h2 style={{ margin: 0, color: 'white', fontSize: '20px', fontWeight: 700 }}>{customer.name}</h2>
+        <div style={{ width: '40px' }}></div>
+      </div>
+
+      <div style={{ padding: '16px', paddingBottom: '100px' }}>
+        {/* Customer Info Card */}
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '20px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+        }}>
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
+              {customer.name}
+            </div>
+            <div style={{ fontSize: '16px', color: '#64748b' }}>
+              📱 {customer.phone}
+            </div>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: '16px',
+            padding: '16px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            borderRadius: '8px',
+            color: 'white'
+          }}>
+            <div>
+              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>Total Amount</div>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>{formatCurrency(customer.loan_amount)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>Balance</div>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>{formatCurrency(customer.balance)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>Monthly Payment</div>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>{formatCurrency(customer.monthly_amount)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>Progress</div>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>{monthsPaid}/{customer.total_months} months</div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div style={{ marginTop: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b', marginBottom: '6px' }}>
+              <span>Loan Progress</span>
+              <span>{Math.round(progress)}% Complete</span>
+            </div>
+            <div style={{
+              width: '100%',
+              height: '10px',
+              background: '#e2e8f0',
+              borderRadius: '5px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${progress}%`,
+                height: '100%',
+                background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Payment Schedule */}
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+        }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
+            📅 Payment Schedule
+          </h3>
+
+          <div style={{ display: 'grid', gap: '10px' }}>
+            {paymentSchedule.map((payment, index) => (
+              <div
+                key={index}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '16px',
+                  background: payment.paid
+                    ? 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)'
+                    : 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+                  borderRadius: '8px',
+                  borderLeft: `4px solid ${payment.paid ? '#10b981' : '#ef4444'}`
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b', marginBottom: '4px' }}>
+                    Month {payment.month}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#64748b' }}>
+                    Due: {formatDate(payment.date)} | {formatCurrency(payment.amount)}
+                  </div>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={payment.paid}
+                    onChange={() => handlePaymentToggle(index)}
+                    disabled={loading}
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      accentColor: '#10b981'
+                    }}
+                  />
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: payment.paid ? '#10b981' : '#ef4444'
+                  }}>
+                    {payment.paid ? 'Paid' : 'Unpaid'}
+                  </span>
+                </label>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
