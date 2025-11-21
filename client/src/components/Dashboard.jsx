@@ -14,6 +14,7 @@ function Dashboard({ navigateTo }) {
   const [showDatabaseMonitorModal, setShowDatabaseMonitorModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [weeklyPaymentsData, setWeeklyPaymentsData] = useState({ paidLoans: [], unpaidLoans: [], loading: true });
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -28,6 +29,96 @@ function Dashboard({ navigateTo }) {
     revalidateOnFocus: true,
     dedupingInterval: 2000,
   });
+
+  // Fetch weekly payments data when selectedDate or customers change
+  useEffect(() => {
+    const fetchWeeklyPayments = async () => {
+      setWeeklyPaymentsData({ paidLoans: [], unpaidLoans: [], loading: true });
+
+      const selected = new Date(selectedDate + 'T00:00:00');
+      const isSunday = selected.getDay() === 0;
+
+      if (!isSunday || customers.length === 0) {
+        setWeeklyPaymentsData({ paidLoans: [], unpaidLoans: [], loading: false });
+        return;
+      }
+
+      const sundayDate = selected.toISOString().split('T')[0];
+
+      // Helper to get first payment Sunday
+      const getFirstPaymentSunday = (startDateStr) => {
+        const date = new Date(startDateStr + 'T00:00:00');
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek === 0) return date;
+        const daysUntilSunday = 7 - dayOfWeek;
+        const firstSunday = new Date(date);
+        firstSunday.setDate(date.getDate() + daysUntilSunday);
+        return firstSunday;
+      };
+
+      const paidLoans = [];
+      const unpaidLoans = [];
+
+      // Fetch loan details for each customer's loans
+      const promises = [];
+
+      customers.forEach(customer => {
+        if (!customer.loans || customer.loans.length === 0) return;
+
+        customer.loans.forEach(loan => {
+          if (loan.status === 'closed' || loan.loan_type !== 'Weekly' || loan.balance <= 0) return;
+
+          const firstPaymentSunday = getFirstPaymentSunday(loan.start_date);
+          const daysDiff = Math.floor((selected - firstPaymentSunday) / (24 * 60 * 60 * 1000));
+
+          // Only show if it's a payment Sunday for this loan
+          if (daysDiff >= 0 && daysDiff % 7 === 0) {
+            const weekNumber = (daysDiff / 7) + 1;
+            if (weekNumber <= 10) { // 10 weeks total
+              const promise = fetch(`${API_URL}/loans/${loan.loan_id}`)
+                .then(res => res.json())
+                .then(loanData => {
+                  // Check if payment was made ON this specific Sunday
+                  const isPaid = loanData.payments?.some(payment => {
+                    const paymentDate = payment.payment_date?.split('T')[0];
+                    return paymentDate === sundayDate;
+                  }) || false;
+
+                  return {
+                    customer,
+                    loan: { ...loan, ...loanData },
+                    weekNumber,
+                    paymentAmount: loan.weekly_amount,
+                    isPaid
+                  };
+                })
+                .catch(err => {
+                  console.error('Error fetching loan:', err);
+                  return null;
+                });
+
+              promises.push(promise);
+            }
+          }
+        });
+      });
+
+      const results = await Promise.all(promises);
+      const validResults = results.filter(r => r !== null);
+
+      validResults.forEach(result => {
+        if (result.isPaid) {
+          paidLoans.push(result);
+        } else {
+          unpaidLoans.push(result);
+        }
+      });
+
+      setWeeklyPaymentsData({ paidLoans, unpaidLoans, loading: false });
+    };
+
+    fetchWeeklyPayments();
+  }, [selectedDate, customers]);
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -604,75 +695,22 @@ function Dashboard({ navigateTo }) {
                 );
               }
 
-              // Get the Sunday's date for comparison
-              const sundayDate = selected.toISOString().split('T')[0];
+              // Show loading state while fetching payment data
+              if (weeklyPaymentsData.loading) {
+                return (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '20px',
+                    color: '#6b7280',
+                    fontSize: '13px'
+                  }}>
+                    Loading payments...
+                  </div>
+                );
+              }
 
-              // Helper function to get the first payment Sunday on or after the start date
-              const getFirstPaymentSunday = (startDateStr) => {
-                const date = new Date(startDateStr + 'T00:00:00');
-                const dayOfWeek = date.getDay();
-
-                if (dayOfWeek === 0) {
-                  // Start date is already a Sunday
-                  return date;
-                } else {
-                  // Move to next Sunday
-                  const daysUntilSunday = 7 - dayOfWeek;
-                  const firstSunday = new Date(date);
-                  firstSunday.setDate(date.getDate() + daysUntilSunday);
-                  return firstSunday;
-                }
-              };
-
-              // Collect loans with payments due on this Sunday
-              const paidLoans = [];
-              const unpaidLoans = [];
-
-              customers.forEach(customer => {
-                if (!customer.loans || customer.loans.length === 0) return;
-
-                customer.loans.forEach(loan => {
-                  if (loan.status === 'closed') return;
-
-                  // Only process Weekly loans (Monthly loans are collected on any day)
-                  if (loan.loan_type !== 'Weekly') return;
-
-                  // Get the first payment Sunday for this loan
-                  const firstPaymentSunday = getFirstPaymentSunday(loan.start_date);
-
-                  // Calculate days from first payment Sunday to selected Sunday
-                  const daysDiff = Math.floor((selected - firstPaymentSunday) / (24 * 60 * 60 * 1000));
-
-                  // Check if selected date is exactly a payment Sunday for this loan
-                  // (must be 0, 7, 14, 21, ... days from first payment Sunday)
-                  if (daysDiff >= 0 && daysDiff % 7 === 0) {
-                    const weekNumber = (daysDiff / 7) + 1; // 1-indexed week number
-                    const totalWeeks = 10; // Weekly loans are always 10 weeks
-
-                    // Only show if within the loan period
-                    if (weekNumber <= totalWeeks) {
-                      // Check if payment was made for this week
-                      const paymentAmount = loan.weekly_amount;
-                      const totalPaid = loan.loan_amount - loan.balance;
-                      const actualPayments = Math.floor(totalPaid / paymentAmount);
-                      const isPaid = actualPayments >= weekNumber;
-
-                      const loanData = {
-                        customer,
-                        loan,
-                        weekNumber,
-                        paymentAmount
-                      };
-
-                      if (isPaid) {
-                        paidLoans.push(loanData);
-                      } else {
-                        unpaidLoans.push(loanData);
-                      }
-                    }
-                  }
-                });
-              });
+              // Use data from state (fetched in useEffect)
+              const { paidLoans, unpaidLoans } = weeklyPaymentsData;
 
               if (paidLoans.length === 0 && unpaidLoans.length === 0) {
                 return (
