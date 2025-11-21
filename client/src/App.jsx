@@ -19,7 +19,7 @@ const CURRENT_PASSWORD_VERSION = '2025-01-21-v1';
 // Wrapper components that use useNavigate
 function DashboardWrapper() {
   const navigate = useNavigate();
-  return <Dashboard navigateTo={(path) => navigate(`/${path}`)} />;
+  return <Dashboard navigateTo={(path, id) => id ? navigate(`/${path}/${id}`) : navigate(`/${path}`)} />;
 }
 
 function CustomersWrapper() {
