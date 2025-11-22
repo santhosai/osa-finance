@@ -797,18 +797,18 @@ Thank you!
 
                 return (
                   <div key={entry.id} style={{
-                    padding: '16px',
+                    padding: '10px',
                     background: isPrincipalReturned
                       ? 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)'
                       : 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
-                    borderRadius: '8px',
-                    borderLeft: isPrincipalReturned ? '4px solid #10b981' : '4px solid #667eea',
+                    borderRadius: '6px',
+                    borderLeft: isPrincipalReturned ? '3px solid #10b981' : '3px solid #667eea',
                     opacity: isPrincipalReturned ? 0.7 : 1
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                      <div style={{ flex: 1, minWidth: '200px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                          <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                      <div style={{ flex: 1, minWidth: '180px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                          <div style={{ fontWeight: 700, fontSize: '14px', color: '#1e293b' }}>
                             {entry.name}
                           </div>
                           {isPrincipalReturned && (
@@ -824,30 +824,30 @@ Thank you!
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
-                          💰 Principal Amount: ₹{principalAmount.toLocaleString('en-IN')}
+                        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '3px' }}>
+                          💰 Principal: ₹{principalAmount.toLocaleString('en-IN')}
                         </div>
                         {monthlyInterest > 0 && (
-                          <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
-                            📈 Monthly Interest: ₹{monthlyInterest.toLocaleString('en-IN')}
+                          <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '3px' }}>
+                            📈 Interest: ₹{monthlyInterest.toLocaleString('en-IN')}
                           </div>
                         )}
-                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
-                          📅 Start Date: {new Date(entry.date).toLocaleDateString('en-IN')}
+                        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '3px' }}>
+                          📅 Date: {new Date(entry.date).toLocaleDateString('en-IN')}
                         </div>
                         {interestPayments.length > 0 && (
-                          <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600, marginBottom: '4px' }}>
-                            💸 Interest Payments: {interestPayments.length} payment{interestPayments.length !== 1 ? 's' : ''}
+                          <div style={{ fontSize: '10px', color: '#059669', fontWeight: 600, marginBottom: '3px' }}>
+                            💸 Payments: {interestPayments.length}
                           </div>
                         )}
                         {isPrincipalReturned && entry.principalReturnedDate && (
-                          <div style={{ fontSize: '13px', color: '#059669', fontWeight: 600, marginBottom: '4px' }}>
-                            ✅ Returned on: {new Date(entry.principalReturnedDate).toLocaleDateString('en-IN')}
+                          <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginBottom: '3px' }}>
+                            ✅ Returned: {new Date(entry.principalReturnedDate).toLocaleDateString('en-IN')}
                           </div>
                         )}
                         {entry.phone && (
-                          <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span>📱 Phone: {entry.phone}</span>
+                          <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>📱 {entry.phone}</span>
                             <button
                               onClick={() => openContact(entry.phone)}
                               style={{
@@ -867,7 +867,7 @@ Thank you!
                           </div>
                         )}
                       </div>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                         {!isPrincipalReturned ? (
                           <>
                             <button
@@ -877,9 +877,9 @@ Thank you!
                                 background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '6px',
-                                padding: '8px 12px',
-                                fontSize: '13px',
+                                borderRadius: '4px',
+                                padding: '5px 8px',
+                                fontSize: '10px',
                                 cursor: loading ? 'not-allowed' : 'pointer',
                                 fontWeight: 600,
                                 whiteSpace: 'nowrap',
@@ -887,7 +887,7 @@ Thank you!
                               }}
                               title="Record monthly interest payment"
                             >
-                              💰 Interest Paid
+                              💰 Interest
                             </button>
                             <button
                               onClick={() => markPrincipalReturned(entry)}
@@ -896,9 +896,9 @@ Thank you!
                                 background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '6px',
-                                padding: '8px 12px',
-                                fontSize: '13px',
+                                borderRadius: '4px',
+                                padding: '5px 8px',
+                                fontSize: '10px',
                                 cursor: loading ? 'not-allowed' : 'pointer',
                                 fontWeight: 600,
                                 whiteSpace: 'nowrap',
@@ -906,7 +906,7 @@ Thank you!
                               }}
                               title="Mark principal amount as returned"
                             >
-                              ✅ Principal Returned
+                              ✅ Returned
                             </button>
                             {entry.phone && (
                               <button
@@ -915,9 +915,9 @@ Thank you!
                                   background: '#25D366',
                                   color: 'white',
                                   border: 'none',
-                                  borderRadius: '6px',
-                                  padding: '8px 12px',
-                                  fontSize: '13px',
+                                  borderRadius: '4px',
+                                  padding: '5px 8px',
+                                  fontSize: '10px',
                                   cursor: 'pointer',
                                   fontWeight: 600,
                                   whiteSpace: 'nowrap'
@@ -936,9 +936,9 @@ Thank you!
                           color: 'white',
                           border: 'none',
                           borderRadius: '50%',
-                          width: '32px',
-                          height: '32px',
-                          fontSize: '18px',
+                          width: '24px',
+                          height: '24px',
+                          fontSize: '14px',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
