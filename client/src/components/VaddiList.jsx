@@ -768,15 +768,16 @@ Thank you!
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
             border: 'none',
-            padding: '10px',
+            padding: '6px 10px',
             borderRadius: '4px',
             cursor: loading ? 'not-allowed' : 'pointer',
             fontWeight: 600,
-            fontSize: '12px',
+            fontSize: '11px',
             opacity: loading ? 0.6 : 1,
-            alignSelf: 'end'
+            alignSelf: 'end',
+            whiteSpace: 'nowrap'
           }}>
-            {loading ? 'Adding...' : '+ Add Entry'}
+            {loading ? 'Adding...' : '+ Add'}
           </button>
         </form>
 
