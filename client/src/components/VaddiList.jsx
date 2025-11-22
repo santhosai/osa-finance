@@ -748,16 +748,17 @@ Thank you!
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
-                  padding: '8px 10px',
+                  padding: '8px 12px',
                   cursor: loading ? 'not-allowed' : 'pointer',
-                  fontSize: '11px',
+                  fontSize: '13px',
                   fontWeight: 600,
                   whiteSpace: 'nowrap',
-                  opacity: loading ? 0.6 : 1
+                  opacity: loading ? 0.6 : 1,
+                  minWidth: '85px'
                 }}
                 title="Select from Contacts"
               >
-                👤
+                👤 Contacts
               </button>
             </div>
           </div>
