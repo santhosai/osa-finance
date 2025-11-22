@@ -595,27 +595,49 @@ Thank you!
           <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>
             📊 Vaddi List
           </h3>
-          <button
-            onClick={handleDownload}
-            disabled={loading}
-            style={{
-              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-              color: 'white',
-              border: 'none',
-              padding: '10px 20px',
-              borderRadius: '8px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontWeight: 600,
-              fontSize: '14px',
-              opacity: loading ? 0.6 : 1
-            }}
-          >
-            📥 Download CSV
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById('vaddi-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+              }}
+              disabled={loading}
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+                fontSize: '14px',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              {loading ? 'Adding...' : '➕ Add'}
+            </button>
+            <button
+              onClick={handleDownload}
+              disabled={loading}
+              style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+                fontSize: '14px',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              📥 Download
+            </button>
+          </div>
         </div>
 
         {/* Add Entry Form */}
-        <form onSubmit={handleAddEntry} style={{
+        <form id="vaddi-form" onSubmit={handleAddEntry} style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
           gap: '10px',
@@ -762,23 +784,6 @@ Thank you!
               </button>
             </div>
           </div>
-
-          {/* Submit Button */}
-          <button type="submit" disabled={loading} style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            border: 'none',
-            padding: '6px 10px',
-            borderRadius: '4px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontWeight: 600,
-            fontSize: '11px',
-            opacity: loading ? 0.6 : 1,
-            alignSelf: 'end',
-            whiteSpace: 'nowrap'
-          }}>
-            {loading ? 'Adding...' : '+ Add'}
-          </button>
         </form>
 
         {/* Entries List */}
