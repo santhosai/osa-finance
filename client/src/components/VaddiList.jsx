@@ -595,6 +595,18 @@ Thank you!
           <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>
             📊 Vaddi List
           </h3>
+          {safeEntries.length > 0 && (
+            <div style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.9 }}>Total</div>
+              <div style={{ fontSize: '18px', fontWeight: 700 }}>₹{calculateTotal().toLocaleString('en-IN')}</div>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
               onClick={(e) => {
@@ -964,24 +976,6 @@ Thank you!
           )}
         </div>
 
-        {/* Total Amount */}
-        {safeEntries.length > 0 && (
-          <div style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            padding: '16px',
-            borderRadius: '12px',
-            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '4px', opacity: 0.9 }}>
-              Total Outstanding
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 700 }}>
-              ₹{calculateTotal().toLocaleString('en-IN')}
-            </div>
-          </div>
-        )}
       </div>
       </div>
     </div>
