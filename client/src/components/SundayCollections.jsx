@@ -59,12 +59,16 @@ function SundayCollections({ navigateTo }) {
 
                   // Check if customer has already paid on the selected Sunday
                   // Normalize dates to YYYY-MM-DD format for accurate comparison
+                  console.log(`🔍 Loan ${loan.loan_id} - Checking ${loanData.payments?.length || 0} payments against ${selectedSunday}`);
                   const paidOnSelectedSunday = loanData.payments?.some(
                     payment => {
                       const paymentDate = payment.payment_date?.split('T')[0]; // Extract date part only
-                      return paymentDate === selectedSunday;
+                      const matches = paymentDate === selectedSunday;
+                      console.log(`  Payment: ${payment.payment_date} → ${paymentDate} === ${selectedSunday}? ${matches}`);
+                      return matches;
                     }
                   );
+                  console.log(`  ✅ Paid on ${selectedSunday}? ${paidOnSelectedSunday}`);
 
                   // Calculate which week number this would be
                   const startDate = new Date(loanData.start_date);
