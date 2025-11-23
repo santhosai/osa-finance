@@ -791,14 +791,14 @@ function Dashboard({ navigateTo }) {
                     }}>
                       ✓ PAID ({paidLoans.length})
                     </h4>
-                    <div style={{ display: 'grid', gap: '6px' }}>
+                    <div style={{ display: 'grid', gap: '4px' }}>
                       {paidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
                         <div
                           key={loan.loan_id}
                           onClick={() => navigateTo('loan-details', loan.loan_id)}
                           style={{
                             background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
-                            padding: '10px',
+                            padding: '6px 8px',
                             borderRadius: '6px',
                             cursor: 'pointer',
                             border: '1px solid #6ee7b7',
@@ -813,27 +813,19 @@ function Dashboard({ navigateTo }) {
                             e.currentTarget.style.boxShadow = 'none';
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: '13px', color: '#065f46', marginBottom: '6px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
                             {customer.name}
+                            {loan.loan_name && loan.loan_name !== 'General Loan' && (
+                              <span style={{ fontSize: '10px', color: '#047857', fontWeight: 500, marginLeft: '4px' }}>
+                                • {loan.loan_name}
+                              </span>
+                            )}
                           </div>
-                          {loan.loan_name && loan.loan_name !== 'General Loan' && (
-                            <div style={{ fontSize: '11px', color: '#047857', fontWeight: 600, marginBottom: '4px' }}>
-                              👤 Friend: {loan.loan_name}
-                            </div>
-                          )}
-                          <div style={{ display: 'grid', gap: '3px', fontSize: '11px' }}>
-                            <div style={{ color: '#047857', fontWeight: 600 }}>
-                              📅 Week {weekNumber} of {totalWeeks}
-                            </div>
-                            <div style={{ color: '#059669', fontWeight: 600 }}>
-                              💰 Payment: {formatCurrency(paymentAmount)}
-                            </div>
-                            <div style={{ color: '#0d9488', fontWeight: 600 }}>
-                              💵 Balance: {formatCurrency(balance)}
-                            </div>
-                            <div style={{ color: '#0891b2', fontWeight: 600 }}>
-                              ⏳ Remaining: {remainingWeeks} week{remainingWeeks !== 1 ? 's' : ''}
-                            </div>
+                          <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
+                            Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
+                          </div>
+                          <div style={{ fontSize: '9px', color: '#059669', fontWeight: 500 }}>
+                            Bal: {formatCurrency(balance)} • {remainingWeeks}w left
                           </div>
                         </div>
                       ))}
@@ -856,14 +848,14 @@ function Dashboard({ navigateTo }) {
                     }}>
                       ✗ UNPAID ({unpaidLoans.length})
                     </h4>
-                    <div style={{ display: 'grid', gap: '6px' }}>
+                    <div style={{ display: 'grid', gap: '4px' }}>
                       {unpaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
                         <div
                           key={loan.loan_id}
                           onClick={() => navigateTo('loan-details', loan.loan_id)}
                           style={{
                             background: getUnpaidCardColor(balance),
-                            padding: '10px',
+                            padding: '6px 8px',
                             borderRadius: '6px',
                             cursor: 'pointer',
                             border: balance > 10000
@@ -882,27 +874,19 @@ function Dashboard({ navigateTo }) {
                             e.currentTarget.style.boxShadow = 'none';
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: '13px', color: '#7f1d1d', marginBottom: '6px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
                             {customer.name}
+                            {loan.loan_name && loan.loan_name !== 'General Loan' && (
+                              <span style={{ fontSize: '10px', color: '#991b1b', fontWeight: 500, marginLeft: '4px' }}>
+                                • {loan.loan_name}
+                              </span>
+                            )}
                           </div>
-                          {loan.loan_name && loan.loan_name !== 'General Loan' && (
-                            <div style={{ fontSize: '11px', color: '#991b1b', fontWeight: 600, marginBottom: '4px' }}>
-                              👤 Friend: {loan.loan_name}
-                            </div>
-                          )}
-                          <div style={{ display: 'grid', gap: '3px', fontSize: '11px' }}>
-                            <div style={{ color: '#991b1b', fontWeight: 600 }}>
-                              📅 Week {weekNumber} of {totalWeeks}
-                            </div>
-                            <div style={{ color: '#b91c1c', fontWeight: 600 }}>
-                              💰 Due: {formatCurrency(paymentAmount)}
-                            </div>
-                            <div style={{ color: '#dc2626', fontWeight: 700, fontSize: '12px' }}>
-                              ⚠️ Outstanding: {formatCurrency(balance)}
-                            </div>
-                            <div style={{ color: '#ea580c', fontWeight: 600 }}>
-                              ⏳ Remaining: {remainingWeeks} week{remainingWeeks !== 1 ? 's' : ''}
-                            </div>
+                          <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
+                            Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
+                          </div>
+                          <div style={{ fontSize: '9px', color: '#dc2626', fontWeight: 700 }}>
+                            ⚠️ {formatCurrency(balance)} • {remainingWeeks}w left
                           </div>
                         </div>
                       ))}
