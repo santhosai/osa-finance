@@ -66,7 +66,12 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
   const sendWhatsAppMessage = () => {
     if (!lastPayment) return;
 
-    const message = `Payment Receipt\n\nCustomer: ${lastPayment.customer_name}\nAmount: ₹${lastPayment.amount.toLocaleString('en-IN')}\nDate: ${new Date(lastPayment.payment_date).toLocaleDateString('en-IN')}\nWeek: ${lastPayment.week_number}\nBalance Remaining: ₹${lastPayment.balance_after.toLocaleString('en-IN')}\n\nThank you for your payment!`;
+    // Build message with optional Friend name line
+    const friendNameLine = loan.loan_name && loan.loan_name !== 'General Loan'
+      ? `Friend name: ${loan.loan_name}\n`
+      : '';
+
+    const message = `Payment Receipt\n\nCustomer: ${lastPayment.customer_name}\n${friendNameLine}Amount: ₹${lastPayment.amount.toLocaleString('en-IN')}\nDate: ${new Date(lastPayment.payment_date).toLocaleDateString('en-IN')}\nWeek: ${lastPayment.week_number}\nBalance Remaining: ₹${lastPayment.balance_after.toLocaleString('en-IN')}\n\nThank you for your payment!`;
 
     const phoneNumber = lastPayment.customer_phone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/91${phoneNumber}?text=${encodeURIComponent(message)}`;
