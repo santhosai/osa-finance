@@ -19,7 +19,11 @@ function SundayCollections({ navigateTo }) {
     const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
     const nextSunday = new Date(today);
     nextSunday.setDate(today.getDate() + daysUntilSunday);
-    return nextSunday.toISOString().split('T')[0];
+    // Use local timezone to avoid date shifting
+    const year = nextSunday.getFullYear();
+    const month = String(nextSunday.getMonth() + 1).padStart(2, '0');
+    const day = String(nextSunday.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   useEffect(() => {

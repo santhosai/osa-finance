@@ -43,7 +43,8 @@ function Dashboard({ navigateTo }) {
         return;
       }
 
-      const sundayDate = selected.toISOString().split('T')[0];
+      // Use selectedDate directly - already in YYYY-MM-DD format, no timezone conversion needed
+      const sundayDate = selectedDate;
 
       // Helper to get first payment Sunday
       const getFirstPaymentSunday = (startDateStr) => {
