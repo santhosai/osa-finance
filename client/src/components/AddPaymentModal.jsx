@@ -53,6 +53,8 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
         const data = await response.json();
         setLastPayment(data);
         setSuccess(true);
+        // Auto-refresh parent component immediately after payment
+        onSuccess();
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to record payment');
