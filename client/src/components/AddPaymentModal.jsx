@@ -120,6 +120,7 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
                 placeholder="Enter offline collection"
                 min="0"
                 step="1"
+                autoComplete="off"
               />
             </div>
 
@@ -133,6 +134,7 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
                 placeholder="Enter online collection"
                 min="0"
                 step="1"
+                autoComplete="off"
               />
             </div>
 
