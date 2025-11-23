@@ -964,42 +964,21 @@ Thank you!
           )}
         </div>
 
-        {/* Overall Amount Summary */}
+        {/* Total Amount */}
         {safeEntries.length > 0 && (
           <div style={{
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
-            padding: '20px',
+            padding: '16px',
             borderRadius: '12px',
-            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+            textAlign: 'center'
           }}>
-            <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', opacity: 0.9 }}>
-              📊 Overall Summary
+            <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '4px', opacity: 0.9 }}>
+              Total Outstanding
             </div>
-            <div style={{ display: 'grid', gap: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '14px', opacity: 0.9 }}>Total Entries:</span>
-                <span style={{ fontSize: '18px', fontWeight: 700 }}>{safeEntries.length}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '14px', opacity: 0.9 }}>Entries with Phone:</span>
-                <span style={{ fontSize: '18px', fontWeight: 700 }}>{safeEntries.filter(e => e.phone).length}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '14px', opacity: 0.9 }}>Paid Entries:</span>
-                <span style={{ fontSize: '18px', fontWeight: 700 }}>{safeEntries.filter(e => e.paid).length}</span>
-              </div>
-              <div style={{
-                borderTop: '1px solid rgba(255,255,255,0.3)',
-                paddingTop: '12px',
-                marginTop: '4px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span style={{ fontSize: '16px', fontWeight: 600 }}>Total Amount:</span>
-                <span style={{ fontSize: '24px', fontWeight: 700 }}>₹{calculateTotal().toLocaleString('en-IN')}</span>
-              </div>
+            <div style={{ fontSize: '28px', fontWeight: 700 }}>
+              ₹{calculateTotal().toLocaleString('en-IN')}
             </div>
           </div>
         )}
