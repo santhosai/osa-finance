@@ -2,132 +2,67 @@ import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { API_URL } from '../config';
 
-// Fetcher function for SWR
 const fetcher = (url) => fetch(url).then(res => res.json());
 
 const VaddiList = ({ navigateTo }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    principalAmount: '',
-    monthlyInterest: '',
-    date: '',
-    phone: ''
-  });
-  const [showReminder, setShowReminder] = useState(false);
-  const [todaysReminders, setTodaysReminders] = useState([]);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({ name: '', amount: '', phone: '' });
   const [loading, setLoading] = useState(false);
 
-  // Use SWR for data fetching with auto-refresh
+  // Fetch entries with SWR
   const { data: entries = [], error, isLoading, mutate } = useSWR(`${API_URL}/vaddi-entries`, fetcher, {
-    refreshInterval: 30000, // Auto-refresh every 30 seconds
-    revalidateOnFocus: true,
-    dedupingInterval: 2000,
-    onError: (err) => {
-      console.error('SWR Error fetching vaddi entries:', err);
-    }
+    refreshInterval: 30000,
+    revalidateOnFocus: true
   });
 
-  // Ensure entries is always an array and filter out invalid entries
-  const safeEntries = Array.isArray(entries)
-    ? entries.filter(entry => {
-        // Filter out entries that are null, undefined, or missing critical fields
-        if (!entry || typeof entry !== 'object') {
-          console.warn('Invalid entry (not an object):', entry);
-          return false;
-        }
-        if (!entry.id || !entry.name || !entry.date) {
-          console.warn('Entry missing required fields (id, name, or date):', entry);
-          return false;
-        }
-        return true;
-      })
-    : [];
+  // Safe entries
+  const safeEntries = Array.isArray(entries) ? entries.filter(e => e && e.id) : [];
 
-  // Log filtered entries count for debugging
-  if (Array.isArray(entries) && entries.length !== safeEntries.length) {
-    console.warn(`Filtered out ${entries.length - safeEntries.length} invalid entries`);
+  // Group entries by day
+  const entriesByDay = {};
+  for (let day = 1; day <= 31; day++) {
+    entriesByDay[day] = safeEntries.filter(e => e.day === day);
   }
 
-  // Check for reminders on mount and when entries change
-  useEffect(() => {
-    if (safeEntries.length > 0) {
-      checkReminders(safeEntries);
-    }
-  }, [safeEntries]);
-
-  // Check for reminders on current date
-  const checkReminders = (entriesList) => {
-    const today = new Date().toISOString().split('T')[0];
-    const reminders = entriesList.filter(entry => !entry.paid && entry.date === today);
-
-    if (reminders.length > 0) {
-      setTodaysReminders(reminders);
-      setShowReminder(true);
-    }
+  // Calculate total amount for a day
+  const getDayTotal = (day) => {
+    return entriesByDay[day].reduce((sum, e) => sum + (e.amount || 0), 0);
   };
 
-  // Handle form input changes
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  // Get customer count for a day
+  const getDayCount = (day) => {
+    return entriesByDay[day].length;
   };
 
-  // Select contact from phone's contact list
-  const selectFromContacts = async () => {
-    // Check if Contact Picker API is supported
-    if (!('contacts' in navigator)) {
-      alert('Contact picker is not supported on this device/browser. Please use Chrome on Android for best experience.');
-      return;
-    }
-
-    try {
-      const props = ['name', 'tel'];
-      const opts = { multiple: false };
-
-      const contacts = await navigator.contacts.select(props, opts);
-
-      if (contacts && contacts.length > 0) {
-        const contact = contacts[0];
-
-        // Extract phone number (remove all non-digits)
-        let phone = '';
-        if (contact.tel && contact.tel.length > 0) {
-          phone = contact.tel[0].replace(/\D/g, ''); // Remove all non-digits
-          // Get last 10 digits if number is longer (for country codes)
-          if (phone.length > 10) {
-            phone = phone.slice(-10);
-          }
-        }
-
-        // Update form with contact data
-        setFormData(prev => ({
-          ...prev,
-          name: contact.name && contact.name[0] ? contact.name[0] : prev.name,
-          phone: phone
-        }));
-      }
-    } catch (error) {
-      // User cancelled the picker or error occurred
-      if (error.name !== 'AbortError') {
-        console.error('Error selecting contact:', error);
-        alert('Failed to select contact: ' + error.message);
-      }
-    }
+  // Calculate grand total
+  const calculateGrandTotal = () => {
+    return safeEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
   };
 
-  // Add new entry
+  // Open modal for a day
+  const handleDayClick = (day) => {
+    setSelectedDay(day);
+    setShowModal(true);
+    setFormData({ name: '', amount: '', phone: '' });
+  };
+
+  // Close modal
+  const closeModal = () => {
+    setShowModal(false);
+    setSelectedDay(null);
+    setFormData({ name: '', amount: '', phone: '' });
+  };
+
+  // Add new entry for selected day
   const handleAddEntry = async (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.principalAmount || !formData.monthlyInterest || !formData.date || !formData.phone) {
-      alert('Please fill all required fields');
+    if (!formData.name || !formData.amount || !formData.phone) {
+      alert('Please fill all fields');
       return;
     }
 
-    // Validate phone number
     if (formData.phone.length !== 10) {
       alert('Phone number must be 10 digits');
       return;
@@ -139,49 +74,32 @@ const VaddiList = ({ navigateTo }) => {
       const response = await fetch(`${API_URL}/vaddi-entries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          day: selectedDay,
+          name: formData.name,
+          amount: parseInt(formData.amount),
+          phone: formData.phone
+        })
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Server error: ${response.status}`);
+        throw new Error('Failed to add entry');
       }
 
-      // Refresh data
       mutate();
-
-      // Reset form
-      setFormData({ name: '', principalAmount: '', monthlyInterest: '', date: '', phone: '' });
-
-      // Send WhatsApp notification if phone exists
-      if (formData.phone) {
-        const message = `New Vaddi Entry Created
-
-Name: ${formData.name}
-Principal Amount Lent: ₹${parseFloat(formData.principalAmount).toLocaleString('en-IN')}
-Monthly Interest: ₹${parseFloat(formData.monthlyInterest).toLocaleString('en-IN')}
-Start Date: ${new Date(formData.date).toLocaleDateString('en-IN')}
-
-Please pay monthly interest until principal is returned.
-
-- Om Sai Murugan Finance`;
-
-        const cleanPhone = formData.phone.replace(/\D/g, '');
-        const phoneWithCountryCode = `91${cleanPhone}`;
-        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
-      }
+      setFormData({ name: '', amount: '', phone: '' });
+      alert('Entry added successfully!');
     } catch (error) {
-      console.error('Error creating vaddi entry:', error);
-      alert('Failed to create entry: ' + error.message);
+      console.error('Error adding entry:', error);
+      alert('Failed to add entry: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Delete entry
+  // Delete entry (Full Settled)
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this entry?')) {
+    if (!window.confirm('Mark as Full Settled and delete?')) {
       return;
     }
 
@@ -191,234 +109,26 @@ Please pay monthly interest until principal is returned.
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete vaddi entry');
+        throw new Error('Failed to delete entry');
       }
 
-      // Refresh data
       mutate();
     } catch (error) {
-      console.error('Error deleting vaddi entry:', error);
+      console.error('Error deleting entry:', error);
       alert('Failed to delete entry: ' + error.message);
     }
   };
 
-  // Mark as paid and send receipt
-  const markAsPaid = async (entry) => {
-    if (!entry.phone) {
-      const confirmed = window.confirm('No phone number for this entry. Mark as paid anyway?');
-      if (!confirmed) return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/vaddi-entries/${entry.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paid: true,
-          paidDate: new Date().toISOString().split('T')[0]
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update vaddi entry');
-      }
-
-      // Refresh data
-      mutate();
-
-      // Send WhatsApp receipt if phone available
-      if (entry.phone) {
-        const principalAmount = entry.principalAmount || entry.amount || 0;
-        const message = `Payment Receipt - Monthly Interest
-
-Name: ${entry.name}
-Amount Paid: ₹${principalAmount.toLocaleString('en-IN')}
-Paid Date: ${new Date().toLocaleDateString('en-IN')}
-
-Thank you for your payment!
-
-- Om Sai Murugan Finance`;
-
-        const cleanPhone = entry.phone.replace(/\D/g, '');
-        const phoneWithCountryCode = `91${cleanPhone}`;
-        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
-      }
-    } catch (error) {
-      console.error('Error marking as paid:', error);
-      alert('Failed to mark as paid: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Record interest payment
-  const recordInterestPayment = async (entry) => {
-    const principalAmount = entry.principalAmount || entry.amount || 0;
-    const monthlyInterest = entry.monthlyInterest || 0;
-
-    setLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/vaddi-entries/${entry.id}/interest-payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentDate: new Date().toISOString().split('T')[0],
-          amount: monthlyInterest
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to record interest payment');
-      }
-
-      // Refresh data
-      mutate();
-
-      // Send WhatsApp receipt if phone available
-      if (entry.phone) {
-        const message = `Payment Receipt - Monthly Interest
-
-Name: ${entry.name}
-Interest Paid: ₹${monthlyInterest.toLocaleString('en-IN')}
-Payment Date: ${new Date().toLocaleDateString('en-IN')}
-Principal Amount: ₹${principalAmount.toLocaleString('en-IN')}
-
-Thank you for your payment!
-
-- Om Sai Murugan Finance`;
-
-        const cleanPhone = entry.phone.replace(/\D/g, '');
-        const phoneWithCountryCode = `91${cleanPhone}`;
-        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
-      }
-
-      alert('Interest payment recorded successfully!');
-    } catch (error) {
-      console.error('Error recording interest payment:', error);
-      alert('Failed to record interest payment: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Mark principal as returned
-  const markPrincipalReturned = async (entry) => {
-    const confirmed = window.confirm('Mark the principal amount as RETURNED? This means the customer has paid back the full amount.');
-    if (!confirmed) return;
-
-    const principalAmount = entry.principalAmount || entry.amount || 0;
-
-    setLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/vaddi-entries/${entry.id}/principal-returned`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          returnDate: new Date().toISOString().split('T')[0]
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to mark principal as returned');
-      }
-
-      // Refresh data
-      mutate();
-
-      // Send WhatsApp receipt if phone available
-      if (entry.phone) {
-        const message = `Receipt - Principal Amount Returned
-
-Name: ${entry.name}
-Principal Amount: ₹${principalAmount.toLocaleString('en-IN')}
-Return Date: ${new Date().toLocaleDateString('en-IN')}
-
-Thank you for returning the principal amount!
-
-- Om Sai Murugan Finance`;
-
-        const cleanPhone = entry.phone.replace(/\D/g, '');
-        const phoneWithCountryCode = `91${cleanPhone}`;
-        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
-      }
-
-      alert('Principal marked as returned successfully!');
-    } catch (error) {
-      console.error('Error marking principal as returned:', error);
-      alert('Failed to mark principal as returned: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Send WhatsApp reminder (for unpaid entries)
-  const sendWhatsAppReminder = (entry) => {
-    if (!entry.phone) {
-      alert('No phone number available for this entry');
-      return;
-    }
-
-    const principalAmount = entry.principalAmount || entry.amount || 0;
-    const monthlyInterest = entry.monthlyInterest || 0;
-
-    const message = `Payment Reminder - Monthly Interest
-
-Name: ${entry.name}
-Principal Amount: ₹${principalAmount.toLocaleString('en-IN')}
-Monthly Interest Due: ₹${monthlyInterest.toLocaleString('en-IN')}
-
-Please pay your monthly interest.
-
-Thank you!
-
-- Om Sai Murugan Finance`;
-
-    const cleanPhone = entry.phone.replace(/\D/g, '');
-    const phoneWithCountryCode = `91${cleanPhone}`;
-    const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-  };
-
-  // Open phone contact
-  const openContact = (phone) => {
-    if (!phone) {
-      alert('No phone number available');
-      return;
-    }
-    window.location.href = `tel:${phone}`;
-  };
-
-  // Calculate total
-  const calculateTotal = () => {
-    return safeEntries.reduce((sum, entry) => {
-      const amount = entry.principalAmount || entry.amount || 0;
-      return sum + amount;
-    }, 0);
-  };
-
-  // Download as CSV
+  // Download CSV
   const handleDownload = () => {
     if (safeEntries.length === 0) {
       alert('No data to download');
       return;
     }
 
-    const csvHeader = 'Name,Principal Amount,Monthly Interest,Start Date,Phone,Status\n';
-    const csvRows = safeEntries.map(entry => {
-      const principalAmount = entry.principalAmount || entry.amount || 0;
-      const monthlyInterest = entry.monthlyInterest || 0;
-      const isPaid = entry.principalReturned || entry.paid || false;
-      return `${entry.name},₹${principalAmount},₹${monthlyInterest},${entry.date},${entry.phone || 'N/A'},${isPaid ? 'RETURNED' : 'ACTIVE'}`;
-    }).join('\n');
-
-    const csvContent = csvHeader + csvRows + `\n\nTotal Amount,₹${calculateTotal()},,,,`;
+    const csvHeader = 'Day,Name,Amount,Phone\n';
+    const csvRows = safeEntries.map(e => `${e.day},${e.name},₹${e.amount},${e.phone}`).join('\n');
+    const csvContent = csvHeader + csvRows + `\n\nTotal Amount,₹${calculateGrandTotal()},,`;
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -433,25 +143,31 @@ Thank you!
     document.body.removeChild(link);
   };
 
-  // Loading state
+  // Format amount to K (e.g., 5000 -> 5k)
+  const formatAmount = (amount) => {
+    if (amount >= 1000) {
+      return `₹${(amount / 1000).toFixed(0)}k`;
+    }
+    return `₹${amount}`;
+  };
+
   if (isLoading) {
     return (
       <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: 'white' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-          <div style={{ fontSize: '18px', fontWeight: 600 }}>Loading Vaddi List...</div>
+          <div style={{ fontSize: '18px', fontWeight: 600 }}>Loading...</div>
         </div>
       </div>
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: 'white' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
-          <div style={{ fontSize: '18px', fontWeight: 600 }}>Failed to load Vaddi List</div>
+          <div style={{ fontSize: '18px', fontWeight: 600 }}>Failed to load data</div>
           <button onClick={() => mutate()} style={{ marginTop: '16px', padding: '10px 20px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
             Retry
           </button>
@@ -481,503 +197,359 @@ Thank you!
               color: 'white',
               cursor: 'pointer',
               fontSize: '24px',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center'
+              padding: '4px'
             }}
           >
             ←
           </button>
           <h2 style={{ margin: 0, color: 'white', fontSize: '20px', fontWeight: 700 }}>
             Vaddi List
-            <span style={{
-              marginLeft: '8px',
-              fontSize: '11px',
-              background: '#10b981',
-              color: 'white',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              fontWeight: 600,
-              verticalAlign: 'middle'
-            }}>☁️ Firestore</span>
           </h2>
         </div>
       </div>
 
       <div style={{ padding: '16px' }}>
-        {/* Reminder Popup */}
-        {showReminder && (
+        {/* Main Card */}
         <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000
-        }} onClick={() => setShowReminder(false)}>
+          background: 'white',
+          borderRadius: '12px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          overflow: 'hidden'
+        }}>
+          {/* Title Bar */}
           <div style={{
-            background: 'white',
-            padding: '30px',
-            borderRadius: '15px',
-            maxWidth: '500px',
-            width: '90%',
-            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)'
-          }} onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ color: '#667eea', marginBottom: '20px', fontSize: '24px', textAlign: 'center' }}>
-              🔔 Payment Reminder
-            </h2>
-            <div style={{ marginBottom: '20px' }}>
-              <p style={{ fontWeight: 600, color: '#333', marginBottom: '15px', fontSize: '16px' }}>
-                Today's Payments Due:
-              </p>
-              {todaysReminders.map(reminder => {
-                const reminderAmount = reminder.principalAmount || reminder.amount || 0;
+            padding: '16px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div style={{ fontSize: '18px', fontWeight: 700 }}>📅 Vaddi List</div>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{
+                background: 'rgba(255,255,255,0.2)',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontWeight: 600
+              }}>
+                Total: ₹{calculateGrandTotal().toLocaleString('en-IN')}
+              </div>
+              <button
+                onClick={handleDownload}
+                style={{
+                  background: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '14px'
+                }}
+              >
+                📥 Download
+              </button>
+            </div>
+          </div>
+
+          {/* 31-Day Calendar Grid */}
+          <div style={{ padding: '20px' }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(7, 1fr)',
+              gap: '8px'
+            }}>
+              {[...Array(31)].map((_, index) => {
+                const day = index + 1;
+                const dayTotal = getDayTotal(day);
+                const dayCount = getDayCount(day);
+                const hasData = dayCount > 0;
+
                 return (
-                  <div key={reminder.id} style={{
-                    background: '#f5f5f5',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    marginBottom: '10px',
-                    fontSize: '16px',
-                    color: '#333',
-                    borderLeft: '4px solid #667eea'
-                  }}>
-                    📌 <strong>{reminder.name}</strong> - ₹{reminderAmount.toLocaleString('en-IN')}
+                  <div
+                    key={day}
+                    onClick={() => handleDayClick(day)}
+                    style={{
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '12px 8px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      background: hasData ? 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)' : 'white',
+                      transition: 'all 0.2s',
+                      minHeight: '80px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      position: 'relative'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <div style={{
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      color: hasData ? '#667eea' : '#9ca3af',
+                      marginBottom: '4px'
+                    }}>
+                      {day}
+                    </div>
+                    {hasData && (
+                      <>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#059669',
+                          marginBottom: '2px'
+                        }}>
+                          {formatAmount(dayTotal)}
+                        </div>
+                        <div style={{
+                          fontSize: '11px',
+                          color: '#6b7280'
+                        }}>
+                          👥{dayCount}
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
-              <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                padding: '15px',
-                borderRadius: '8px',
-                textAlign: 'center',
-                fontSize: '18px',
-                marginTop: '15px'
-              }}>
-                <strong>Total Due: ₹{todaysReminders.reduce((sum, r) => {
-                  const amount = r.principalAmount || r.amount || 0;
-                  return sum + amount;
-                }, 0).toLocaleString('en-IN')}</strong>
-              </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <button onClick={() => setShowReminder(false)} style={{
-                background: '#667eea',
-                color: 'white',
-                border: 'none',
-                padding: '12px 40px',
-                borderRadius: '8px',
-                fontSize: '16px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}>
-                OK
+          </div>
+        </div>
+      </div>
+
+      {/* Day Entries Modal */}
+      {showModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000
+          }}
+          onClick={closeModal}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              padding: '16px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
+                📅 Day {selectedDay}
+              </h3>
+              <button
+                onClick={closeModal}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '0',
+                  width: '30px',
+                  height: '30px'
+                }}
+              >
+                ×
               </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ padding: '20px' }}>
+              {/* Add Entry Form */}
+              <form onSubmit={handleAddEntry} style={{ marginBottom: '20px' }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                    👤 Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Customer name"
+                    required
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                    💰 Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.amount}
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    placeholder="Amount in ₹"
+                    required
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                    📱 Mobile Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="10 digits"
+                    required
+                    pattern="[0-9]{10}"
+                    maxLength="10"
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '12px',
+                    borderRadius: '6px',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    opacity: loading ? 0.6 : 1
+                  }}
+                >
+                  {loading ? 'Adding...' : '➕ Add Entry'}
+                </button>
+              </form>
+
+              {/* Entries List */}
+              {entriesByDay[selectedDay].length > 0 && (
+                <div>
+                  <div style={{
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#374151',
+                    marginBottom: '12px',
+                    paddingBottom: '8px',
+                    borderBottom: '2px solid #e5e7eb'
+                  }}>
+                    Entries ({entriesByDay[selectedDay].length})
+                  </div>
+
+                  <div style={{ display: 'grid', gap: '10px' }}>
+                    {entriesByDay[selectedDay].map(entry => (
+                      <div
+                        key={entry.id}
+                        style={{
+                          padding: '12px',
+                          background: 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
+                          borderRadius: '8px',
+                          borderLeft: '3px solid #667eea'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: '14px', color: '#1e293b', marginBottom: '4px' }}>
+                              {entry.name}
+                            </div>
+                            <div style={{ fontSize: '13px', color: '#059669', fontWeight: 600, marginBottom: '2px' }}>
+                              ₹{entry.amount?.toLocaleString('en-IN')}
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                              📱 {entry.phone}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDelete(entry.id)}
+                            style={{
+                              background: '#10b981',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            ✓ Full Settled
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {entriesByDay[selectedDay].length === 0 && (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '30px',
+                  color: '#9ca3af',
+                  fontStyle: 'italic'
+                }}>
+                  No entries for this day. Add your first entry above!
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
-
-      {/* Monthly Tracker Card */}
-      <div style={{
-        background: 'white',
-        padding: '20px',
-        borderRadius: '12px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        marginBottom: '20px'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-          <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>
-            📊 Vaddi List
-          </h3>
-          {safeEntries.length > 0 && (
-            <div style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.9 }}>Total</div>
-              <div style={{ fontSize: '18px', fontWeight: 700 }}>₹{calculateTotal().toLocaleString('en-IN')}</div>
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                document.getElementById('vaddi-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-              }}
-              disabled={loading}
-              style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: '8px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontWeight: 600,
-                fontSize: '14px',
-                opacity: loading ? 0.6 : 1
-              }}
-            >
-              {loading ? 'Adding...' : '➕ Add'}
-            </button>
-            <button
-              onClick={handleDownload}
-              disabled={loading}
-              style={{
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                color: 'white',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: '8px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontWeight: 600,
-                fontSize: '14px',
-                opacity: loading ? 0.6 : 1
-              }}
-            >
-              📥 Download
-            </button>
-          </div>
-        </div>
-
-        {/* Add Entry Form */}
-        <form id="vaddi-form" onSubmit={handleAddEntry} style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: '10px',
-          marginBottom: '16px',
-          padding: '12px',
-          background: '#f8f9fa',
-          borderRadius: '6px'
-        }}>
-          {/* Customer Name */}
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
-              👤 Name *
-            </label>
-            <input
-              type="text"
-              name="name"
-              placeholder="Name"
-              value={formData.name}
-              onChange={handleInputChange}
-              required
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '13px'
-              }}
-            />
-          </div>
-
-          {/* Principal Amount */}
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
-              💰 Principal *
-            </label>
-            <input
-              type="number"
-              name="principalAmount"
-              placeholder="₹ Amount"
-              value={formData.principalAmount}
-              onChange={handleInputChange}
-              required
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '13px'
-              }}
-            />
-          </div>
-
-          {/* Monthly Interest */}
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
-              📈 Interest *
-            </label>
-            <input
-              type="number"
-              name="monthlyInterest"
-              placeholder="₹ /month"
-              value={formData.monthlyInterest}
-              onChange={handleInputChange}
-              required
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '13px'
-              }}
-            />
-          </div>
-
-          {/* Start Date */}
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
-              📅 Date *
-            </label>
-            <input
-              type="date"
-              name="date"
-              value={formData.date}
-              onChange={handleInputChange}
-              required
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '13px'
-              }}
-            />
-          </div>
-
-          {/* Phone Number */}
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '4px', color: '#374151', fontSize: '11px' }}>
-              📱 Phone *
-            </label>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'stretch' }}>
-              <input
-                type="tel"
-                name="phone"
-                placeholder="10 digits"
-                value={formData.phone}
-                onChange={handleInputChange}
-                required
-                pattern="[0-9]{10}"
-                maxLength="10"
-                disabled={loading}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '13px'
-                }}
-              />
-              <button
-                type="button"
-                onClick={selectFromContacts}
-                disabled={loading}
-                style={{
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '8px 12px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                  opacity: loading ? 0.6 : 1,
-                  minWidth: '85px'
-                }}
-                title="Select from Contacts"
-              >
-                👤 Contacts
-              </button>
-            </div>
-          </div>
-        </form>
-
-        {/* Entries List */}
-        <div style={{ marginBottom: '16px' }}>
-          {safeEntries.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#999', fontStyle: 'italic', padding: '20px' }}>
-              No entries yet. Add your first entry above!
-            </p>
-          ) : (
-            <div style={{ display: 'grid', gap: '12px' }}>
-              {safeEntries.map(entry => {
-                // Handle both old and new field structures
-                const principalAmount = entry.principalAmount || entry.amount || 0;
-                const monthlyInterest = entry.monthlyInterest || 0;
-                const isPrincipalReturned = entry.principalReturned || entry.paid || false;
-                const interestPayments = entry.interestPayments || [];
-
-                return (
-                  <div key={entry.id} style={{
-                    padding: '10px',
-                    background: isPrincipalReturned
-                      ? 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)'
-                      : 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
-                    borderRadius: '6px',
-                    borderLeft: isPrincipalReturned ? '3px solid #10b981' : '3px solid #667eea',
-                    opacity: isPrincipalReturned ? 0.7 : 1
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
-                      <div style={{ flex: 1, minWidth: '180px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                          <div style={{ fontWeight: 700, fontSize: '14px', color: '#1e293b' }}>
-                            {entry.name}
-                          </div>
-                          {isPrincipalReturned && (
-                            <span style={{
-                              background: '#10b981',
-                              color: 'white',
-                              padding: '2px 8px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: 600
-                            }}>
-                              ✅ RETURNED
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '3px' }}>
-                          💰 Principal: ₹{principalAmount.toLocaleString('en-IN')}
-                        </div>
-                        {monthlyInterest > 0 && (
-                          <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '3px' }}>
-                            📈 Interest: ₹{monthlyInterest.toLocaleString('en-IN')}
-                          </div>
-                        )}
-                        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '3px' }}>
-                          📅 Date: {new Date(entry.date).toLocaleDateString('en-IN')}
-                        </div>
-                        {interestPayments.length > 0 && (
-                          <div style={{ fontSize: '10px', color: '#059669', fontWeight: 600, marginBottom: '3px' }}>
-                            💸 Payments: {interestPayments.length}
-                          </div>
-                        )}
-                        {isPrincipalReturned && entry.principalReturnedDate && (
-                          <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginBottom: '3px' }}>
-                            ✅ Returned: {new Date(entry.principalReturnedDate).toLocaleDateString('en-IN')}
-                          </div>
-                        )}
-                        {entry.phone && (
-                          <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span>📱 {entry.phone}</span>
-                            <button
-                              onClick={() => openContact(entry.phone)}
-                              style={{
-                                background: '#3b82f6',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '2px 8px',
-                                fontSize: '11px',
-                                cursor: 'pointer',
-                                fontWeight: 600
-                              }}
-                              title="Call"
-                            >
-                              📞 Call
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        {!isPrincipalReturned ? (
-                          <>
-                            <button
-                              onClick={() => recordInterestPayment(entry)}
-                              disabled={loading}
-                              style={{
-                                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '5px 8px',
-                                fontSize: '10px',
-                                cursor: loading ? 'not-allowed' : 'pointer',
-                                fontWeight: 600,
-                                whiteSpace: 'nowrap',
-                                opacity: loading ? 0.6 : 1
-                              }}
-                              title="Record monthly interest payment"
-                            >
-                              💰 Interest
-                            </button>
-                            <button
-                              onClick={() => markPrincipalReturned(entry)}
-                              disabled={loading}
-                              style={{
-                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '5px 8px',
-                                fontSize: '10px',
-                                cursor: loading ? 'not-allowed' : 'pointer',
-                                fontWeight: 600,
-                                whiteSpace: 'nowrap',
-                                opacity: loading ? 0.6 : 1
-                              }}
-                              title="Mark principal amount as returned"
-                            >
-                              ✅ Returned
-                            </button>
-                            {entry.phone && (
-                              <button
-                                onClick={() => sendWhatsAppReminder(entry)}
-                                style={{
-                                  background: '#25D366',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  padding: '5px 8px',
-                                  fontSize: '10px',
-                                  cursor: 'pointer',
-                                  fontWeight: 600,
-                                  whiteSpace: 'nowrap'
-                                }}
-                                title="Send WhatsApp Reminder"
-                              >
-                                📲 Remind
-                              </button>
-                            )}
-                          </>
-                        ) : null}
-                      <button
-                        onClick={() => handleDelete(entry.id)}
-                        style={{
-                          background: '#ef4444',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '50%',
-                          width: '24px',
-                          height: '24px',
-                          fontSize: '14px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0
-                        }}
-                        title="Delete"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-              })}
-            </div>
-          )}
-        </div>
-
-      </div>
-      </div>
     </div>
   );
 };

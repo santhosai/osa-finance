@@ -955,7 +955,7 @@ app.get('/api/sunday-collections', async (req, res) => {
 app.get('/api/vaddi-entries', async (req, res) => {
   try {
     const vaddiSnapshot = await db.collection('vaddi_entries')
-      .orderBy('date', 'asc')
+      .orderBy('day', 'asc')
       .get();
 
     const entries = [];
@@ -976,11 +976,16 @@ app.get('/api/vaddi-entries', async (req, res) => {
 // Create new vaddi entry
 app.post('/api/vaddi-entries', async (req, res) => {
   try {
-    const { name, principalAmount, monthlyInterest, date, phone } = req.body;
+    const { day, name, amount, phone } = req.body;
 
     // Validate required fields
-    if (!name || !principalAmount || !monthlyInterest || !date || !phone) {
+    if (!day || !name || !amount || !phone) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate day (1-31)
+    if (day < 1 || day > 31) {
+      return res.status(400).json({ error: 'Day must be between 1 and 31' });
     }
 
     // Validate phone number format
@@ -989,14 +994,10 @@ app.post('/api/vaddi-entries', async (req, res) => {
     }
 
     const newEntry = {
+      day: parseInt(day),
       name,
-      principalAmount: parseFloat(principalAmount),
-      monthlyInterest: parseFloat(monthlyInterest),
-      date,
+      amount: parseInt(amount),
       phone,
-      principalReturned: false,
-      principalReturnedDate: null,
-      interestPayments: [], // Array to track monthly interest payments
       createdAt: new Date().toISOString()
     };
 
