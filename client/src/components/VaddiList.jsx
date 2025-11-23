@@ -54,6 +54,44 @@ const VaddiList = ({ navigateTo }) => {
     setFormData({ name: '', amount: '', phone: '' });
   };
 
+  // Select contact from phone
+  const selectFromContacts = async () => {
+    if (!('contacts' in navigator)) {
+      alert('Contact picker not supported. Please use Chrome on Android for best experience.');
+      return;
+    }
+
+    try {
+      const props = ['name', 'tel'];
+      const opts = { multiple: false };
+
+      const contacts = await navigator.contacts.select(props, opts);
+
+      if (contacts && contacts.length > 0) {
+        const contact = contacts[0];
+
+        let phone = '';
+        if (contact.tel && contact.tel.length > 0) {
+          phone = contact.tel[0].replace(/\D/g, '');
+          if (phone.length > 10) {
+            phone = phone.slice(-10);
+          }
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          name: contact.name && contact.name[0] ? contact.name[0] : prev.name,
+          phone: phone
+        }));
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Error selecting contact:', error);
+        alert('Failed to select contact: ' + error.message);
+      }
+    }
+  };
+
   // Add new entry for selected day
   const handleAddEntry = async (e) => {
     e.preventDefault();
@@ -389,6 +427,28 @@ const VaddiList = ({ navigateTo }) => {
 
             {/* Modal Content */}
             <div style={{ padding: '20px' }}>
+              {/* Contact Picker Button */}
+              <button
+                type="button"
+                onClick={selectFromContacts}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  marginBottom: '16px',
+                  opacity: loading ? 0.6 : 1
+                }}
+              >
+                👤 Select from Contacts
+              </button>
+
               {/* Add Entry Form */}
               <form onSubmit={handleAddEntry} style={{ marginBottom: '20px' }}>
                 <div style={{ marginBottom: '12px' }}>
