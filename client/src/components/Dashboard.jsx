@@ -79,10 +79,14 @@ function Dashboard({ navigateTo }) {
                 .then(res => res.json())
                 .then(loanData => {
                   // Check if payment was made ON this specific Sunday
+                  console.log(`🔍 Loan ${loan.loan_id} (${customer.name}) - ${loanData.payments?.length || 0} payments, checking against ${sundayDate}`);
                   const isPaid = loanData.payments?.some(payment => {
                     const paymentDate = payment.payment_date?.split('T')[0];
-                    return paymentDate === sundayDate;
+                    const matches = paymentDate === sundayDate;
+                    console.log(`  Payment: ${payment.payment_date} → ${paymentDate} === ${sundayDate}? ${matches}`);
+                    return matches;
                   }) || false;
+                  console.log(`  Result: isPaid = ${isPaid}`);
 
                   // Calculate total weeks and remaining weeks
                   const totalWeeks = 10; // Weekly loans are 10 weeks
