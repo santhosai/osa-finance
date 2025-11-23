@@ -816,6 +816,11 @@ function Dashboard({ navigateTo }) {
                           <div style={{ fontWeight: 700, fontSize: '13px', color: '#065f46', marginBottom: '6px' }}>
                             {customer.name}
                           </div>
+                          {loan.loan_name && loan.loan_name !== 'General Loan' && (
+                            <div style={{ fontSize: '11px', color: '#047857', fontWeight: 600, marginBottom: '4px' }}>
+                              👤 Friend: {loan.loan_name}
+                            </div>
+                          )}
                           <div style={{ display: 'grid', gap: '3px', fontSize: '11px' }}>
                             <div style={{ color: '#047857', fontWeight: 600 }}>
                               📅 Week {weekNumber} of {totalWeeks}
@@ -880,6 +885,11 @@ function Dashboard({ navigateTo }) {
                           <div style={{ fontWeight: 700, fontSize: '13px', color: '#7f1d1d', marginBottom: '6px' }}>
                             {customer.name}
                           </div>
+                          {loan.loan_name && loan.loan_name !== 'General Loan' && (
+                            <div style={{ fontSize: '11px', color: '#991b1b', fontWeight: 600, marginBottom: '4px' }}>
+                              👤 Friend: {loan.loan_name}
+                            </div>
+                          )}
                           <div style={{ display: 'grid', gap: '3px', fontSize: '11px' }}>
                             <div style={{ color: '#991b1b', fontWeight: 600 }}>
                               📅 Week {weekNumber} of {totalWeeks}
