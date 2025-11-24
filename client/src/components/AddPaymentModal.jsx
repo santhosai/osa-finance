@@ -128,6 +128,11 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
                 min="0"
                 step="1"
                 autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                data-form-type="other"
+                name="offline_amount_unique"
               />
             </div>
 
@@ -142,6 +147,11 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
                 min="0"
                 step="1"
                 autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                data-form-type="other"
+                name="online_amount_unique"
               />
             </div>
 
