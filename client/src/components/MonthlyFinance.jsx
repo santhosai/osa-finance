@@ -445,11 +445,17 @@ Thank you for choosing our service!
               }}
             />
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               name="amount"
               placeholder="Total Amount"
               value={formData.amount}
-              onChange={handleInputChange}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                handleInputChange({ target: { name: 'amount', value } });
+              }}
+              autoComplete="off"
               style={{
                 padding: '12px',
                 border: '1px solid #ddd',
@@ -458,12 +464,17 @@ Thank you for choosing our service!
               }}
             />
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               name="totalMonths"
               placeholder="Total Months (Default: 5)"
-              min="1"
               value={formData.totalMonths}
-              onChange={handleInputChange}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                handleInputChange({ target: { name: 'totalMonths', value } });
+              }}
+              autoComplete="off"
               style={{
                 padding: '12px',
                 border: '1px solid #ddd',
@@ -472,11 +483,17 @@ Thank you for choosing our service!
               }}
             />
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               name="monthlyInstallment"
               placeholder="Auto-calculated (Amount ÷ Months)"
               value={formData.monthlyInstallment}
-              onChange={handleInputChange}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                handleInputChange({ target: { name: 'monthlyInstallment', value } });
+              }}
+              autoComplete="off"
               style={{
                 padding: '12px',
                 border: '1px solid #ddd',

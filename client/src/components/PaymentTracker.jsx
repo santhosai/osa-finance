@@ -551,12 +551,16 @@ Thank you for your payment!
               Offline Amount (₹)
             </label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={offlineAmount}
-              onChange={(e) => setOfflineAmount(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setOfflineAmount(value);
+              }}
               placeholder="Enter offline collection"
-              min="0"
-              step="1"
+              autoComplete="off"
               style={{
                 width: '100%',
                 padding: '12px',
@@ -573,12 +577,16 @@ Thank you for your payment!
               Online Amount (₹)
             </label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={onlineAmount}
-              onChange={(e) => setOnlineAmount(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setOnlineAmount(value);
+              }}
               placeholder="Enter online collection"
-              min="0"
-              step="1"
+              autoComplete="off"
               style={{
                 width: '100%',
                 padding: '12px',

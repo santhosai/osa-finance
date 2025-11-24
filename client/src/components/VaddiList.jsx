@@ -477,10 +477,16 @@ const VaddiList = ({ navigateTo }) => {
                     💰 Amount
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setFormData({ ...formData, amount: value });
+                    }}
                     placeholder="Amount in ₹"
+                    autoComplete="off"
                     required
                     disabled={loading}
                     style={{

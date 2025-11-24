@@ -512,12 +512,16 @@ Thank you for choosing us!
               Loan Amount (₹) *
             </label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={formData.loanAmount}
-              onChange={(e) => setFormData({ ...formData, loanAmount: e.target.value })}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setFormData({ ...formData, loanAmount: value });
+              }}
+              autoComplete="off"
               required
-              min="0"
-              step="1"
               style={{
                 width: '100%',
                 padding: '10px',
@@ -539,12 +543,16 @@ Thank you for choosing us!
               Total Months *
             </label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={formData.totalMonths}
-              onChange={(e) => setFormData({ ...formData, totalMonths: parseInt(e.target.value) || 5 })}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setFormData({ ...formData, totalMonths: parseInt(value) || 5 });
+              }}
+              autoComplete="off"
               required
-              min="1"
-              max="12"
               style={{
                 width: '100%',
                 padding: '10px',

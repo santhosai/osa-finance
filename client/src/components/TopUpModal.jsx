@@ -82,13 +82,17 @@ function TopUpModal({ loan, onClose, onSuccess }) {
           <div className="form-group">
             <label className="form-label">Top-up Amount (₹)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               className="form-input"
               value={topUpAmount}
-              onChange={(e) => setTopUpAmount(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setTopUpAmount(value);
+              }}
               placeholder="Enter additional loan amount"
-              min="0"
-              step="100"
+              autoComplete="off"
               required
             />
           </div>

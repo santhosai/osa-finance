@@ -601,13 +601,17 @@ const InvestmentsList = ({ navigateTo }) => {
                     Investment Amount (₹) *
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     name="investmentAmount"
                     value={formData.investmentAmount}
-                    onChange={handleInputChange}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      handleInputChange({ target: { name: 'investmentAmount', value } });
+                    }}
+                    autoComplete="off"
                     required
-                    min="1"
-                    step="1"
                     disabled={loading}
                     style={{
                       width: '100%',
@@ -630,13 +634,17 @@ const InvestmentsList = ({ navigateTo }) => {
                     Return Amount (₹) *
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     name="returnAmount"
                     value={formData.returnAmount}
-                    onChange={handleInputChange}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      handleInputChange({ target: { name: 'returnAmount', value } });
+                    }}
+                    autoComplete="off"
                     required
-                    min="1"
-                    step="1"
                     disabled={loading}
                     style={{
                       width: '100%',
