@@ -334,13 +334,17 @@ Thank you for choosing our service!
           <div className="form-group">
             <label className="form-label">Loan Amount (₹)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               className="form-input"
               value={loanAmount}
-              onChange={(e) => setLoanAmount(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setLoanAmount(value);
+              }}
               placeholder="Enter loan amount"
-              min="1"
-              step="1"
+              autoComplete="off"
               required
             />
           </div>
@@ -349,13 +353,17 @@ Thank you for choosing our service!
             <div className="form-group">
               <label className="form-label">Weekly Payment (₹)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="form-input"
                 value={weeklyAmount}
-                onChange={(e) => setWeeklyAmount(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setWeeklyAmount(value);
+                }}
                 placeholder="Auto-calculated (Loan ÷ 10)"
-                min="1"
-                step="1"
+                autoComplete="off"
               />
               <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
                 Auto-calculated as Loan Amount ÷ 10 weeks (editable)
@@ -367,13 +375,17 @@ Thank you for choosing our service!
             <div className="form-group">
               <label className="form-label">Monthly Payment (₹)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="form-input"
                 value={monthlyAmount}
-                onChange={(e) => setMonthlyAmount(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setMonthlyAmount(value);
+                }}
                 placeholder="Auto-calculated (Loan ÷ 5)"
-                min="1"
-                step="1"
+                autoComplete="off"
               />
               <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
                 Auto-calculated as Loan Amount ÷ 5 months (editable)
