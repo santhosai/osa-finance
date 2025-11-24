@@ -120,38 +120,42 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
             <div className="form-group">
               <label className="form-label">Offline Amount (₹)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="form-input"
                 value={offlineAmount}
-                onChange={(e) => setOfflineAmount(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setOfflineAmount(value);
+                }}
                 placeholder="Enter offline collection"
-                min="0"
-                step="1"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck="false"
                 data-form-type="other"
-                name="offline_amount_unique"
               />
             </div>
 
             <div className="form-group">
               <label className="form-label">Online Amount (₹)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="form-input"
                 value={onlineAmount}
-                onChange={(e) => setOnlineAmount(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setOnlineAmount(value);
+                }}
                 placeholder="Enter online collection"
-                min="0"
-                step="1"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck="false"
                 data-form-type="other"
-                name="online_amount_unique"
               />
             </div>
 
