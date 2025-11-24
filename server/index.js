@@ -583,8 +583,80 @@ app.delete('/api/payments/:id', async (req, res) => {
       status: 'active'
     });
 
-    res.json({ message: 'Payment deleted successfully' });
+    // RECALCULATE week numbers for remaining payments
+    const remainingPaymentsSnapshot = await db.collection('payments')
+      .where('loan_id', '==', paymentData.loan_id)
+      .get();
+
+    // Sort payments by date
+    const paymentsToUpdate = [];
+    remainingPaymentsSnapshot.forEach(doc => {
+      paymentsToUpdate.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    paymentsToUpdate.sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
+
+    // Update each payment with correct sequential period_number
+    const updatePromises = paymentsToUpdate.map((payment, index) => {
+      return db.collection('payments').doc(payment.id).update({
+        period_number: index + 1
+      });
+    });
+
+    await Promise.all(updatePromises);
+
+    res.json({ message: 'Payment deleted and week numbers recalculated successfully' });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Fix all existing payment week numbers (one-time migration)
+app.post('/api/migrate-payment-numbers', async (req, res) => {
+  try {
+    // Get all loans
+    const loansSnapshot = await db.collection('loans').get();
+    let totalFixed = 0;
+
+    for (const loanDoc of loansSnapshot.docs) {
+      const loanId = loanDoc.id;
+
+      // Get all payments for this loan
+      const paymentsSnapshot = await db.collection('payments')
+        .where('loan_id', '==', loanId)
+        .get();
+
+      if (paymentsSnapshot.empty) continue;
+
+      // Sort payments by date
+      const payments = [];
+      paymentsSnapshot.forEach(doc => {
+        payments.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+
+      payments.sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
+
+      // Update each payment with correct sequential period_number
+      for (let i = 0; i < payments.length; i++) {
+        await db.collection('payments').doc(payments[i].id).update({
+          period_number: i + 1
+        });
+        totalFixed++;
+      }
+    }
+
+    res.json({
+      message: 'All payment week numbers recalculated successfully',
+      totalFixed
+    });
+  } catch (error) {
+    console.error('Error migrating payment numbers:', error);
     res.status(500).json({ error: error.message });
   }
 });
