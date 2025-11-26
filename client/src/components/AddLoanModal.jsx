@@ -15,6 +15,7 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
   const [showSuccess, setShowSuccess] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!customerId) {
@@ -111,6 +112,9 @@ Thank you for choosing our service!
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Prevent double submission
+    if (isSubmitting) return;
+
     if (!selectedCustomerId) {
       alert('Please select a customer');
       return;
@@ -134,6 +138,7 @@ Thank you for choosing our service!
       }
     }
 
+    setIsSubmitting(true);
     try {
       const response = await fetch(`${API_URL}/loans`, {
         method: 'POST',
@@ -166,6 +171,8 @@ Thank you for choosing our service!
     } catch (error) {
       console.error('Error creating loan:', error);
       alert('Failed to create loan');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -462,8 +469,17 @@ Thank you for choosing our service!
             </div>
           )}
 
-          <button type="submit" className="btn-primary" style={{ margin: '16px 0' }}>
-            Create Loan
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={isSubmitting}
+            style={{
+              margin: '16px 0',
+              opacity: isSubmitting ? 0.6 : 1,
+              cursor: isSubmitting ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {isSubmitting ? 'Creating...' : 'Create Loan'}
           </button>
         </form>
         )}

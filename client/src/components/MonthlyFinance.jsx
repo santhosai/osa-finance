@@ -12,6 +12,7 @@ const MonthlyFinance = ({ navigateTo }) => {
     phone: ''
   });
   const [showForm, setShowForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Load customers from localStorage on mount
   useEffect(() => {
@@ -52,49 +53,54 @@ const MonthlyFinance = ({ navigateTo }) => {
   const handleAddCustomer = (e) => {
     e.preventDefault();
 
+    // Prevent double submission
+    if (isSubmitting) return;
+
     if (!formData.name || !formData.amount || !formData.date || !formData.monthlyInstallment || !formData.totalMonths) {
       alert('Please fill all fields');
       return;
     }
 
-    const amount = parseFloat(formData.amount);
-    const monthlyInstallment = parseFloat(formData.monthlyInstallment);
-    const totalMonths = parseInt(formData.totalMonths);
+    setIsSubmitting(true);
+    try {
+      const amount = parseFloat(formData.amount);
+      const monthlyInstallment = parseFloat(formData.monthlyInstallment);
+      const totalMonths = parseInt(formData.totalMonths);
 
-    // Generate payment schedule
-    const startDate = new Date(formData.date);
-    const paymentSchedule = [];
+      // Generate payment schedule
+      const startDate = new Date(formData.date);
+      const paymentSchedule = [];
 
-    for (let i = 0; i < totalMonths; i++) {
-      const paymentDate = new Date(startDate);
-      paymentDate.setMonth(startDate.getMonth() + i);
+      for (let i = 0; i < totalMonths; i++) {
+        const paymentDate = new Date(startDate);
+        paymentDate.setMonth(startDate.getMonth() + i);
 
-      paymentSchedule.push({
-        month: i + 1,
-        date: paymentDate.toISOString().split('T')[0],
-        amount: monthlyInstallment,
-        paid: false
-      });
-    }
+        paymentSchedule.push({
+          month: i + 1,
+          date: paymentDate.toISOString().split('T')[0],
+          amount: monthlyInstallment,
+          paid: false
+        });
+      }
 
-    const newCustomer = {
-      id: Date.now(),
-      name: formData.name,
-      phone: formData.phone || '',
-      totalAmount: amount,
-      monthlyInstallment: monthlyInstallment,
-      totalMonths: totalMonths,
-      startDate: formData.date,
-      paymentSchedule: paymentSchedule,
-      balance: amount
-    };
+      const newCustomer = {
+        id: Date.now(),
+        name: formData.name,
+        phone: formData.phone || '',
+        totalAmount: amount,
+        monthlyInstallment: monthlyInstallment,
+        totalMonths: totalMonths,
+        startDate: formData.date,
+        paymentSchedule: paymentSchedule,
+        balance: amount
+      };
 
-    const updatedCustomers = [...customers, newCustomer];
-    saveCustomers(updatedCustomers);
+      const updatedCustomers = [...customers, newCustomer];
+      saveCustomers(updatedCustomers);
 
-    // Send WhatsApp message if phone number provided
-    if (formData.phone) {
-      const message = `HI ${formData.name},
+      // Send WhatsApp message if phone number provided
+      if (formData.phone) {
+        const message = `HI ${formData.name},
 
 You have received a loan of ₹${amount.toLocaleString('en-IN')} from Om Sai Murugan Finance.
 
@@ -106,16 +112,19 @@ Thank you for choosing our service!
 
 - Om Sai Murugan Finance`;
 
-      const cleanPhone = formData.phone.replace(/\D/g, '');
-      const phoneWithCountryCode = `91${cleanPhone}`;
-      const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+        const cleanPhone = formData.phone.replace(/\D/g, '');
+        const phoneWithCountryCode = `91${cleanPhone}`;
+        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
 
-      window.open(whatsappUrl, '_blank');
+        window.open(whatsappUrl, '_blank');
+      }
+
+      // Reset form
+      setFormData({ name: '', amount: '', date: '', monthlyInstallment: '', totalMonths: '5', phone: '' });
+      setShowForm(false);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Reset form
-    setFormData({ name: '', amount: '', date: '', monthlyInstallment: '', totalMonths: '5', phone: '' });
-    setShowForm(false);
   };
 
   // Toggle payment status
@@ -529,17 +538,22 @@ Thank you for choosing our service!
                 fontSize: '14px'
               }}
             />
-            <button type="submit" style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              border: 'none',
-              padding: '12px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '14px'
-            }}>
-              + Add Customer
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none',
+                padding: '12px',
+                borderRadius: '6px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+                fontSize: '14px',
+                opacity: isSubmitting ? 0.6 : 1
+              }}
+            >
+              {isSubmitting ? 'Adding...' : '+ Add Customer'}
             </button>
           </form>
         )}

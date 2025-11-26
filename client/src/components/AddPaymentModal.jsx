@@ -8,6 +8,7 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
   const [paymentMode, setPaymentMode] = useState('cash');
   const [success, setSuccess] = useState(false);
   const [lastPayment, setLastPayment] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const amount = parseInt(offlineAmount || 0) + parseInt(onlineAmount || 0);
 
@@ -23,6 +24,9 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Prevent double submission
+    if (isSubmitting) return;
+
     if (!amount || amount <= 0) {
       alert('Please enter a valid amount');
       return;
@@ -33,6 +37,7 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const response = await fetch(`${API_URL}/payments`, {
         method: 'POST',
@@ -62,6 +67,8 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
     } catch (error) {
       console.error('Error recording payment:', error);
       alert('Failed to record payment');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -206,8 +213,17 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
               </div>
             )}
 
-            <button type="submit" className="btn-primary" style={{ margin: '16px 0' }}>
-              ✓ Record Payment
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={isSubmitting}
+              style={{
+                margin: '16px 0',
+                opacity: isSubmitting ? 0.6 : 1,
+                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isSubmitting ? 'Processing...' : '✓ Record Payment'}
             </button>
           </form>
         ) : (

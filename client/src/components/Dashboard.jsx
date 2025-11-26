@@ -12,9 +12,12 @@ function Dashboard({ navigateTo }) {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showDatabaseMonitorModal, setShowDatabaseMonitorModal] = useState(false);
+  const [showQuickRefModal, setShowQuickRefModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [weeklyPaymentsData, setWeeklyPaymentsData] = useState({ paidLoans: [], unpaidLoans: [], loading: true });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -25,6 +28,19 @@ function Dashboard({ navigateTo }) {
 
   // Fetch customers with loans for the table
   const { data: customers = [], mutate: mutateCustomers } = useSWR(`${API_URL}/customers`, fetcher, {
+    refreshInterval: 30000,
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
+  });
+
+  // Get current month for Vaddi summary
+  const currentMonth = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  })();
+
+  // Fetch Vaddi monthly summary
+  const { data: vaddiSummary = {} } = useSWR(`${API_URL}/vaddi-summary?month=${currentMonth}`, fetcher, {
     refreshInterval: 30000,
     revalidateOnFocus: true,
     dedupingInterval: 2000,
@@ -521,6 +537,125 @@ function Dashboard({ navigateTo }) {
             <h2 style={{ margin: 0, color: 'white', fontSize: '16px', fontWeight: 700 }}>Dashboard</h2>
           </div>
 
+          {/* Search Bar */}
+          <div style={{ position: 'relative', flex: 1, maxWidth: '200px', margin: '0 8px' }}>
+            <input
+              type="text"
+              placeholder="🔍 Search..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setShowSearchResults(e.target.value.length > 0);
+              }}
+              onFocus={() => setShowSearchResults(searchTerm.length > 0)}
+              style={{
+                width: '100%',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '12px',
+                background: 'rgba(255,255,255,0.15)',
+                color: 'white',
+                outline: 'none'
+              }}
+            />
+            {/* Search Results Dropdown */}
+            {showSearchResults && searchTerm.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  background: 'white',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                  zIndex: 1001,
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  marginTop: '4px'
+                }}
+              >
+                {(() => {
+                  const searchLower = searchTerm.toLowerCase();
+                  const results = customers
+                    .filter(customer =>
+                      customer.name.toLowerCase().includes(searchLower) ||
+                      (customer.phone && customer.phone.includes(searchTerm)) ||
+                      (customer.loans && customer.loans.some(loan =>
+                        (loan.loan_name && loan.loan_name.toLowerCase().includes(searchLower))
+                      ))
+                    )
+                    .slice(0, 10);
+
+                  if (results.length === 0) {
+                    return (
+                      <div style={{ padding: '12px', color: '#6b7280', textAlign: 'center', fontSize: '12px' }}>
+                        No results found
+                      </div>
+                    );
+                  }
+
+                  return results.map(customer => (
+                    <div
+                      key={customer.customer_id}
+                      onClick={() => {
+                        setShowSearchResults(false);
+                        setSearchTerm('');
+                        if (customer.loans && customer.loans.length > 0) {
+                          navigateTo('loan-details', customer.loans[0].loan_id);
+                        } else {
+                          navigateTo('customers');
+                        }
+                      }}
+                      style={{
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #f3f4f6',
+                        transition: 'background 0.15s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = '#f0f9ff'}
+                      onMouseOut={(e) => e.currentTarget.style.background = 'white'}
+                    >
+                      <div style={{ fontWeight: 600, fontSize: '12px', color: '#1e293b' }}>
+                        {customer.name}
+                      </div>
+                      {customer.phone && (
+                        <div style={{ fontSize: '10px', color: '#6b7280' }}>
+                          📞 {customer.phone}
+                        </div>
+                      )}
+                      {customer.loans && customer.loans.length > 0 && (
+                        <div style={{ fontSize: '10px', color: '#059669', marginTop: '2px' }}>
+                          {customer.loans.filter(l => l.status === 'active').length} active loan(s)
+                        </div>
+                      )}
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Reference Button */}
+          <button
+            onClick={() => setShowQuickRefModal(true)}
+            style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: 'white',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+            title="Quick Reference - All Customers"
+          >
+            📋 Quick Ref
+          </button>
+
           {/* Database Size Monitor */}
           <div
             style={{
@@ -640,45 +775,63 @@ function Dashboard({ navigateTo }) {
                 </div>
               </div>
 
-              <div
-                onClick={() => setShowPaymentsThisWeekModal(true)}
-                style={{
-                  background: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  boxShadow: '0 2px 6px rgba(4, 120, 87, 0.2)',
-                  color: 'white',
-                  cursor: 'pointer',
-                  transition: 'transform 0.15s ease, box-shadow 0.15s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 120, 87, 0.3)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 2px 6px rgba(4, 120, 87, 0.2)';
-                }}
-              >
-                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>
-                  Payments This Week
-                  <span style={{ marginLeft: '4px', fontSize: '9px', opacity: 0.8 }}>👆 Click</span>
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: 700 }}>{stats.paymentsThisWeek}</div>
-              </div>
-
-              <div style={{
-                background: 'linear-gradient(135deg, #475569 0%, #334155 100%)',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                boxShadow: '0 2px 6px rgba(71, 85, 105, 0.2)',
-                color: 'white'
-              }}>
-                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>Total Customers</div>
-                <div style={{ fontSize: '20px', fontWeight: 700 }}>{stats.totalCustomers}</div>
-              </div>
             </div>
           )}
+
+          {/* Vaddi Monthly Summary Card */}
+          <div
+            onClick={() => navigateTo('vaddi-list')}
+            style={{
+              background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              boxShadow: '0 4px 12px rgba(124, 58, 237, 0.3)',
+              color: 'white',
+              cursor: 'pointer',
+              marginBottom: '10px',
+              transition: 'transform 0.15s, box-shadow 0.15s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(124, 58, 237, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(124, 58, 237, 0.3)';
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, opacity: 0.95 }}>
+                💰 Vaddi - {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </div>
+              <span style={{ fontSize: '10px', opacity: 0.8 }}>Tap to view →</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700 }}>
+                  {formatCurrency(vaddiSummary.totalCollected || 0)}
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Total</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#86efac' }}>
+                  {formatCurrency(vaddiSummary.myProfit || 0)}
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>My Profit</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#fcd34d' }}>
+                  {formatCurrency(vaddiSummary.friendShare || 0)}
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Friend</div>
+              </div>
+            </div>
+            {vaddiSummary.paymentCount > 0 && (
+              <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '11px', opacity: 0.9 }}>
+                {vaddiSummary.paymentCount} payments recorded this month
+              </div>
+            )}
+          </div>
 
           {/* Weekly Payments Table */}
           <div style={{
@@ -768,7 +921,43 @@ function Dashboard({ navigateTo }) {
                 );
               }
 
+              // Calculate totals
+              const paidTotal = paidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
+              const unpaidTotal = unpaidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
+              const grandTotal = paidTotal + unpaidTotal;
+
               return (
+                <div>
+                  {/* Total Summary */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    marginBottom: '10px',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    gap: '10px',
+                    color: 'white'
+                  }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#86efac' }}>
+                        {formatCurrency(paidTotal)}
+                      </div>
+                      <div style={{ fontSize: '10px', opacity: 0.8 }}>Collected</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#fca5a5' }}>
+                        {formatCurrency(unpaidTotal)}
+                      </div>
+                      <div style={{ fontSize: '10px', opacity: 0.8 }}>Pending</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700 }}>
+                        {formatCurrency(grandTotal)}
+                      </div>
+                      <div style={{ fontSize: '10px', opacity: 0.8 }}>Total Due</div>
+                    </div>
+                  </div>
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
@@ -893,6 +1082,7 @@ function Dashboard({ navigateTo }) {
                     </div>
                   </div>
                 </div>
+                </div>
               );
             })()}
           </div>
@@ -923,6 +1113,245 @@ function Dashboard({ navigateTo }) {
           onRefresh={handleRefresh}
         />
       )}
+
+      {showQuickRefModal && (
+        <QuickReferenceModal
+          customers={customers}
+          onClose={() => setShowQuickRefModal(false)}
+          formatCurrency={formatCurrency}
+        />
+      )}
+    </div>
+  );
+}
+
+// Quick Reference Modal Component
+function QuickReferenceModal({ customers, onClose, formatCurrency }) {
+  // Get all customers with active loans
+  const customersWithLoans = customers
+    .filter(customer => customer.loans && customer.loans.length > 0)
+    .flatMap(customer =>
+      customer.loans
+        .filter(loan => loan.status === 'active' && loan.balance > 0)
+        .map(loan => ({
+          name: customer.name,
+          friendName: loan.loan_name || 'General Loan',
+          amountGot: loan.loan_amount,
+          balance: loan.balance
+        }))
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: 'white',
+          borderRadius: '12px',
+          maxWidth: '900px',
+          width: '100%',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: '20px',
+            borderBottom: '2px solid #e5e7eb',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>
+            📋 Quick Reference - All Active Loans
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '28px',
+              cursor: 'pointer',
+              color: '#6b7280',
+              padding: 0,
+              lineHeight: 1
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Table Container */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+          {customersWithLoans.length === 0 ? (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '60px 20px',
+                color: '#6b7280'
+              }}
+            >
+              <div style={{ fontSize: '64px', marginBottom: '16px' }}>📭</div>
+              <div style={{ fontSize: '18px', fontWeight: 600 }}>No Active Loans</div>
+              <div style={{ fontSize: '14px', marginTop: '8px' }}>
+                All loans are either closed or paid off
+              </div>
+            </div>
+          ) : (
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '14px'
+              }}
+            >
+              <thead>
+                <tr style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', color: 'white' }}>
+                  <th
+                    style={{
+                      padding: '12px',
+                      textAlign: 'left',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      borderTopLeftRadius: '8px'
+                    }}
+                  >
+                    Name
+                  </th>
+                  <th
+                    style={{
+                      padding: '12px',
+                      textAlign: 'left',
+                      fontWeight: 700,
+                      fontSize: '13px'
+                    }}
+                  >
+                    Friend Name
+                  </th>
+                  <th
+                    style={{
+                      padding: '12px',
+                      textAlign: 'right',
+                      fontWeight: 700,
+                      fontSize: '13px'
+                    }}
+                  >
+                    Amount Got
+                  </th>
+                  <th
+                    style={{
+                      padding: '12px',
+                      textAlign: 'right',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      borderTopRightRadius: '8px'
+                    }}
+                  >
+                    Balance
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {customersWithLoans.map((row, index) => (
+                  <tr
+                    key={index}
+                    style={{
+                      background: index % 2 === 0 ? '#f9fafb' : 'white',
+                      borderBottom: '1px solid #e5e7eb'
+                    }}
+                  >
+                    <td style={{ padding: '12px', fontWeight: 600, color: '#1e293b' }}>
+                      {row.name}
+                    </td>
+                    <td style={{ padding: '12px', color: '#6b7280' }}>
+                      {row.friendName}
+                    </td>
+                    <td
+                      style={{
+                        padding: '12px',
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        color: '#059669'
+                      }}
+                    >
+                      {formatCurrency(row.amountGot)}
+                    </td>
+                    <td
+                      style={{
+                        padding: '12px',
+                        textAlign: 'right',
+                        fontWeight: 700,
+                        color: row.balance > 5000 ? '#dc2626' : '#f59e0b'
+                      }}
+                    >
+                      {formatCurrency(row.balance)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)' }}>
+                  <td
+                    colSpan="2"
+                    style={{
+                      padding: '12px',
+                      fontWeight: 700,
+                      color: '#1e293b',
+                      fontSize: '15px',
+                      borderBottomLeftRadius: '8px'
+                    }}
+                  >
+                    Total ({customersWithLoans.length} loans)
+                  </td>
+                  <td
+                    style={{
+                      padding: '12px',
+                      textAlign: 'right',
+                      fontWeight: 700,
+                      color: '#059669',
+                      fontSize: '15px'
+                    }}
+                  >
+                    {formatCurrency(customersWithLoans.reduce((sum, row) => sum + row.amountGot, 0))}
+                  </td>
+                  <td
+                    style={{
+                      padding: '12px',
+                      textAlign: 'right',
+                      fontWeight: 700,
+                      color: '#dc2626',
+                      fontSize: '15px',
+                      borderBottomRightRadius: '8px'
+                    }}
+                  >
+                    {formatCurrency(customersWithLoans.reduce((sum, row) => sum + row.balance, 0))}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

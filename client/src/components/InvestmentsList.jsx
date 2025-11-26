@@ -92,6 +92,10 @@ const InvestmentsList = ({ navigateTo }) => {
   // Add new investment
   const handleAddInvestment = async (e) => {
     e.preventDefault();
+
+    // Prevent double submission
+    if (loading) return;
+
     setError('');
 
     if (!formData.investorName || !formData.investmentAmount || !formData.returnAmount ||

@@ -3,6 +3,7 @@ import { API_URL } from '../config';
 
 function TopUpModal({ loan, onClose, onSuccess }) {
   const [topUpAmount, setTopUpAmount] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const newLoanAmount = topUpAmount ? loan.loan_amount + parseInt(topUpAmount) : loan.loan_amount;
   const newBalance = topUpAmount ? loan.balance + parseInt(topUpAmount) : loan.balance;
@@ -12,11 +13,15 @@ function TopUpModal({ loan, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Prevent double submission
+    if (isSubmitting) return;
+
     if (!topUpAmount || parseInt(topUpAmount) <= 0) {
       alert('Please enter a valid top-up amount');
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const response = await fetch(`${API_URL}/loans/${loan.id}/topup`, {
         method: 'POST',
@@ -37,6 +42,8 @@ function TopUpModal({ loan, onClose, onSuccess }) {
     } catch (error) {
       console.error('Error topping up loan:', error);
       alert('Failed to top up loan');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -121,8 +128,17 @@ function TopUpModal({ loan, onClose, onSuccess }) {
             </div>
           )}
 
-          <button type="submit" className="btn-primary" style={{ margin: '16px 0' }}>
-            Confirm Top-up
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={isSubmitting}
+            style={{
+              margin: '16px 0',
+              opacity: isSubmitting ? 0.6 : 1,
+              cursor: isSubmitting ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {isSubmitting ? 'Processing...' : 'Confirm Top-up'}
           </button>
         </form>
       </div>

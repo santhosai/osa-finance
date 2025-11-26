@@ -7,7 +7,13 @@
       "Bash(cmd.exe //c taskkill //F //PID 4104)",
       "Bash(cmd.exe //c taskkill //F //PID 50692)",
       "Bash(npx vercel inspect:*)",
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(node -e:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

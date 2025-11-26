@@ -310,6 +310,10 @@ function AddMonthlyCustomerModal({ formData, setFormData, onClose, onSuccess }) 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Prevent double submission
+    if (loading) return;
+
     setError('');
     setLoading(true);
 
@@ -690,6 +694,9 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
   const monthsPaid = paymentSchedule.filter(p => p.paid).length;
 
   const handlePaymentToggle = async (monthIndex) => {
+    // Prevent double submission
+    if (loading) return;
+
     const payment = paymentSchedule[monthIndex];
 
     if (payment.paid) {

@@ -1207,6 +1207,251 @@ app.delete('/api/vaddi-entries/:id', async (req, res) => {
   }
 });
 
+// ============ VADDI MONTHLY INTEREST PAYMENT ROUTES ============
+
+// Record monthly interest payment for a vaddi entry
+app.post('/api/vaddi-entries/:id/monthly-payment', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { month, totalAmount, myShare, friendShare } = req.body;
+
+    // Validate required fields
+    if (!month || totalAmount === undefined || myShare === undefined || friendShare === undefined) {
+      return res.status(400).json({ error: 'Month, totalAmount, myShare, and friendShare are required' });
+    }
+
+    // Validate the entry exists
+    const entryRef = db.collection('vaddi_entries').doc(id);
+    const entryDoc = await entryRef.get();
+
+    if (!entryDoc.exists) {
+      return res.status(404).json({ error: 'Vaddi entry not found' });
+    }
+
+    const entryData = entryDoc.data();
+
+    // Check if already paid for this month
+    const existingPayment = await db.collection('vaddi_payments')
+      .where('entryId', '==', id)
+      .where('month', '==', month)
+      .get();
+
+    if (!existingPayment.empty) {
+      return res.status(400).json({ error: 'Payment already recorded for this month' });
+    }
+
+    // Create payment record
+    const paymentData = {
+      entryId: id,
+      customerName: entryData.name,
+      month,
+      totalAmount: parseInt(totalAmount),
+      myShare: parseInt(myShare),
+      friendShare: parseInt(friendShare),
+      paidDate: new Date().toISOString().split('T')[0],
+      createdAt: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('vaddi_payments').add(paymentData);
+
+    res.status(201).json({
+      id: docRef.id,
+      ...paymentData
+    });
+  } catch (error) {
+    console.error('Error recording vaddi monthly payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get vaddi payments for a specific month
+app.get('/api/vaddi-payments', async (req, res) => {
+  try {
+    const { month } = req.query;
+
+    if (!month) {
+      return res.status(400).json({ error: 'Month parameter is required (e.g., 2025-11)' });
+    }
+
+    const paymentsSnapshot = await db.collection('vaddi_payments')
+      .where('month', '==', month)
+      .get();
+
+    const payments = [];
+    paymentsSnapshot.forEach(doc => {
+      payments.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    res.json(payments);
+  } catch (error) {
+    console.error('Error fetching vaddi payments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get vaddi monthly summary (totals for a month)
+app.get('/api/vaddi-summary', async (req, res) => {
+  try {
+    const { month } = req.query;
+
+    if (!month) {
+      return res.status(400).json({ error: 'Month parameter is required (e.g., 2025-11)' });
+    }
+
+    const paymentsSnapshot = await db.collection('vaddi_payments')
+      .where('month', '==', month)
+      .get();
+
+    let totalCollected = 0;
+    let totalMyShare = 0;
+    let totalFriendShare = 0;
+    let paymentCount = 0;
+
+    paymentsSnapshot.forEach(doc => {
+      const payment = doc.data();
+      totalCollected += payment.totalAmount || 0;
+      totalMyShare += payment.myShare || 0;
+      totalFriendShare += payment.friendShare || 0;
+      paymentCount++;
+    });
+
+    res.json({
+      month,
+      totalCollected,
+      myProfit: totalMyShare,
+      friendShare: totalFriendShare,
+      paymentCount
+    });
+  } catch (error) {
+    console.error('Error fetching vaddi summary:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all months' vaddi payment history
+app.get('/api/vaddi-history', async (req, res) => {
+  try {
+    const paymentsSnapshot = await db.collection('vaddi_payments').get();
+
+    // Group payments by month
+    const monthsMap = new Map();
+
+    paymentsSnapshot.forEach(doc => {
+      const payment = doc.data();
+      const month = payment.month;
+
+      if (!monthsMap.has(month)) {
+        monthsMap.set(month, {
+          month,
+          totalCollected: 0,
+          myProfit: 0,
+          friendShare: 0,
+          paymentCount: 0
+        });
+      }
+
+      const monthData = monthsMap.get(month);
+      monthData.totalCollected += payment.totalAmount || 0;
+      monthData.myProfit += payment.myShare || 0;
+      monthData.friendShare += payment.friendShare || 0;
+      monthData.paymentCount++;
+    });
+
+    // Convert to array and sort by month (newest first)
+    const history = Array.from(monthsMap.values())
+      .sort((a, b) => b.month.localeCompare(a.month));
+
+    res.json(history);
+  } catch (error) {
+    console.error('Error fetching vaddi history:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark vaddi entry as fully settled (customer closed account)
+app.put('/api/vaddi-entries/:id/settle', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const entryRef = db.collection('vaddi_entries').doc(id);
+    const entryDoc = await entryRef.get();
+
+    if (!entryDoc.exists) {
+      return res.status(404).json({ error: 'Vaddi entry not found' });
+    }
+
+    await entryRef.update({
+      status: 'settled',
+      settledDate: new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString()
+    });
+
+    const updatedDoc = await entryRef.get();
+
+    res.json({
+      id,
+      ...updatedDoc.data()
+    });
+  } catch (error) {
+    console.error('Error settling vaddi entry:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reactivate a settled vaddi entry
+app.put('/api/vaddi-entries/:id/reactivate', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const entryRef = db.collection('vaddi_entries').doc(id);
+    const entryDoc = await entryRef.get();
+
+    if (!entryDoc.exists) {
+      return res.status(404).json({ error: 'Vaddi entry not found' });
+    }
+
+    await entryRef.update({
+      status: 'active',
+      settledDate: null,
+      updatedAt: new Date().toISOString()
+    });
+
+    const updatedDoc = await entryRef.get();
+
+    res.json({
+      id,
+      ...updatedDoc.data()
+    });
+  } catch (error) {
+    console.error('Error reactivating vaddi entry:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a vaddi monthly payment (undo payment)
+app.delete('/api/vaddi-payments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const paymentRef = db.collection('vaddi_payments').doc(id);
+    const paymentDoc = await paymentRef.get();
+
+    if (!paymentDoc.exists) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    await paymentRef.delete();
+
+    res.json({ message: 'Payment deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting vaddi payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ INVESTMENTS TRACKING ROUTES ============
 
 // Get all investments
