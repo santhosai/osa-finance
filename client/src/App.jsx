@@ -18,7 +18,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
-const CURRENT_PASSWORD_VERSION = '2025-01-21-v1';
+const CURRENT_PASSWORD_VERSION = '2025-01-27-v2';
 
 // Wrapper components that use useNavigate
 function DashboardWrapper() {

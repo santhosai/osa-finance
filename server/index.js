@@ -1612,24 +1612,44 @@ app.post('/api/users/register', async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
 
-    // Validate required fields
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Name, email, and password are required' });
+    // Validate required fields - need name, password, and at least email OR phone
+    if (!name || !password) {
+      return res.status(400).json({ error: 'Name and password are required' });
     }
 
-    // Validate email format
+    if (!email && !phone) {
+      return res.status(400).json({ error: 'Please provide either email or mobile number' });
+    }
+
+    // Validate email format if provided
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (email && !emailRegex.test(email)) {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    // Check if email already exists
-    const existingUser = await db.collection('app_users')
-      .where('email', '==', email.toLowerCase())
-      .get();
+    // Validate phone format if provided (10 digits)
+    if (phone && !/^\d{10}$/.test(phone)) {
+      return res.status(400).json({ error: 'Mobile number must be 10 digits' });
+    }
 
-    if (!existingUser.empty) {
-      return res.status(400).json({ error: 'Email already registered. Please wait for admin approval or use a different email.' });
+    // Check if email already exists (if provided)
+    if (email) {
+      const existingEmail = await db.collection('app_users')
+        .where('email', '==', email.toLowerCase())
+        .get();
+      if (!existingEmail.empty) {
+        return res.status(400).json({ error: 'Email already registered. Please wait for admin approval or use a different email.' });
+      }
+    }
+
+    // Check if phone already exists (if provided)
+    if (phone) {
+      const existingPhone = await db.collection('app_users')
+        .where('phone', '==', phone)
+        .get();
+      if (!existingPhone.empty) {
+        return res.status(400).json({ error: 'Mobile number already registered. Please wait for admin approval or use a different number.' });
+      }
     }
 
     // Simple password hash (for basic security - in production use bcrypt)
@@ -1637,7 +1657,7 @@ app.post('/api/users/register', async (req, res) => {
 
     const userData = {
       name,
-      email: email.toLowerCase(),
+      email: email ? email.toLowerCase() : '',
       phone: phone || '',
       password_hash,
       status: 'pending', // pending, approved, rejected
@@ -1647,7 +1667,7 @@ app.post('/api/users/register', async (req, res) => {
 
     const docRef = await db.collection('app_users').add(userData);
 
-    console.log(`✅ New user registered: ${email} (pending approval)`);
+    console.log(`✅ New user registered: ${email || phone} (pending approval)`);
 
     res.status(201).json({
       message: 'Registration successful! Please wait for admin approval.',
@@ -1659,22 +1679,30 @@ app.post('/api/users/register', async (req, res) => {
   }
 });
 
-// User login
+// User login (supports email or phone)
 app.post('/api/users/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, phone, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    if ((!email && !phone) || !password) {
+      return res.status(400).json({ error: 'Email/Mobile and password are required' });
     }
 
-    // Find user by email
-    const usersSnapshot = await db.collection('app_users')
-      .where('email', '==', email.toLowerCase())
-      .get();
+    let usersSnapshot;
 
-    if (usersSnapshot.empty) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+    // Find user by email or phone
+    if (email) {
+      usersSnapshot = await db.collection('app_users')
+        .where('email', '==', email.toLowerCase())
+        .get();
+    } else if (phone) {
+      usersSnapshot = await db.collection('app_users')
+        .where('phone', '==', phone)
+        .get();
+    }
+
+    if (!usersSnapshot || usersSnapshot.empty) {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const userDoc = usersSnapshot.docs[0];
@@ -1683,7 +1711,7 @@ app.post('/api/users/login', async (req, res) => {
     // Check password
     const password_hash = Buffer.from(password).toString('base64');
     if (userData.password_hash !== password_hash) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Check status

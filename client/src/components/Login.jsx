@@ -3,12 +3,13 @@ import { API_URL } from '../config';
 import './Login.css';
 
 // PASSWORD VERSION - Change this when you change password to logout all devices
-const PASSWORD_VERSION = '2025-01-21-v1';
+const PASSWORD_VERSION = '2025-01-27-v2';
 
 function Login({ onLogin }) {
   const [mode, setMode] = useState('login'); // 'login', 'register', 'admin'
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
+  const [loginIdentifier, setLoginIdentifier] = useState(''); // email or phone for login
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -16,11 +17,14 @@ function Login({ onLogin }) {
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Helper to check if a string is likely a phone number
+  const isPhoneNumber = (value) => /^\d{10}$/.test(value);
+
   const handleAdminLogin = (e) => {
     e.preventDefault();
 
     // Admin login with hardcoded credentials
-    if (userId === 'omsairam' && password === 'Omsaimurugan') {
+    if (userId === 'omsairam' && password === 'SAnt@#21') {
       // Store password version and admin flag
       localStorage.setItem('passwordVersion', PASSWORD_VERSION);
       localStorage.setItem('userRole', 'admin');
@@ -38,10 +42,15 @@ function Login({ onLogin }) {
     setIsLoading(true);
 
     try {
+      // Determine if loginIdentifier is email or phone
+      const loginData = isPhoneNumber(loginIdentifier)
+        ? { phone: loginIdentifier, password }
+        : { email: loginIdentifier, password };
+
       const response = await fetch(`${API_URL}/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(loginData)
       });
 
       const data = await response.json();
@@ -72,8 +81,22 @@ function Login({ onLogin }) {
     setSuccess('');
     setIsLoading(true);
 
+    // Validate at least email or phone is provided
+    if (!email && !phone) {
+      setError('Please provide either Email or Mobile number');
+      setIsLoading(false);
+      return;
+    }
+
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate phone format if provided
+    if (phone && !isPhoneNumber(phone)) {
+      setError('Mobile number must be 10 digits');
       setIsLoading(false);
       return;
     }
@@ -82,7 +105,7 @@ function Login({ onLogin }) {
       const response = await fetch(`${API_URL}/users/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone, password })
+        body: JSON.stringify({ name, email: email || '', phone: phone || '', password })
       });
 
       const data = await response.json();
@@ -151,13 +174,13 @@ function Login({ onLogin }) {
         {mode === 'login' && (
           <form onSubmit={handleUserLogin} className="login-form">
             <div className="form-group">
-              <label className="login-label">Email</label>
+              <label className="login-label">Email or Mobile</label>
               <input
-                type="email"
+                type="text"
                 className="login-input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
+                value={loginIdentifier}
+                onChange={(e) => setLoginIdentifier(e.target.value)}
+                placeholder="Enter email or 10-digit mobile"
                 required
                 disabled={isLoading}
               />
@@ -281,27 +304,38 @@ function Login({ onLogin }) {
               />
             </div>
 
+            <div style={{
+              padding: '8px 12px',
+              background: '#e0e7ff',
+              borderRadius: '6px',
+              fontSize: '12px',
+              color: '#4338ca',
+              marginBottom: '12px',
+              textAlign: 'center'
+            }}>
+              Provide either Email or Mobile (at least one required)
+            </div>
+
             <div className="form-group">
-              <label className="login-label">Email *</label>
+              <label className="login-label">Email</label>
               <input
                 type="email"
                 className="login-input"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
-                required
                 disabled={isLoading}
               />
             </div>
 
             <div className="form-group">
-              <label className="login-label">Phone (Optional)</label>
+              <label className="login-label">Mobile Number</label>
               <input
                 type="tel"
                 className="login-input"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Enter phone number"
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                placeholder="Enter 10-digit mobile"
                 maxLength="10"
                 disabled={isLoading}
               />
