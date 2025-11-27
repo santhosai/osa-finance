@@ -1,0 +1,42 @@
+{
+  "name": "Om Sai Murugan Finance",
+  "short_name": "OSM Finance",
+  "description": "Finance Management System for Om Sai Murugan Finance",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e293b",
+  "theme_color": "#667eea",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["finance", "business"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "description": "View Dashboard"
+    },
+    {
+      "name": "Customers",
+      "url": "/customers",
+      "description": "View Customers"
+    },
+    {
+      "name": "Vaddi List",
+      "url": "/vaddi-list",
+      "description": "View Vaddi List"
+    }
+  ]
+}

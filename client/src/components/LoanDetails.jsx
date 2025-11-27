@@ -129,6 +129,31 @@ function LoanDetails({ loanId, navigateTo }) {
     }
   };
 
+  const archiveLoan = async () => {
+    const confirmed = window.confirm(
+      `Archive this loan?\n\nThis will move the loan and all payment history to the archive.\n\n• Customer: ${loan.customer_name}\n• Amount: ₹${loan.loan_amount.toLocaleString('en-IN')}\n• Payments: ${loan.payments.length}\n\nYou can restore it later from the Archive section.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`${API_URL}/loans/${loan.id}/archive`, {
+        method: 'POST'
+      });
+
+      if (response.ok) {
+        alert('Loan archived successfully! You can find it in the Archive section.');
+        navigateTo('customers');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to archive loan');
+      }
+    } catch (error) {
+      console.error('Error archiving loan:', error);
+      alert('Failed to archive loan');
+    }
+  };
+
   const downloadPaymentHistory = () => {
     const loanType = loan.loan_type || 'Weekly';
     const periodLabel = loanType === 'Weekly' ? 'Week' : 'Month';
@@ -426,6 +451,35 @@ function LoanDetails({ loanId, navigateTo }) {
             onMouseOut={(e) => e.target.style.background = '#dc2626'}
           >
             ✓ Close Loan
+          </button>
+        )}
+
+        {loan.status === 'closed' && (
+          <button
+            onClick={archiveLoan}
+            style={{
+              flex: 1,
+              minWidth: '140px',
+              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              color: 'white',
+              border: 'none',
+              padding: '12px 20px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.background = 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)';
+              e.target.style.transform = 'translateY(-2px)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.background = 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)';
+              e.target.style.transform = 'translateY(0)';
+            }}
+          >
+            📦 Archive Loan
           </button>
         )}
       </div>

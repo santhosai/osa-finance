@@ -12,6 +12,8 @@ import OverduePayments from './components/OverduePayments';
 import MonthlyFinanceView from './components/MonthlyFinanceView';
 import WeeklyFinanceView from './components/WeeklyFinanceView';
 import InvestmentsList from './components/InvestmentsList';
+import ArchivedLoans from './components/ArchivedLoans';
+import UserManagement from './components/UserManagement';
 import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
@@ -80,6 +82,16 @@ function InvestmentsListWrapper() {
   return <InvestmentsList navigateTo={(path) => navigate(`/${path}`)} />;
 }
 
+function ArchivedLoansWrapper() {
+  const navigate = useNavigate();
+  return <ArchivedLoans navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+function UserManagementWrapper() {
+  const navigate = useNavigate();
+  return <UserManagement navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     // Check localStorage for existing login session
@@ -127,6 +139,8 @@ function App() {
           <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
           <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
           <Route path="/investments" element={<InvestmentsListWrapper />} />
+          <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
+          <Route path="/user-management" element={<UserManagementWrapper />} />
         </Routes>
       </div>
     </BrowserRouter>

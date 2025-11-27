@@ -6,10 +6,190 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <title>Om Sai Ayyanar Finance</title>
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#667eea" />
+    <meta name="description" content="Om Sai Murugan Finance - Finance Management System" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/icon-192.svg" />
+
+    <title>Om Sai Murugan Finance</title>
+
+    <style>
+      /* Offline indicator styles */
+      .offline-indicator {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #dc2626;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        z-index: 9999;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      }
+      .offline-indicator.show {
+        display: block;
+        animation: slideUp 0.3s ease-out;
+      }
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateX(-50%) translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(-50%) translateY(0);
+        }
+      }
+
+      /* Install prompt styles */
+      .install-prompt {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 16px;
+        display: none;
+        z-index: 9998;
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.2);
+      }
+      .install-prompt.show {
+        display: block;
+        animation: slideUp 0.3s ease-out;
+      }
+      .install-prompt-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      .install-prompt-text {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .install-prompt-buttons {
+        display: flex;
+        gap: 10px;
+      }
+      .install-btn {
+        background: white;
+        color: #667eea;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .dismiss-btn {
+        background: rgba(255,255,255,0.2);
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- Offline Indicator -->
+    <div id="offline-indicator" class="offline-indicator">
+      You are offline
+    </div>
+
+    <!-- Install Prompt -->
+    <div id="install-prompt" class="install-prompt">
+      <div class="install-prompt-content">
+        <div class="install-prompt-text">
+          Install OSM Finance for quick access
+        </div>
+        <div class="install-prompt-buttons">
+          <button class="install-btn" id="install-btn">Install</button>
+          <button class="dismiss-btn" id="dismiss-btn">Later</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.jsx"></script>
+
+    <script>
+      // Register Service Worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('SW registered:', registration.scope);
+            })
+            .catch((error) => {
+              console.log('SW registration failed:', error);
+            });
+        });
+      }
+
+      // Offline/Online detection
+      const offlineIndicator = document.getElementById('offline-indicator');
+
+      function updateOnlineStatus() {
+        if (!navigator.onLine) {
+          offlineIndicator.classList.add('show');
+        } else {
+          offlineIndicator.classList.remove('show');
+        }
+      }
+
+      window.addEventListener('online', updateOnlineStatus);
+      window.addEventListener('offline', updateOnlineStatus);
+      updateOnlineStatus();
+
+      // PWA Install Prompt
+      let deferredPrompt;
+      const installPrompt = document.getElementById('install-prompt');
+      const installBtn = document.getElementById('install-btn');
+      const dismissBtn = document.getElementById('dismiss-btn');
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+
+        // Check if user hasn't dismissed before
+        if (!localStorage.getItem('pwa-install-dismissed')) {
+          installPrompt.classList.add('show');
+        }
+      });
+
+      installBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          console.log('Install prompt outcome:', outcome);
+          deferredPrompt = null;
+        }
+        installPrompt.classList.remove('show');
+      });
+
+      dismissBtn.addEventListener('click', () => {
+        installPrompt.classList.remove('show');
+        localStorage.setItem('pwa-install-dismissed', 'true');
+      });
+
+      window.addEventListener('appinstalled', () => {
+        console.log('PWA installed');
+        installPrompt.classList.remove('show');
+        deferredPrompt = null;
+      });
+    </script>
   </body>
 </html>

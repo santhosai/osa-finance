@@ -1577,6 +1577,440 @@ app.delete('/api/investments/:id', async (req, res) => {
   }
 });
 
+// ============ USER MANAGEMENT ROUTES ============
+
+// ADMIN PASSWORD (same as login) - for admin operations
+const ADMIN_PASSWORD = 'Omsaimurugan';
+
+// Get all users (for admin)
+app.get('/api/users', async (req, res) => {
+  try {
+    const usersSnapshot = await db.collection('app_users')
+      .orderBy('created_at', 'desc')
+      .get();
+
+    const users = [];
+    usersSnapshot.forEach(doc => {
+      const data = doc.data();
+      // Don't send password hash to client
+      const { password_hash, ...userData } = data;
+      users.push({
+        id: doc.id,
+        ...userData
+      });
+    });
+
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Register new user (sign up)
+app.post('/api/users/register', async (req, res) => {
+  try {
+    const { name, email, phone, password } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Check if email already exists
+    const existingUser = await db.collection('app_users')
+      .where('email', '==', email.toLowerCase())
+      .get();
+
+    if (!existingUser.empty) {
+      return res.status(400).json({ error: 'Email already registered. Please wait for admin approval or use a different email.' });
+    }
+
+    // Simple password hash (for basic security - in production use bcrypt)
+    const password_hash = Buffer.from(password).toString('base64');
+
+    const userData = {
+      name,
+      email: email.toLowerCase(),
+      phone: phone || '',
+      password_hash,
+      status: 'pending', // pending, approved, rejected
+      role: 'user', // admin, user
+      created_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('app_users').add(userData);
+
+    console.log(`✅ New user registered: ${email} (pending approval)`);
+
+    res.status(201).json({
+      message: 'Registration successful! Please wait for admin approval.',
+      user_id: docRef.id
+    });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// User login
+app.post('/api/users/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user by email
+    const usersSnapshot = await db.collection('app_users')
+      .where('email', '==', email.toLowerCase())
+      .get();
+
+    if (usersSnapshot.empty) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const userDoc = usersSnapshot.docs[0];
+    const userData = userDoc.data();
+
+    // Check password
+    const password_hash = Buffer.from(password).toString('base64');
+    if (userData.password_hash !== password_hash) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Check status
+    if (userData.status === 'pending') {
+      return res.status(403).json({
+        error: 'Your account is pending approval. Please wait for admin to approve your access.',
+        status: 'pending'
+      });
+    }
+
+    if (userData.status === 'rejected') {
+      return res.status(403).json({
+        error: 'Your account has been rejected. Please contact admin.',
+        status: 'rejected'
+      });
+    }
+
+    // Update last login
+    await db.collection('app_users').doc(userDoc.id).update({
+      last_login: new Date().toISOString()
+    });
+
+    // Return user data (without password hash)
+    const { password_hash: _, ...userDataWithoutPassword } = userData;
+
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: userDoc.id,
+        ...userDataWithoutPassword
+      }
+    });
+  } catch (error) {
+    console.error('Error logging in:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Approve user (admin only)
+app.put('/api/users/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { admin_password } = req.body;
+
+    // Verify admin password
+    if (admin_password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Invalid admin password' });
+    }
+
+    const userRef = db.collection('app_users').doc(id);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await userRef.update({
+      status: 'approved',
+      approved_at: new Date().toISOString()
+    });
+
+    console.log(`✅ User approved: ${userDoc.data().email}`);
+
+    res.json({ message: 'User approved successfully' });
+  } catch (error) {
+    console.error('Error approving user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reject user (admin only)
+app.put('/api/users/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { admin_password } = req.body;
+
+    // Verify admin password
+    if (admin_password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Invalid admin password' });
+    }
+
+    const userRef = db.collection('app_users').doc(id);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await userRef.update({
+      status: 'rejected',
+      rejected_at: new Date().toISOString()
+    });
+
+    console.log(`❌ User rejected: ${userDoc.data().email}`);
+
+    res.json({ message: 'User rejected' });
+  } catch (error) {
+    console.error('Error rejecting user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete user (admin only)
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { admin_password } = req.body;
+
+    // Verify admin password
+    if (admin_password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Invalid admin password' });
+    }
+
+    const userRef = db.collection('app_users').doc(id);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await userRef.delete();
+
+    console.log(`🗑️ User deleted: ${userDoc.data().email}`);
+
+    res.json({ message: 'User deleted' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ DATA ARCHIVING ROUTES ============
+
+// Archive a closed loan (move to archived_loans collection)
+app.post('/api/loans/:id/archive', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get the loan
+    const loanDoc = await db.collection('loans').doc(id).get();
+
+    if (!loanDoc.exists) {
+      return res.status(404).json({ error: 'Loan not found' });
+    }
+
+    const loanData = loanDoc.data();
+
+    // Only allow archiving closed loans
+    if (loanData.status !== 'closed') {
+      return res.status(400).json({ error: 'Only closed loans can be archived' });
+    }
+
+    // Get customer data
+    const customerDoc = await db.collection('customers').doc(loanData.customer_id).get();
+    const customerData = customerDoc.exists ? customerDoc.data() : { name: 'Unknown', phone: '' };
+
+    // Get all payments for this loan
+    const paymentsSnapshot = await db.collection('payments')
+      .where('loan_id', '==', id)
+      .get();
+
+    const payments = [];
+    paymentsSnapshot.forEach(doc => {
+      payments.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    // Create archived loan document with all data
+    const archivedLoanData = {
+      ...loanData,
+      original_loan_id: id,
+      customer_name: customerData.name,
+      customer_phone: customerData.phone,
+      payments: payments,
+      total_payments: payments.length,
+      total_paid: loanData.loan_amount - loanData.balance,
+      archived_at: new Date().toISOString()
+    };
+
+    // Add to archived_loans collection
+    const archivedRef = await db.collection('archived_loans').add(archivedLoanData);
+
+    // Delete original payments
+    for (const paymentDoc of paymentsSnapshot.docs) {
+      await paymentDoc.ref.delete();
+    }
+
+    // Delete original loan
+    await db.collection('loans').doc(id).delete();
+
+    console.log(`✅ Loan ${id} archived successfully as ${archivedRef.id}`);
+
+    res.json({
+      message: 'Loan archived successfully',
+      archived_id: archivedRef.id,
+      original_loan_id: id
+    });
+  } catch (error) {
+    console.error('Error archiving loan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all archived loans
+app.get('/api/archived-loans', async (req, res) => {
+  try {
+    const archivedSnapshot = await db.collection('archived_loans')
+      .orderBy('archived_at', 'desc')
+      .get();
+
+    const archivedLoans = [];
+    archivedSnapshot.forEach(doc => {
+      archivedLoans.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    res.json(archivedLoans);
+  } catch (error) {
+    console.error('Error fetching archived loans:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single archived loan by ID
+app.get('/api/archived-loans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const archivedDoc = await db.collection('archived_loans').doc(id).get();
+
+    if (!archivedDoc.exists) {
+      return res.status(404).json({ error: 'Archived loan not found' });
+    }
+
+    res.json({
+      id: archivedDoc.id,
+      ...archivedDoc.data()
+    });
+  } catch (error) {
+    console.error('Error fetching archived loan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Restore an archived loan (move back to active loans collection)
+app.post('/api/archived-loans/:id/restore', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get the archived loan
+    const archivedDoc = await db.collection('archived_loans').doc(id).get();
+
+    if (!archivedDoc.exists) {
+      return res.status(404).json({ error: 'Archived loan not found' });
+    }
+
+    const archivedData = archivedDoc.data();
+    const payments = archivedData.payments || [];
+
+    // Create loan document (without archived fields)
+    const loanData = {
+      customer_id: archivedData.customer_id,
+      loan_name: archivedData.loan_name,
+      loan_type: archivedData.loan_type,
+      loan_amount: archivedData.loan_amount,
+      weekly_amount: archivedData.weekly_amount || 0,
+      monthly_amount: archivedData.monthly_amount || 0,
+      balance: archivedData.balance,
+      loan_given_date: archivedData.loan_given_date,
+      start_date: archivedData.start_date,
+      status: archivedData.status,
+      created_at: archivedData.created_at,
+      restored_at: new Date().toISOString()
+    };
+
+    // Add loan back to loans collection
+    const loanRef = await db.collection('loans').add(loanData);
+    const newLoanId = loanRef.id;
+
+    // Restore all payments
+    for (const payment of payments) {
+      const { id: oldPaymentId, ...paymentData } = payment;
+      await db.collection('payments').add({
+        ...paymentData,
+        loan_id: newLoanId
+      });
+    }
+
+    // Delete archived loan
+    await db.collection('archived_loans').doc(id).delete();
+
+    console.log(`✅ Archived loan ${id} restored as ${newLoanId}`);
+
+    res.json({
+      message: 'Loan restored successfully',
+      loan_id: newLoanId,
+      archived_id: id
+    });
+  } catch (error) {
+    console.error('Error restoring loan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete archived loan permanently
+app.delete('/api/archived-loans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const archivedDoc = await db.collection('archived_loans').doc(id).get();
+
+    if (!archivedDoc.exists) {
+      return res.status(404).json({ error: 'Archived loan not found' });
+    }
+
+    await db.collection('archived_loans').doc(id).delete();
+
+    res.json({ message: 'Archived loan deleted permanently' });
+  } catch (error) {
+    console.error('Error deleting archived loan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
