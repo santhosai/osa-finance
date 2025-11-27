@@ -14,6 +14,7 @@ import WeeklyFinanceView from './components/WeeklyFinanceView';
 import InvestmentsList from './components/InvestmentsList';
 import ArchivedLoans from './components/ArchivedLoans';
 import UserManagement from './components/UserManagement';
+import DailyFinance from './components/DailyFinance';
 import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
@@ -92,6 +93,11 @@ function UserManagementWrapper() {
   return <UserManagement navigateTo={(path) => navigate(`/${path}`)} />;
 }
 
+function DailyFinanceWrapper() {
+  const navigate = useNavigate();
+  return <DailyFinance navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     // Check localStorage for existing login session
@@ -140,6 +146,7 @@ function App() {
           <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
           <Route path="/investments" element={<InvestmentsListWrapper />} />
           <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
+          <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
           <Route path="/user-management" element={<UserManagementWrapper />} />
         </Routes>
       </div>

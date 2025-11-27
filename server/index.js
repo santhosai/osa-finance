@@ -2039,6 +2039,492 @@ app.delete('/api/archived-loans/:id', async (req, res) => {
   }
 });
 
+// ============ DAILY FINANCE ROUTES ============
+// Separate system for daily loans (100 days, 1% daily)
+// Logic: Customer asks ₹10,000 → Give ₹9,000 → Pay ₹100/day × 100 days
+
+// Get all daily customers with their loans
+app.get('/api/daily-customers', async (req, res) => {
+  try {
+    const customersSnapshot = await db.collection('daily_customers').get();
+    const customers = [];
+
+    for (const doc of customersSnapshot.docs) {
+      const customerData = { id: doc.id, ...doc.data() };
+
+      // Get active loans for this customer
+      const loansSnapshot = await db.collection('daily_loans')
+        .where('customer_id', '==', doc.id)
+        .where('status', '==', 'active')
+        .get();
+
+      const loans = [];
+      let totalOutstanding = 0;
+
+      for (const loanDoc of loansSnapshot.docs) {
+        const loanData = loanDoc.data();
+        loans.push({
+          id: loanDoc.id,
+          ...loanData
+        });
+        totalOutstanding += loanData.balance || 0;
+      }
+
+      customers.push({
+        ...customerData,
+        loans,
+        total_loans: loans.length,
+        total_outstanding: totalOutstanding
+      });
+    }
+
+    customers.sort((a, b) => a.name.localeCompare(b.name));
+    res.json(customers);
+  } catch (error) {
+    console.error('Error fetching daily customers:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create daily customer
+app.post('/api/daily-customers', async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+
+    if (!name || !phone) {
+      return res.status(400).json({ error: 'Name and phone are required' });
+    }
+
+    const customerData = {
+      name,
+      phone,
+      created_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('daily_customers').add(customerData);
+    res.status(201).json({ id: docRef.id, ...customerData });
+  } catch (error) {
+    console.error('Error creating daily customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single daily customer with loans
+app.get('/api/daily-customers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const customerDoc = await db.collection('daily_customers').doc(id).get();
+
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customerData = { id: customerDoc.id, ...customerDoc.data() };
+
+    // Get all loans for this customer
+    const loansSnapshot = await db.collection('daily_loans')
+      .where('customer_id', '==', id)
+      .get();
+
+    const loans = [];
+    for (const loanDoc of loansSnapshot.docs) {
+      const loanData = loanDoc.data();
+
+      // Get payments for this loan
+      const paymentsSnapshot = await db.collection('daily_payments')
+        .where('loan_id', '==', loanDoc.id)
+        .get();
+
+      const payments = paymentsSnapshot.docs.map(p => ({ id: p.id, ...p.data() }));
+      payments.sort((a, b) => a.day_number - b.day_number);
+
+      loans.push({
+        id: loanDoc.id,
+        ...loanData,
+        payments,
+        days_paid: payments.length
+      });
+    }
+
+    res.json({ ...customerData, loans });
+  } catch (error) {
+    console.error('Error fetching daily customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update daily customer
+app.put('/api/daily-customers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, phone } = req.body;
+
+    await db.collection('daily_customers').doc(id).update({ name, phone });
+    const doc = await db.collection('daily_customers').doc(id).get();
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (error) {
+    console.error('Error updating daily customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete daily customer
+app.delete('/api/daily-customers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Delete all loans and payments for this customer
+    const loansSnapshot = await db.collection('daily_loans')
+      .where('customer_id', '==', id)
+      .get();
+
+    for (const loanDoc of loansSnapshot.docs) {
+      // Delete payments
+      const paymentsSnapshot = await db.collection('daily_payments')
+        .where('loan_id', '==', loanDoc.id)
+        .get();
+      for (const paymentDoc of paymentsSnapshot.docs) {
+        await paymentDoc.ref.delete();
+      }
+      // Delete loan
+      await loanDoc.ref.delete();
+    }
+
+    // Delete customer
+    await db.collection('daily_customers').doc(id).delete();
+    res.json({ message: 'Daily customer deleted' });
+  } catch (error) {
+    console.error('Error deleting daily customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create daily loan
+app.post('/api/daily-loans', async (req, res) => {
+  try {
+    const { customer_id, asked_amount, start_date } = req.body;
+
+    if (!customer_id || !asked_amount) {
+      return res.status(400).json({ error: 'Customer ID and asked amount are required' });
+    }
+
+    // Calculate: Give 90%, daily payment = asked/100
+    const given_amount = Math.floor(asked_amount * 0.9);
+    const daily_amount = Math.floor(asked_amount / 100);
+    const total_days = 100;
+
+    const loanData = {
+      customer_id,
+      asked_amount: Number(asked_amount),
+      given_amount,
+      daily_amount,
+      total_days,
+      balance: Number(asked_amount), // Total to be collected
+      start_date: start_date || new Date().toISOString().split('T')[0],
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('daily_loans').add(loanData);
+
+    // Get customer name for response
+    const customerDoc = await db.collection('daily_customers').doc(customer_id).get();
+    const customerName = customerDoc.exists ? customerDoc.data().name : 'Unknown';
+
+    res.status(201).json({
+      id: docRef.id,
+      ...loanData,
+      customer_name: customerName
+    });
+  } catch (error) {
+    console.error('Error creating daily loan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single daily loan with payments
+app.get('/api/daily-loans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const loanDoc = await db.collection('daily_loans').doc(id).get();
+
+    if (!loanDoc.exists) {
+      return res.status(404).json({ error: 'Loan not found' });
+    }
+
+    const loanData = { id: loanDoc.id, ...loanDoc.data() };
+
+    // Get customer info
+    const customerDoc = await db.collection('daily_customers').doc(loanData.customer_id).get();
+    if (customerDoc.exists) {
+      loanData.customer_name = customerDoc.data().name;
+      loanData.customer_phone = customerDoc.data().phone;
+    }
+
+    // Get payments
+    const paymentsSnapshot = await db.collection('daily_payments')
+      .where('loan_id', '==', id)
+      .get();
+
+    const payments = paymentsSnapshot.docs.map(p => ({ id: p.id, ...p.data() }));
+    payments.sort((a, b) => a.day_number - b.day_number);
+
+    loanData.payments = payments;
+    loanData.days_paid = payments.length;
+
+    res.json(loanData);
+  } catch (error) {
+    console.error('Error fetching daily loan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Record daily payment
+app.post('/api/daily-payments', async (req, res) => {
+  try {
+    const { loan_id, amount, payment_date } = req.body;
+
+    if (!loan_id) {
+      return res.status(400).json({ error: 'Loan ID is required' });
+    }
+
+    // Get loan
+    const loanRef = db.collection('daily_loans').doc(loan_id);
+    const loanDoc = await loanRef.get();
+
+    if (!loanDoc.exists) {
+      return res.status(404).json({ error: 'Loan not found' });
+    }
+
+    const loanData = loanDoc.data();
+
+    // Count existing payments to determine day number
+    const paymentsSnapshot = await db.collection('daily_payments')
+      .where('loan_id', '==', loan_id)
+      .get();
+
+    const day_number = paymentsSnapshot.size + 1;
+    const paymentAmount = amount || loanData.daily_amount;
+
+    const paymentData = {
+      loan_id,
+      day_number,
+      amount: Number(paymentAmount),
+      payment_date: payment_date || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    };
+
+    const paymentRef = await db.collection('daily_payments').add(paymentData);
+
+    // Update loan balance
+    const newBalance = loanData.balance - paymentAmount;
+    const updateData = { balance: newBalance };
+
+    // Close loan if fully paid
+    if (newBalance <= 0 || day_number >= loanData.total_days) {
+      updateData.status = 'closed';
+      updateData.closed_at = new Date().toISOString();
+    }
+
+    await loanRef.update(updateData);
+
+    res.status(201).json({
+      id: paymentRef.id,
+      ...paymentData,
+      new_balance: newBalance,
+      loan_status: newBalance <= 0 ? 'closed' : 'active'
+    });
+  } catch (error) {
+    console.error('Error recording daily payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete daily payment
+app.delete('/api/daily-payments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const paymentDoc = await db.collection('daily_payments').doc(id).get();
+    if (!paymentDoc.exists) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    const paymentData = paymentDoc.data();
+
+    // Update loan balance (add back the payment amount)
+    const loanRef = db.collection('daily_loans').doc(paymentData.loan_id);
+    const loanDoc = await loanRef.get();
+
+    if (loanDoc.exists) {
+      const loanData = loanDoc.data();
+      await loanRef.update({
+        balance: loanData.balance + paymentData.amount,
+        status: 'active' // Reopen if was closed
+      });
+    }
+
+    // Delete payment
+    await db.collection('daily_payments').doc(id).delete();
+
+    res.json({ message: 'Payment deleted' });
+  } catch (error) {
+    console.error('Error deleting daily payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get daily collections for a specific date (who should pay today)
+app.get('/api/daily-collections/:date', async (req, res) => {
+  try {
+    const { date } = req.params; // YYYY-MM-DD format
+
+    // Get all active daily loans
+    const loansSnapshot = await db.collection('daily_loans')
+      .where('status', '==', 'active')
+      .get();
+
+    const collections = [];
+
+    for (const loanDoc of loansSnapshot.docs) {
+      const loanData = loanDoc.data();
+      const startDate = new Date(loanData.start_date);
+      const targetDate = new Date(date);
+
+      // Calculate day number for target date
+      const diffTime = targetDate - startDate;
+      const dayNumber = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+      // Only include if within the 100 day period
+      if (dayNumber >= 1 && dayNumber <= loanData.total_days) {
+        // Check if payment already made for this day
+        const paymentsSnapshot = await db.collection('daily_payments')
+          .where('loan_id', '==', loanDoc.id)
+          .where('day_number', '==', dayNumber)
+          .get();
+
+        const isPaid = !paymentsSnapshot.empty;
+
+        // Get customer info
+        const customerDoc = await db.collection('daily_customers').doc(loanData.customer_id).get();
+        const customerData = customerDoc.exists ? customerDoc.data() : {};
+
+        collections.push({
+          loan_id: loanDoc.id,
+          customer_id: loanData.customer_id,
+          customer_name: customerData.name || 'Unknown',
+          customer_phone: customerData.phone || '',
+          asked_amount: loanData.asked_amount,
+          daily_amount: loanData.daily_amount,
+          day_number: dayNumber,
+          is_paid: isPaid,
+          balance: loanData.balance,
+          start_date: loanData.start_date
+        });
+      }
+    }
+
+    // Sort by customer name
+    collections.sort((a, b) => a.customer_name.localeCompare(b.customer_name));
+
+    res.json(collections);
+  } catch (error) {
+    console.error('Error fetching daily collections:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get daily finance summary
+app.get('/api/daily-summary', async (req, res) => {
+  try {
+    // Get all daily loans
+    const loansSnapshot = await db.collection('daily_loans').get();
+
+    let totalGiven = 0;
+    let totalOutstanding = 0;
+    let activeLoans = 0;
+    let closedLoans = 0;
+
+    loansSnapshot.forEach(doc => {
+      const loan = doc.data();
+      totalGiven += loan.given_amount || 0;
+
+      if (loan.status === 'active') {
+        totalOutstanding += loan.balance || 0;
+        activeLoans++;
+      } else {
+        closedLoans++;
+      }
+    });
+
+    // Get today's collections
+    const today = new Date().toISOString().split('T')[0];
+    const activeLoansSnapshot = await db.collection('daily_loans')
+      .where('status', '==', 'active')
+      .get();
+
+    let todayExpected = 0;
+    let todayCollected = 0;
+
+    for (const loanDoc of activeLoansSnapshot.docs) {
+      const loanData = loanDoc.data();
+      const startDate = new Date(loanData.start_date);
+      const todayDate = new Date(today);
+      const dayNumber = Math.floor((todayDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+      if (dayNumber >= 1 && dayNumber <= loanData.total_days) {
+        todayExpected += loanData.daily_amount;
+
+        // Check if paid today
+        const paymentsSnapshot = await db.collection('daily_payments')
+          .where('loan_id', '==', loanDoc.id)
+          .where('payment_date', '==', today)
+          .get();
+
+        paymentsSnapshot.forEach(p => {
+          todayCollected += p.data().amount || 0;
+        });
+      }
+    }
+
+    res.json({
+      total_given: totalGiven,
+      total_outstanding: totalOutstanding,
+      active_loans: activeLoans,
+      closed_loans: closedLoans,
+      today_expected: todayExpected,
+      today_collected: todayCollected
+    });
+  } catch (error) {
+    console.error('Error fetching daily summary:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Close daily loan manually
+app.put('/api/daily-loans/:id/close', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const loanRef = db.collection('daily_loans').doc(id);
+    const loanDoc = await loanRef.get();
+
+    if (!loanDoc.exists) {
+      return res.status(404).json({ error: 'Loan not found' });
+    }
+
+    await loanRef.update({
+      status: 'closed',
+      closed_at: new Date().toISOString()
+    });
+
+    res.json({ message: 'Loan closed successfully' });
+  } catch (error) {
+    console.error('Error closing daily loan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

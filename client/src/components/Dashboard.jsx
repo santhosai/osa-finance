@@ -46,6 +46,13 @@ function Dashboard({ navigateTo }) {
     dedupingInterval: 2000,
   });
 
+  // Fetch Daily Finance summary
+  const { data: dailySummary = {} } = useSWR(`${API_URL}/daily-summary`, fetcher, {
+    refreshInterval: 30000,
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
+  });
+
   // Fetch weekly payments data when selectedDate or customers change
   useEffect(() => {
     const fetchWeeklyPayments = async () => {
@@ -446,6 +453,26 @@ function Dashboard({ navigateTo }) {
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
             💰 Monthly Finance
+          </button>
+
+          <button
+            onClick={() => { setShowSidebar(false); navigateTo('daily-finance'); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'transparent',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#334155'}
+            onMouseOut={(e) => e.target.style.background = 'transparent'}
+          >
+            📆 Daily Finance
           </button>
 
           <button
@@ -871,6 +898,61 @@ function Dashboard({ navigateTo }) {
             {vaddiSummary.paymentCount > 0 && (
               <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '11px', opacity: 0.9 }}>
                 {vaddiSummary.paymentCount} payments recorded this month
+              </div>
+            )}
+          </div>
+
+          {/* Daily Finance Summary Card */}
+          <div
+            onClick={() => navigateTo('daily-finance')}
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+              color: 'white',
+              cursor: 'pointer',
+              marginBottom: '10px',
+              transition: 'transform 0.15s, box-shadow 0.15s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(245, 158, 11, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.3)';
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, opacity: 0.95 }}>
+                📆 Daily Finance (100 Days)
+              </div>
+              <span style={{ fontSize: '10px', opacity: 0.8 }}>Tap to view →</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700 }}>
+                  {formatCurrency(dailySummary.total_given || 0)}
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Given</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#fee2e2' }}>
+                  {formatCurrency(dailySummary.total_outstanding || 0)}
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Outstanding</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#86efac' }}>
+                  {dailySummary.active_loans || 0}
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Active</div>
+              </div>
+            </div>
+            {dailySummary.today_expected > 0 && (
+              <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '11px', opacity: 0.9 }}>
+                Today: {formatCurrency(dailySummary.today_collected || 0)} / {formatCurrency(dailySummary.today_expected)} collected
               </div>
             )}
           </div>
