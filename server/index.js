@@ -427,6 +427,33 @@ app.put('/api/loans/:id/close', async (req, res) => {
 
 // ============ PAYMENT ROUTES ============
 
+// Get all payments for a specific date (optimized batch query)
+app.get('/api/payments-by-date', async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date) {
+      return res.status(400).json({ error: 'Date parameter is required' });
+    }
+
+    // Query payments where payment_date matches the given date
+    const paymentsSnapshot = await db.collection('payments')
+      .where('payment_date', '>=', date)
+      .where('payment_date', '<', date + 'T23:59:59')
+      .get();
+
+    const payments = paymentsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      loan_id: doc.data().loan_id,
+      amount: doc.data().amount,
+      payment_date: doc.data().payment_date
+    }));
+
+    res.json(payments);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all payments
 app.get('/api/payments', async (req, res) => {
   try {
@@ -914,6 +941,75 @@ app.get('/api/stats', async (req, res) => {
           monthlyFinancePayments: monthlyPaymentsCount
         }
       }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ WEEKLY LOAN DIAGNOSTIC ============
+// Analyze weekly loan totals to find discrepancies
+app.get('/api/weekly-diagnostic', async (req, res) => {
+  try {
+    // Get all active loans (filter balance > 0 in code to avoid composite index)
+    const loansSnapshot = await db.collection('loans')
+      .where('status', '==', 'active')
+      .get();
+
+    const weeklyLoans = [];
+    let totalLoanAmount = 0;
+    let totalWeeklyAmount = 0;
+    let totalExpectedWeekly = 0; // loan_amount / 10
+    const discrepancies = [];
+
+    loansSnapshot.forEach(doc => {
+      const loan = doc.data();
+      const loanType = loan.loan_type || 'Weekly';
+      const balance = loan.balance || 0;
+
+      // Only include Weekly loans with balance > 0
+      if (loanType === 'Weekly' && balance > 0) {
+        const loanAmount = loan.loan_amount || 0;
+        const weeklyAmount = loan.weekly_amount || 0;
+        const expectedWeekly = loanAmount / 10;
+
+        totalLoanAmount += loanAmount;
+        totalWeeklyAmount += weeklyAmount;
+        totalExpectedWeekly += expectedWeekly;
+
+        // Check if weekly_amount matches loan_amount / 10
+        if (Math.abs(weeklyAmount - expectedWeekly) > 1) { // Allow ₹1 rounding difference
+          discrepancies.push({
+            loan_id: doc.id,
+            loan_name: loan.loan_name || 'General Loan',
+            loan_amount: loanAmount,
+            weekly_amount: weeklyAmount,
+            expected_weekly: expectedWeekly,
+            difference: weeklyAmount - expectedWeekly
+          });
+        }
+
+        weeklyLoans.push({
+          loan_id: doc.id,
+          loan_name: loan.loan_name || 'General Loan',
+          loan_amount: loanAmount,
+          weekly_amount: weeklyAmount,
+          expected_weekly: expectedWeekly,
+          balance: loan.balance
+        });
+      }
+    });
+
+    res.json({
+      summary: {
+        totalWeeklyLoans: weeklyLoans.length,
+        totalLoanAmount,
+        totalWeeklyAmount,
+        totalExpectedWeekly,
+        discrepancyAmount: totalWeeklyAmount - totalExpectedWeekly
+      },
+      discrepancies,
+      allLoans: weeklyLoans
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -18,6 +18,11 @@ function Dashboard({ navigateTo }) {
   const [weeklyPaymentsData, setWeeklyPaymentsData] = useState({ paidLoans: [], unpaidLoans: [], loading: true });
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [selectedUnpaid, setSelectedUnpaid] = useState(new Set());
+  const [quickPayConfirm, setQuickPayConfirm] = useState(null); // { loan, customer, amount, weekNumber }
+  const [isPaymentLoading, setIsPaymentLoading] = useState(false);
+  const [undoPaymentConfirm, setUndoPaymentConfirm] = useState(null); // { loan, customer, paymentId }
+  const [weeklyDiagnostic, setWeeklyDiagnostic] = useState(null); // Weekly loans overview
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -54,19 +59,21 @@ function Dashboard({ navigateTo }) {
   });
 
   // Fetch weekly payments data when selectedDate or customers change
+  const customersLength = customers?.length || 0;
   useEffect(() => {
+    if (customersLength === 0) return;
+
     const fetchWeeklyPayments = async () => {
       setWeeklyPaymentsData({ paidLoans: [], unpaidLoans: [], loading: true });
 
       const selected = new Date(selectedDate + 'T00:00:00');
       const isSunday = selected.getDay() === 0;
 
-      if (!isSunday || customers.length === 0) {
+      if (!isSunday) {
         setWeeklyPaymentsData({ paidLoans: [], unpaidLoans: [], loading: false });
         return;
       }
 
-      // Use selectedDate directly - already in YYYY-MM-DD format, no timezone conversion needed
       const sundayDate = selectedDate;
 
       // Helper to get first payment Sunday
@@ -80,80 +87,95 @@ function Dashboard({ navigateTo }) {
         return firstSunday;
       };
 
-      const paidLoans = [];
-      const unpaidLoans = [];
-
-      // Fetch loan details for each customer's loans
-      const promises = [];
-
+      // Get all loan IDs that need payment check
+      const loansToCheck = [];
       customers.forEach(customer => {
         if (!customer.loans || customer.loans.length === 0) return;
-
         customer.loans.forEach(loan => {
           if (loan.status === 'closed' || loan.loan_type !== 'Weekly' || loan.balance <= 0) return;
-
           const firstPaymentSunday = getFirstPaymentSunday(loan.start_date);
           const daysDiff = Math.floor((selected - firstPaymentSunday) / (24 * 60 * 60 * 1000));
-
-          // Only show if it's a payment Sunday for this loan
           if (daysDiff >= 0 && daysDiff % 7 === 0) {
             const weekNumber = (daysDiff / 7) + 1;
-            if (weekNumber <= 10) { // 10 weeks total
-              const promise = fetch(`${API_URL}/loans/${loan.loan_id}`)
-                .then(res => res.json())
-                .then(loanData => {
-                  // Check if payment was made ON this specific Sunday
-                  console.log(`🔍 Loan ${loan.loan_id} (${customer.name}) - ${loanData.payments?.length || 0} payments, checking against ${sundayDate}`);
-                  const isPaid = loanData.payments?.some(payment => {
-                    const paymentDate = payment.payment_date?.split('T')[0];
-                    const matches = paymentDate === sundayDate;
-                    console.log(`  Payment: ${payment.payment_date} → ${paymentDate} === ${sundayDate}? ${matches}`);
-                    return matches;
-                  }) || false;
-                  console.log(`  Result: isPaid = ${isPaid}`);
-
-                  // Calculate total weeks and remaining weeks
-                  const totalWeeks = 10; // Weekly loans are 10 weeks
-                  const remainingWeeks = totalWeeks - weekNumber;
-
-                  return {
-                    customer,
-                    loan: { ...loan, ...loanData },
-                    weekNumber,
-                    totalWeeks,
-                    remainingWeeks,
-                    paymentAmount: loan.weekly_amount,
-                    balance: loan.balance,
-                    isPaid
-                  };
-                })
-                .catch(err => {
-                  console.error('Error fetching loan:', err);
-                  return null;
-                });
-
-              promises.push(promise);
+            if (weekNumber <= 10) {
+              loansToCheck.push({ customer, loan, weekNumber });
             }
           }
         });
       });
 
-      const results = await Promise.all(promises);
-      const validResults = results.filter(r => r !== null);
+      if (loansToCheck.length === 0) {
+        setWeeklyPaymentsData({ paidLoans: [], unpaidLoans: [], loading: false });
+        return;
+      }
 
-      validResults.forEach(result => {
-        if (result.isPaid) {
-          paidLoans.push(result);
-        } else {
-          unpaidLoans.push(result);
-        }
-      });
+      // Batch fetch: get all payments for this date in one call
+      try {
+        const paymentsResponse = await fetch(`${API_URL}/payments-by-date?date=${sundayDate}`);
+        const paymentsOnDate = paymentsResponse.ok ? await paymentsResponse.json() : [];
 
-      setWeeklyPaymentsData({ paidLoans, unpaidLoans, loading: false });
+        // Create a Set of loan_ids that have payments on this date
+        const paidLoanIds = new Set(paymentsOnDate.map(p => p.loan_id));
+
+        const paidLoans = [];
+        const unpaidLoans = [];
+
+        loansToCheck.forEach(({ customer, loan, weekNumber }) => {
+          const totalWeeks = 10;
+          const remainingWeeks = totalWeeks - weekNumber;
+          const isPaid = paidLoanIds.has(loan.loan_id);
+
+          const result = {
+            customer,
+            loan,
+            weekNumber,
+            totalWeeks,
+            remainingWeeks,
+            paymentAmount: loan.weekly_amount,
+            balance: loan.balance,
+            isPaid
+          };
+
+          if (isPaid) {
+            paidLoans.push(result);
+          } else {
+            unpaidLoans.push(result);
+          }
+        });
+
+        setWeeklyPaymentsData({ paidLoans, unpaidLoans, loading: false });
+      } catch (error) {
+        console.error('Error fetching payments:', error);
+        setWeeklyPaymentsData({ paidLoans: [], unpaidLoans: [], loading: false });
+      }
     };
 
     fetchWeeklyPayments();
-  }, [selectedDate, customers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, customersLength]);
+
+  // Fetch weekly diagnostic data for overview
+  useEffect(() => {
+    const fetchDiagnostic = async () => {
+      try {
+        const response = await fetch(`${API_URL}/weekly-diagnostic`);
+        if (response.ok) {
+          const data = await response.json();
+          // Calculate total balance from all loans
+          const totalBalance = data.allLoans.reduce((sum, loan) => sum + loan.balance, 0);
+          setWeeklyDiagnostic({
+            ...data.summary,
+            totalBalance,
+            allLoans: data.allLoans
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching diagnostic:', error);
+      }
+    };
+
+    fetchDiagnostic();
+  }, []); // Run on mount
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -178,6 +200,149 @@ function Dashboard({ navigateTo }) {
   const handleLogout = () => {
     localStorage.removeItem('isLoggedIn');
     window.location.reload();
+  };
+
+  // Toggle selection of unpaid customer for WhatsApp share
+  const toggleUnpaidSelection = (loanId) => {
+    setSelectedUnpaid(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(loanId)) {
+        newSet.delete(loanId);
+      } else {
+        newSet.add(loanId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select/Deselect all unpaid customers
+  const toggleSelectAll = (unpaidLoans) => {
+    if (selectedUnpaid.size === unpaidLoans.length) {
+      setSelectedUnpaid(new Set());
+    } else {
+      setSelectedUnpaid(new Set(unpaidLoans.map(item => item.loan.loan_id)));
+    }
+  };
+
+  // Share selected customers via WhatsApp
+  const shareViaWhatsApp = (unpaidLoans) => {
+    const selectedItems = unpaidLoans.filter(item => selectedUnpaid.has(item.loan.loan_id));
+    if (selectedItems.length === 0) {
+      alert('Please select at least one customer to share');
+      return;
+    }
+
+    const dateStr = new Date(selectedDate).toLocaleDateString('en-IN', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+
+    let message = `📅 *Weekly Collection - ${dateStr}*\n\n`;
+    message += `Total: ${selectedItems.length} customers\n`;
+    message += `━━━━━━━━━━━━━━━━━━\n\n`;
+
+    selectedItems.forEach((item, index) => {
+      const loanName = item.loan.loan_name && item.loan.loan_name !== 'General Loan'
+        ? ` (${item.loan.loan_name})`
+        : '';
+      message += `${index + 1}. *${item.customer.name}*${loanName}\n`;
+      message += `   Week ${item.weekNumber}/10 • ₹${item.paymentAmount.toLocaleString('en-IN')}\n`;
+      if (item.customer.phone) {
+        message += `   📞 ${item.customer.phone}\n`;
+      }
+      message += `\n`;
+    });
+
+    const totalAmount = selectedItems.reduce((sum, item) => sum + item.paymentAmount, 0);
+    message += `━━━━━━━━━━━━━━━━━━\n`;
+    message += `💰 *Total to Collect: ₹${totalAmount.toLocaleString('en-IN')}*`;
+
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
+
+  // Quick Pay - record payment with one click
+  const handleQuickPay = async () => {
+    if (!quickPayConfirm || isPaymentLoading) return;
+
+    setIsPaymentLoading(true);
+    const { loan, amount } = quickPayConfirm;
+
+    try {
+      const response = await fetch(`${API_URL}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          loan_id: loan.loan_id,
+          amount: amount,
+          payment_date: selectedDate,
+          payment_method: 'Cash',
+          notes: `Quick payment - Week ${quickPayConfirm.weekNumber}`
+        })
+      });
+
+      if (response.ok) {
+        // Refresh data
+        mutate();
+        mutateCustomers();
+        // Reset state and trigger re-fetch of weekly payments
+        setQuickPayConfirm(null);
+        // Force refresh weekly payments data
+        setWeeklyPaymentsData(prev => ({ ...prev, loading: true }));
+      } else {
+        const error = await response.json();
+        alert('Payment failed: ' + (error.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Quick pay error:', error);
+      alert('Payment failed. Please try again.');
+    } finally {
+      setIsPaymentLoading(false);
+    }
+  };
+
+  // Undo Payment - delete the payment and mark as unpaid
+  const handleUndoPayment = async () => {
+    if (!undoPaymentConfirm || isPaymentLoading) return;
+
+    setIsPaymentLoading(true);
+
+    try {
+      // First, get the payment ID for this loan on this date
+      const paymentsResponse = await fetch(`${API_URL}/payments-by-date?date=${selectedDate}`);
+      const payments = await paymentsResponse.json();
+      const payment = payments.find(p => p.loan_id === undoPaymentConfirm.loan.loan_id);
+
+      if (!payment) {
+        alert('Payment not found');
+        setIsPaymentLoading(false);
+        return;
+      }
+
+      // Delete the payment
+      const response = await fetch(`${API_URL}/payments/${payment.id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        // Refresh data
+        mutate();
+        mutateCustomers();
+        setUndoPaymentConfirm(null);
+        // Force refresh weekly payments data
+        setWeeklyPaymentsData(prev => ({ ...prev, loading: true }));
+      } else {
+        const error = await response.json();
+        alert('Failed to undo payment: ' + (error.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Undo payment error:', error);
+      alert('Failed to undo payment. Please try again.');
+    } finally {
+      setIsPaymentLoading(false);
+    }
   };
 
   // Check if backup reminder should be shown
@@ -274,6 +439,12 @@ function Dashboard({ navigateTo }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', maxWidth: '100vw', overflowX: 'hidden' }}>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       {/* Menu Sidebar */}
       <div
         style={{
@@ -957,6 +1128,70 @@ function Dashboard({ navigateTo }) {
             )}
           </div>
 
+          {/* Weekly Loans Overview Card */}
+          {weeklyDiagnostic && (
+            <div style={{
+              background: 'linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%)',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              marginBottom: '10px',
+              boxShadow: '0 4px 12px rgba(3, 105, 161, 0.3)',
+              color: 'white'
+            }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '10px', opacity: 0.95 }}>
+                📊 Weekly Finance Overview
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 700 }}>
+                    {formatCurrency(weeklyDiagnostic.totalLoanAmount)}
+                  </div>
+                  <div style={{ fontSize: '9px', opacity: 0.8 }}>Total Given</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: '#fcd34d' }}>
+                    {formatCurrency(weeklyDiagnostic.totalBalance)}
+                  </div>
+                  <div style={{ fontSize: '9px', opacity: 0.8 }}>Outstanding</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: '#86efac' }}>
+                    {formatCurrency(weeklyDiagnostic.totalLoanAmount - weeklyDiagnostic.totalBalance)}
+                  </div>
+                  <div style={{ fontSize: '9px', opacity: 0.8 }}>Collected</div>
+                </div>
+              </div>
+              <div style={{
+                background: 'rgba(255,255,255,0.15)',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '10px'
+              }}>
+                <span>
+                  <strong>{weeklyDiagnostic.totalWeeklyLoans}</strong> active loans
+                </span>
+                <span style={{ opacity: 0.9 }}>
+                  Weekly total: <strong>{formatCurrency(weeklyDiagnostic.totalWeeklyAmount)}</strong>/week
+                </span>
+              </div>
+              {!weeklyPaymentsData.loading && (weeklyPaymentsData.paidLoans.length > 0 || weeklyPaymentsData.unpaidLoans.length > 0) && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '6px 10px',
+                  background: 'rgba(0,0,0,0.2)',
+                  borderRadius: '6px',
+                  fontSize: '10px',
+                  textAlign: 'center'
+                }}>
+                  📅 This Sunday: <strong>{weeklyPaymentsData.paidLoans.length + weeklyPaymentsData.unpaidLoans.length}</strong> of {weeklyDiagnostic.totalWeeklyLoans} loans due
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Weekly Payments Table */}
           <div style={{
             background: 'white',
@@ -1108,38 +1343,71 @@ function Dashboard({ navigateTo }) {
                       {paidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
                         <div
                           key={loan.loan_id}
-                          onClick={() => navigateTo('loan-details', loan.loan_id)}
                           style={{
                             background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
                             padding: '6px 8px',
                             borderRadius: '6px',
-                            cursor: 'pointer',
                             border: '1px solid #6ee7b7',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.transform = 'scale(1.02)';
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.boxShadow = 'none';
+                            transition: 'all 0.15s',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '8px'
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
-                            {customer.name}
-                            {loan.loan_name && loan.loan_name !== 'General Loan' && (
-                              <span style={{ fontSize: '10px', color: '#047857', fontWeight: 500, marginLeft: '4px' }}>
-                                • {loan.loan_name}
-                              </span>
-                            )}
+                          {/* Customer Info */}
+                          <div
+                            style={{ flex: 1, cursor: 'pointer' }}
+                            onClick={() => navigateTo('loan-details', loan.loan_id)}
+                            onMouseOver={(e) => {
+                              e.currentTarget.parentElement.style.transform = 'scale(1.02)';
+                              e.currentTarget.parentElement.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.parentElement.style.transform = 'scale(1)';
+                              e.currentTarget.parentElement.style.boxShadow = 'none';
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
+                              {customer.name}
+                              {loan.loan_name && loan.loan_name !== 'General Loan' && (
+                                <span style={{ fontSize: '10px', color: '#047857', fontWeight: 500, marginLeft: '4px' }}>
+                                  • {loan.loan_name}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
+                              Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
+                            </div>
+                            <div style={{ fontSize: '9px', color: '#059669', fontWeight: 500 }}>
+                              Bal: {formatCurrency(balance)} • {remainingWeeks}w left
+                            </div>
                           </div>
-                          <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
-                            Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
-                          </div>
-                          <div style={{ fontSize: '9px', color: '#059669', fontWeight: 500 }}>
-                            Bal: {formatCurrency(balance)} • {remainingWeeks}w left
-                          </div>
+
+                          {/* Undo Button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUndoPaymentConfirm({ loan, customer, amount: paymentAmount, weekNumber });
+                            }}
+                            style={{
+                              background: '#fee2e2',
+                              border: '1px solid #fca5a5',
+                              borderRadius: '4px',
+                              padding: '4px 6px',
+                              cursor: 'pointer',
+                              fontSize: '9px',
+                              color: '#dc2626',
+                              fontWeight: 600,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: '1px'
+                            }}
+                            title="Undo this payment"
+                          >
+                            ↩️
+                            <span>Undo</span>
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1152,54 +1420,155 @@ function Dashboard({ navigateTo }) {
                     padding: '10px',
                     minWidth: '250px'
                   }}>
-                    <h4 style={{
-                      margin: '0 0 8px 0',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: '#991b1b',
-                      textAlign: 'center'
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '8px'
                     }}>
-                      ✗ UNPAID ({unpaidLoans.length})
-                    </h4>
+                      <h4 style={{
+                        margin: 0,
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#991b1b'
+                      }}>
+                        ✗ UNPAID ({unpaidLoans.length})
+                      </h4>
+                      {unpaidLoans.length > 0 && (
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <label style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '10px',
+                            color: '#991b1b',
+                            cursor: 'pointer'
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedUnpaid.size === unpaidLoans.length && unpaidLoans.length > 0}
+                              onChange={() => toggleSelectAll(unpaidLoans)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            All
+                          </label>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* WhatsApp Share Button */}
+                    {selectedUnpaid.size > 0 && (
+                      <button
+                        onClick={() => shareViaWhatsApp(unpaidLoans)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          marginBottom: '8px',
+                          background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          boxShadow: '0 2px 6px rgba(37, 211, 102, 0.3)'
+                        }}
+                      >
+                        📱 Share {selectedUnpaid.size} via WhatsApp
+                      </button>
+                    )}
+
                     <div style={{ display: 'grid', gap: '4px' }}>
                       {unpaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
                         <div
                           key={loan.loan_id}
-                          onClick={() => navigateTo('loan-details', loan.loan_id)}
                           style={{
                             background: getUnpaidCardColor(balance),
                             padding: '6px 8px',
                             borderRadius: '6px',
-                            cursor: 'pointer',
-                            border: balance > 10000
-                              ? '1px solid #fca5a5'
-                              : balance > 5000
-                                ? '1px solid #fb923c'
-                                : '1px solid #fecaca',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.transform = 'scale(1.02)';
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.boxShadow = 'none';
+                            border: selectedUnpaid.has(loan.loan_id)
+                              ? '2px solid #25D366'
+                              : balance > 10000
+                                ? '1px solid #fca5a5'
+                                : balance > 5000
+                                  ? '1px solid #fb923c'
+                                  : '1px solid #fecaca',
+                            transition: 'all 0.15s',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '8px'
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
-                            {customer.name}
-                            {loan.loan_name && loan.loan_name !== 'General Loan' && (
-                              <span style={{ fontSize: '10px', color: '#991b1b', fontWeight: 500, marginLeft: '4px' }}>
-                                • {loan.loan_name}
-                              </span>
-                            )}
+                          {/* Checkbox */}
+                          <input
+                            type="checkbox"
+                            checked={selectedUnpaid.has(loan.loan_id)}
+                            onChange={() => toggleUnpaidSelection(loan.loan_id)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              cursor: 'pointer',
+                              marginTop: '2px',
+                              width: '16px',
+                              height: '16px',
+                              accentColor: '#25D366'
+                            }}
+                          />
+
+                          {/* Customer Info */}
+                          <div
+                            style={{ flex: 1, cursor: 'pointer' }}
+                            onClick={() => navigateTo('loan-details', loan.loan_id)}
+                            onMouseOver={(e) => {
+                              e.currentTarget.parentElement.style.transform = 'scale(1.02)';
+                              e.currentTarget.parentElement.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.parentElement.style.transform = 'scale(1)';
+                              e.currentTarget.parentElement.style.boxShadow = 'none';
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
+                              {customer.name}
+                              {loan.loan_name && loan.loan_name !== 'General Loan' && (
+                                <span style={{ fontSize: '10px', color: '#991b1b', fontWeight: 500, marginLeft: '4px' }}>
+                                  • {loan.loan_name}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
+                              Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
+                            </div>
+                            <div style={{ fontSize: '9px', color: '#dc2626', fontWeight: 700 }}>
+                              ⚠️ {formatCurrency(balance)} • {remainingWeeks}w left
+                            </div>
                           </div>
-                          <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
-                            Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
-                          </div>
-                          <div style={{ fontSize: '9px', color: '#dc2626', fontWeight: 700 }}>
-                            ⚠️ {formatCurrency(balance)} • {remainingWeeks}w left
+
+                          {/* Quick Pay Checkbox */}
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: '2px'
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              onChange={() => setQuickPayConfirm({ loan, customer, amount: paymentAmount, weekNumber })}
+                              checked={false}
+                              style={{
+                                cursor: 'pointer',
+                                width: '18px',
+                                height: '18px',
+                                accentColor: '#10b981'
+                              }}
+                            />
+                            <span style={{ fontSize: '8px', color: '#059669', fontWeight: 600 }}>Paid</span>
                           </div>
                         </div>
                       ))}
@@ -1244,6 +1613,273 @@ function Dashboard({ navigateTo }) {
           onClose={() => setShowQuickRefModal(false)}
           formatCurrency={formatCurrency}
         />
+      )}
+
+      {/* Quick Pay Confirmation Modal */}
+      {quickPayConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1001,
+            padding: '20px'
+          }}
+          onClick={() => setQuickPayConfirm(null)}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '400px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>💰</div>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
+                Confirm Payment
+              </h3>
+            </div>
+
+            <div style={{
+              background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#065f46', marginBottom: '8px' }}>
+                {quickPayConfirm.customer.name}
+              </div>
+              {quickPayConfirm.loan.loan_name && quickPayConfirm.loan.loan_name !== 'General Loan' && (
+                <div style={{ fontSize: '12px', color: '#047857', marginBottom: '4px' }}>
+                  {quickPayConfirm.loan.loan_name}
+                </div>
+              )}
+              <div style={{ fontSize: '12px', color: '#059669', marginBottom: '8px' }}>
+                Week {quickPayConfirm.weekNumber}/10
+              </div>
+              <div style={{
+                fontSize: '24px',
+                fontWeight: 700,
+                color: '#059669',
+                textAlign: 'center',
+                padding: '8px',
+                background: 'white',
+                borderRadius: '8px'
+              }}>
+                {formatCurrency(quickPayConfirm.amount)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#6b7280', textAlign: 'center', marginTop: '8px' }}>
+                Payment Date: {new Date(selectedDate).toLocaleDateString('en-IN', {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric'
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setQuickPayConfirm(null)}
+                disabled={isPaymentLoading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                  opacity: isPaymentLoading ? 0.5 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleQuickPay}
+                disabled={isPaymentLoading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: isPaymentLoading
+                    ? '#9ca3af'
+                    : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: isPaymentLoading ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {isPaymentLoading ? (
+                  <>
+                    <span style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid white',
+                      borderTopColor: 'transparent',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Paying...
+                  </>
+                ) : (
+                  '✓ Confirm Paid'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Payment Confirmation Modal */}
+      {undoPaymentConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1001,
+            padding: '20px'
+          }}
+          onClick={() => setUndoPaymentConfirm(null)}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '400px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#dc2626' }}>
+                Undo Payment?
+              </h3>
+            </div>
+
+            <div style={{
+              background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#7f1d1d', marginBottom: '8px' }}>
+                {undoPaymentConfirm.customer.name}
+              </div>
+              {undoPaymentConfirm.loan.loan_name && undoPaymentConfirm.loan.loan_name !== 'General Loan' && (
+                <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '4px' }}>
+                  {undoPaymentConfirm.loan.loan_name}
+                </div>
+              )}
+              <div style={{ fontSize: '12px', color: '#dc2626', marginBottom: '8px' }}>
+                Week {undoPaymentConfirm.weekNumber}/10
+              </div>
+              <div style={{
+                fontSize: '24px',
+                fontWeight: 700,
+                color: '#dc2626',
+                textAlign: 'center',
+                padding: '8px',
+                background: 'white',
+                borderRadius: '8px'
+              }}>
+                {formatCurrency(undoPaymentConfirm.amount)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#991b1b', textAlign: 'center', marginTop: '8px' }}>
+                This will delete the payment and mark as unpaid
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setUndoPaymentConfirm(null)}
+                disabled={isPaymentLoading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                  opacity: isPaymentLoading ? 0.5 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUndoPayment}
+                disabled={isPaymentLoading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: isPaymentLoading
+                    ? '#9ca3af'
+                    : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: isPaymentLoading ? 'none' : '0 4px 12px rgba(220, 38, 38, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {isPaymentLoading ? (
+                  <>
+                    <span style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid white',
+                      borderTopColor: 'transparent',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Undoing...
+                  </>
+                ) : (
+                  '↩️ Undo Payment'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
