@@ -89,6 +89,10 @@ function Dashboard({ navigateTo }) {
 
       // Get all loan IDs that need payment check
       const loansToCheck = [];
+      if (!Array.isArray(customers)) {
+        setWeeklyPaymentsData({ paidLoans: [], unpaidLoans: [], loading: false });
+        return;
+      }
       customers.forEach(customer => {
         if (!customer.loans || customer.loans.length === 0) return;
         customer.loans.forEach(loan => {
