@@ -10,6 +10,9 @@ const fetcher = (url) => fetch(url).then(res => res.json());
 function LoanDetails({ loanId, navigateTo }) {
   const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
+  const [showEditLoanModal, setShowEditLoanModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({});
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Use SWR for automatic caching and re-fetching
   const { data: loan, error, isLoading, mutate } = useSWR(
@@ -57,6 +60,46 @@ function LoanDetails({ loanId, navigateTo }) {
     } catch (error) {
       console.error('Error updating loan name:', error);
       alert('Failed to update loan name');
+    }
+  };
+
+  const openEditModal = () => {
+    setEditFormData({
+      loan_name: loan.loan_name || '',
+      loan_given_date: loan.loan_given_date || '',
+      start_date: loan.start_date || '',
+      loan_amount: loan.loan_amount || 0,
+      weekly_amount: loan.weekly_amount || 0,
+      monthly_amount: loan.monthly_amount || 0,
+      balance: loan.balance || 0
+    });
+    setShowEditLoanModal(true);
+  };
+
+  const updateLoanDetails = async () => {
+    setIsUpdating(true);
+    try {
+      const response = await fetch(`${API_URL}/loans/${loan.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editFormData)
+      });
+
+      if (response.ok) {
+        mutate();
+        setShowEditLoanModal(false);
+        alert('Loan details updated successfully!');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to update loan details');
+      }
+    } catch (error) {
+      console.error('Error updating loan:', error);
+      alert('Failed to update loan details');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -280,6 +323,52 @@ function LoanDetails({ loanId, navigateTo }) {
             title="Edit loan name"
           >
             ✏️ Edit
+          </button>
+        </div>
+
+        {/* Loan Dates Section with Edit Button */}
+        <div style={{
+          marginTop: '12px',
+          padding: '10px',
+          background: '#f1f5f9',
+          borderRadius: '8px',
+          fontSize: '13px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 600, color: '#1e40af' }}>
+                📅 {loan.loan_given_date ? formatDate(loan.loan_given_date) : 'Not Set'}
+              </div>
+              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Loan Given</div>
+            </div>
+            <div style={{ borderLeft: '1px solid #cbd5e1', margin: '0 8px', height: '30px' }}></div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 600, color: '#047857' }}>
+                🗓️ {loan.start_date ? formatDate(loan.start_date) : 'Not Set'}
+              </div>
+              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Payments Start</div>
+            </div>
+          </div>
+          <button
+            onClick={openEditModal}
+            style={{
+              width: '100%',
+              marginTop: '10px',
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '8px 12px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px'
+            }}
+          >
+            ✏️ Edit Loan Details
           </button>
         </div>
 
@@ -507,6 +596,236 @@ function LoanDetails({ loanId, navigateTo }) {
             navigateTo('customers');
           }}
         />
+      )}
+
+      {/* Edit Loan Modal */}
+      {showEditLoanModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '16px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '400px',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              borderRadius: '16px 16px 0 0',
+              color: 'white'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '18px' }}>✏️ Edit Loan Details</h3>
+              <button
+                onClick={() => setShowEditLoanModal(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >×</button>
+            </div>
+
+            <div style={{ padding: '20px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                  Loan Name
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.loan_name}
+                  onChange={(e) => setEditFormData({...editFormData, loan_name: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    boxSizing: 'border-box'
+                  }}
+                  placeholder="e.g., General Loan"
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                  📅 Loan Given Date
+                </label>
+                <input
+                  type="date"
+                  value={editFormData.loan_given_date}
+                  onChange={(e) => setEditFormData({...editFormData, loan_given_date: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                  🗓️ Payment Start Date
+                </label>
+                <input
+                  type="date"
+                  value={editFormData.start_date}
+                  onChange={(e) => setEditFormData({...editFormData, start_date: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                    Loan Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={editFormData.loan_amount}
+                    onChange={(e) => setEditFormData({...editFormData, loan_amount: e.target.value})}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '15px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                    Balance
+                  </label>
+                  <input
+                    type="number"
+                    value={editFormData.balance}
+                    onChange={(e) => setEditFormData({...editFormData, balance: e.target.value})}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '15px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                    Weekly Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={editFormData.weekly_amount}
+                    onChange={(e) => setEditFormData({...editFormData, weekly_amount: e.target.value})}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '15px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                    Monthly Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={editFormData.monthly_amount}
+                    onChange={(e) => setEditFormData({...editFormData, monthly_amount: e.target.value})}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '15px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => setShowEditLoanModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    border: '2px solid #e5e7eb',
+                    background: 'white',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    color: '#6b7280'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateLoanDetails}
+                  disabled={isUpdating}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    border: 'none',
+                    background: isUpdating ? '#9ca3af' : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                    color: 'white',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: isUpdating ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isUpdating ? 'Saving...' : '💾 Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

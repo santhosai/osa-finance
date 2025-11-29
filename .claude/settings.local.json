@@ -19,7 +19,9 @@
       "Bash(timeout /t 2 /nobreak)",
       "Bash(node index.js:*)",
       "Bash(curl:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(node:*)",
+      "Bash(del \"c:\\Users\\SanthoshKumarShakkar\\Desktop\\Financeapplication\\check_week.js\")"
     ],
     "deny": [],
     "ask": []

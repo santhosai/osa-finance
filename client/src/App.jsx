@@ -15,7 +15,10 @@ import InvestmentsList from './components/InvestmentsList';
 import ArchivedLoans from './components/ArchivedLoans';
 import UserManagement from './components/UserManagement';
 import DailyFinance from './components/DailyFinance';
+import AdminProfit from './components/AdminProfit';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import './App.css';
 
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
@@ -98,6 +101,11 @@ function DailyFinanceWrapper() {
   return <DailyFinance navigateTo={(path) => navigate(`/${path}`)} />;
 }
 
+function AdminProfitWrapper() {
+  const navigate = useNavigate();
+  return <AdminProfit navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     // Check localStorage for existing login session
@@ -130,27 +138,32 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <div className="app">
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<DashboardWrapper />} />
-          <Route path="/customers" element={<CustomersWrapper />} />
-          <Route path="/customer-loans/:customerId" element={<CustomerLoansWrapper />} />
-          <Route path="/loan-details/:loanId" element={<LoanDetailsWrapper />} />
-          <Route path="/sunday-collections" element={<SundayCollectionsWrapper />} />
-          <Route path="/overdue-payments" element={<OverduePaymentsWrapper />} />
-          <Route path="/payment-tracker" element={<ExcelPaymentTrackerWrapper />} />
-          <Route path="/vaddi-list" element={<VaddiListWrapper />} />
-          <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
-          <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
-          <Route path="/investments" element={<InvestmentsListWrapper />} />
-          <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
-          <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
-          <Route path="/user-management" element={<UserManagementWrapper />} />
-        </Routes>
-      </div>
-    </BrowserRouter>
+    <ThemeProvider>
+      <LanguageProvider>
+        <BrowserRouter>
+          <div className="app">
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<DashboardWrapper />} />
+              <Route path="/customers" element={<CustomersWrapper />} />
+              <Route path="/customer-loans/:customerId" element={<CustomerLoansWrapper />} />
+              <Route path="/loan-details/:loanId" element={<LoanDetailsWrapper />} />
+              <Route path="/sunday-collections" element={<SundayCollectionsWrapper />} />
+              <Route path="/overdue-payments" element={<OverduePaymentsWrapper />} />
+              <Route path="/payment-tracker" element={<ExcelPaymentTrackerWrapper />} />
+              <Route path="/vaddi-list" element={<VaddiListWrapper />} />
+              <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
+              <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
+              <Route path="/investments" element={<InvestmentsListWrapper />} />
+              <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
+              <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
+              <Route path="/user-management" element={<UserManagementWrapper />} />
+              <Route path="/admin-profit" element={<AdminProfitWrapper />} />
+            </Routes>
+          </div>
+        </BrowserRouter>
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
 

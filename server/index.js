@@ -390,15 +390,21 @@ app.post('/api/loans/:id/topup', async (req, res) => {
   }
 });
 
-// Update loan (for editing loan details like loan_name)
+// Update loan (for editing loan details)
 app.put('/api/loans/:id', async (req, res) => {
   try {
-    const { loan_name, status } = req.body;
+    const { loan_name, status, loan_given_date, start_date, loan_amount, weekly_amount, monthly_amount, balance } = req.body;
     const updateData = {};
 
     // Only update fields that are provided
     if (loan_name !== undefined) updateData.loan_name = loan_name;
     if (status !== undefined) updateData.status = status;
+    if (loan_given_date !== undefined) updateData.loan_given_date = loan_given_date;
+    if (start_date !== undefined) updateData.start_date = start_date;
+    if (loan_amount !== undefined) updateData.loan_amount = Number(loan_amount);
+    if (weekly_amount !== undefined) updateData.weekly_amount = Number(weekly_amount);
+    if (monthly_amount !== undefined) updateData.monthly_amount = Number(monthly_amount);
+    if (balance !== undefined) updateData.balance = Number(balance);
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
@@ -835,6 +841,110 @@ app.delete('/api/monthly-finance/customers/:id', async (req, res) => {
 
     res.json({ message: 'Monthly Finance customer deleted successfully' });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Undo last payment for Monthly Finance customer
+app.delete('/api/monthly-finance/customers/:id/undo-payment', async (req, res) => {
+  try {
+    const customerId = req.params.id;
+
+    // Get customer data
+    const customerDoc = await db.collection('monthly_finance_customers').doc(customerId).get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customerData = customerDoc.data();
+
+    // Get all payments for this customer (no orderBy to avoid index requirement)
+    const paymentsSnapshot = await db.collection('monthly_finance_payments')
+      .where('customer_id', '==', customerId)
+      .get();
+
+    if (paymentsSnapshot.empty) {
+      return res.status(400).json({ error: 'No payments to undo' });
+    }
+
+    // Sort payments by created_at in JavaScript to find the most recent
+    const payments = paymentsSnapshot.docs.map(doc => ({
+      ref: doc.ref,
+      data: doc.data()
+    }));
+
+    payments.sort((a, b) => {
+      const dateA = a.data.created_at?.toDate?.() || new Date(a.data.created_at) || new Date(0);
+      const dateB = b.data.created_at?.toDate?.() || new Date(b.data.created_at) || new Date(0);
+      return dateB - dateA; // Descending order (most recent first)
+    });
+
+    const lastPayment = payments[0];
+    const paymentData = lastPayment.data;
+
+    // Restore the balance by adding back the payment amount
+    const newBalance = customerData.balance + paymentData.amount;
+
+    // Update customer balance and status
+    const updateData = {
+      balance: newBalance,
+      status: 'active' // Reactivate if it was closed
+    };
+
+    await db.collection('monthly_finance_customers').doc(customerId).update(updateData);
+
+    // Delete the payment record
+    await lastPayment.ref.delete();
+
+    // Get updated customer data
+    const updatedDoc = await db.collection('monthly_finance_customers').doc(customerId).get();
+
+    res.json({
+      message: 'Payment undone successfully',
+      deletedPayment: paymentData,
+      customer: { id: updatedDoc.id, ...updatedDoc.data() }
+    });
+  } catch (error) {
+    console.error('Error undoing Monthly Finance payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete Monthly Finance customer and all their payments
+app.delete('/api/monthly-finance/customers/:id', async (req, res) => {
+  try {
+    const customerId = req.params.id;
+
+    // Get customer data first to confirm it exists
+    const customerDoc = await db.collection('monthly_finance_customers').doc(customerId).get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customerData = customerDoc.data();
+
+    // Delete all payments for this customer
+    const paymentsSnapshot = await db.collection('monthly_finance_payments')
+      .where('customer_id', '==', customerId)
+      .get();
+
+    const batch = db.batch();
+    paymentsSnapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    // Delete the customer document
+    batch.delete(customerDoc.ref);
+
+    await batch.commit();
+
+    res.json({
+      message: 'Customer deleted successfully',
+      deletedCustomer: customerData,
+      deletedPaymentsCount: paymentsSnapshot.size
+    });
+  } catch (error) {
+    console.error('Error deleting Monthly Finance customer:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1384,6 +1494,44 @@ app.get('/api/vaddi-payments', async (req, res) => {
     res.json(payments);
   } catch (error) {
     console.error('Error fetching vaddi payments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all payments for profit analysis (includes vaddi payments with my_profit)
+app.get('/api/all-payments', async (req, res) => {
+  try {
+    const allPayments = [];
+
+    // Get vaddi payments (they have myShare as my_profit)
+    const vaddiSnapshot = await db.collection('vaddi_payments').get();
+    vaddiSnapshot.forEach(doc => {
+      const data = doc.data();
+      allPayments.push({
+        id: doc.id,
+        type: 'vaddi',
+        payment_date: data.date || data.paymentDate,
+        my_profit: data.myShare || 0,
+        amount: data.totalAmount || 0
+      });
+    });
+
+    // Get regular payments
+    const paymentsSnapshot = await db.collection('payments').get();
+    paymentsSnapshot.forEach(doc => {
+      const data = doc.data();
+      allPayments.push({
+        id: doc.id,
+        type: 'regular',
+        payment_date: data.payment_date,
+        amount: data.amount || 0,
+        loan_id: data.loan_id
+      });
+    });
+
+    res.json(allPayments);
+  } catch (error) {
+    console.error('Error fetching all payments:', error);
     res.status(500).json({ error: error.message });
   }
 });

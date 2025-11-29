@@ -1,14 +1,21 @@
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import AddCustomerModal from './AddCustomerModal';
 import PaymentsThisWeekModal from './PaymentsThisWeekModal';
 import DatabaseMonitorModal from './DatabaseMonitorModal';
 import { API_URL } from '../config';
+import { useTheme } from '../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // Fetcher function for SWR
 const fetcher = (url) => fetch(url).then(res => res.json());
 
 function Dashboard({ navigateTo }) {
+  // Theme and Language hooks
+  const { isDarkMode, toggleDarkMode, theme } = useTheme();
+  const { language, toggleLanguage, t } = useLanguage();
+
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showDatabaseMonitorModal, setShowDatabaseMonitorModal] = useState(false);
@@ -23,6 +30,7 @@ function Dashboard({ navigateTo }) {
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
   const [undoPaymentConfirm, setUndoPaymentConfirm] = useState(null); // { loan, customer, paymentId }
   const [weeklyDiagnostic, setWeeklyDiagnostic] = useState(null); // Weekly loans overview
+  const [showCharts, setShowCharts] = useState(false); // Toggle charts visibility
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -97,14 +105,16 @@ function Dashboard({ navigateTo }) {
         if (!customer.loans || customer.loans.length === 0) return;
         customer.loans.forEach(loan => {
           if (loan.status === 'closed' || loan.loan_type !== 'Weekly' || loan.balance <= 0) return;
-          const firstPaymentSunday = getFirstPaymentSunday(loan.start_date);
-          const daysDiff = Math.floor((selected - firstPaymentSunday) / (24 * 60 * 60 * 1000));
-          if (daysDiff >= 0 && daysDiff % 7 === 0) {
-            const weekNumber = (daysDiff / 7) + 1;
-            if (weekNumber <= 10) {
-              loansToCheck.push({ customer, loan, weekNumber });
-            }
-          }
+
+          // NEW LOGIC: Week number based on payments made, not calendar weeks
+          // paymentsMade = how much collected / weekly amount
+          const collected = loan.loan_amount - loan.balance;
+          const paymentsMade = Math.floor(collected / loan.weekly_amount);
+          const weekNumber = paymentsMade + 1; // Next week to pay
+
+          // Show ALL loans with balance > 0 every Sunday (no more week 10 limit)
+          // They owe money, so they should pay!
+          loansToCheck.push({ customer, loan, weekNumber });
         });
       });
 
@@ -487,7 +497,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#1e3a8a'}
             onMouseOut={(e) => e.target.style.background = '#1e40af'}
           >
-            📊 Dashboard
+            📊 {t('dashboard')}
           </button>
 
           <button
@@ -507,7 +517,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            📅 Sunday Collections
+            📅 {t('sundayCollections')}
           </button>
 
           <button
@@ -527,7 +537,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            ⚠️ Overdue Payments
+            ⚠️ {t('overduePayments')}
           </button>
 
           <button
@@ -547,7 +557,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            👥 Customers
+            👥 {t('customers')}
           </button>
 
           <button
@@ -567,7 +577,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            📅 Payment Tracker
+            📅 {t('paymentTracker')}
           </button>
 
           <button
@@ -587,7 +597,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            📝 Vaddi List
+            📝 {t('vaddiList')}
           </button>
 
           <button
@@ -607,7 +617,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            📅 Weekly Finance
+            📅 {t('weeklyFinance')}
           </button>
 
           <button
@@ -627,7 +637,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            💰 Monthly Finance
+            💰 {t('monthlyFinance')}
           </button>
 
           <button
@@ -647,7 +657,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            📆 Daily Finance
+            📆 {t('dailyFinance')}
           </button>
 
           <button
@@ -667,7 +677,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            💰 Investments
+            💰 {t('investments')}
           </button>
 
           <button
@@ -687,7 +697,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            📦 Archived Loans
+            📦 {t('archivedLoans')}
           </button>
 
           {localStorage.getItem('userRole') === 'admin' && (
@@ -708,9 +718,31 @@ function Dashboard({ navigateTo }) {
               onMouseOver={(e) => e.target.style.background = '#334155'}
               onMouseOut={(e) => e.target.style.background = 'transparent'}
             >
-              👥 User Management
+              👥 {t('userManagement')}
             </button>
           )}
+
+          {/* Admin Profit - Password Protected */}
+          <button
+            onClick={() => { setShowSidebar(false); navigateTo('admin-profit'); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #047857 0%, #065f46 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)'}
+          >
+            🔐 {t('adminProfit')}
+          </button>
 
         </div>
 
@@ -731,7 +763,7 @@ function Dashboard({ navigateTo }) {
             fontWeight: 600
           }}
         >
-          🚪 Logout
+          🚪 {t('logout')}
         </button>
       </div>
 
@@ -778,7 +810,7 @@ function Dashboard({ navigateTo }) {
             >
               ☰
             </button>
-            <h2 style={{ margin: 0, color: 'white', fontSize: '16px', fontWeight: 700 }}>Dashboard</h2>
+            <h2 style={{ margin: 0, color: 'white', fontSize: '16px', fontWeight: 700 }}>{t('dashboard')}</h2>
           </div>
 
           {/* Search Bar */}
@@ -998,7 +1030,7 @@ function Dashboard({ navigateTo }) {
                 boxShadow: '0 2px 6px rgba(30, 64, 175, 0.2)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>Active Loans</div>
+                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>{t('activeLoans')}</div>
                 <div style={{ fontSize: '20px', fontWeight: 700 }}>{stats.activeLoans}</div>
               </div>
 
@@ -1009,13 +1041,13 @@ function Dashboard({ navigateTo }) {
                 boxShadow: '0 2px 6px rgba(180, 83, 9, 0.2)',
                 color: 'white'
               }}>
-                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>Total Outstanding</div>
+                <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px', fontWeight: 600 }}>{t('totalOutstanding')}</div>
                 <div style={{ fontSize: '20px', fontWeight: 700 }}>
                   {formatCurrency(stats.outstanding || 0)}
                 </div>
                 <div style={{ fontSize: '9px', opacity: 0.8, marginTop: '4px' }}>
-                  <span>Weekly: {formatCurrency(stats.weeklyOutstanding || 0)}</span>
-                  <span> | Monthly: {formatCurrency(stats.monthlyOutstanding || 0)}</span>
+                  <span>{t('weekly')}: {formatCurrency(stats.weeklyOutstanding || 0)}</span>
+                  <span> | {t('monthly')}: {formatCurrency(stats.monthlyOutstanding || 0)}</span>
                 </div>
               </div>
 
@@ -1055,19 +1087,19 @@ function Dashboard({ navigateTo }) {
                 <div style={{ fontSize: '18px', fontWeight: 700 }}>
                   {formatCurrency(vaddiSummary.totalCollected || 0)}
                 </div>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>Total</div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('collected')}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '18px', fontWeight: 700, color: '#86efac' }}>
                   {formatCurrency(vaddiSummary.myProfit || 0)}
                 </div>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>My Profit</div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('myProfit')}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '18px', fontWeight: 700, color: '#fcd34d' }}>
                   {formatCurrency(vaddiSummary.friendShare || 0)}
                 </div>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>Friend</div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('friend')}</div>
               </div>
             </div>
             {vaddiSummary.paymentCount > 0 && (
@@ -1110,19 +1142,19 @@ function Dashboard({ navigateTo }) {
                 <div style={{ fontSize: '18px', fontWeight: 700 }}>
                   {formatCurrency(dailySummary.total_given || 0)}
                 </div>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>Given</div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('given')}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '18px', fontWeight: 700, color: '#fee2e2' }}>
                   {formatCurrency(dailySummary.total_outstanding || 0)}
                 </div>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>Outstanding</div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('outstanding')}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '18px', fontWeight: 700, color: '#86efac' }}>
                   {dailySummary.active_loans || 0}
                 </div>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>Active</div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('active')}</div>
               </div>
             </div>
             {dailySummary.today_expected > 0 && (
@@ -1143,26 +1175,26 @@ function Dashboard({ navigateTo }) {
               color: 'white'
             }}>
               <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '10px', opacity: 0.95 }}>
-                📊 Weekly Finance Overview
+                📊 {t('weeklyFinanceOverview')}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '16px', fontWeight: 700 }}>
                     {formatCurrency(weeklyDiagnostic.totalLoanAmount)}
                   </div>
-                  <div style={{ fontSize: '9px', opacity: 0.8 }}>Total Given</div>
+                  <div style={{ fontSize: '9px', opacity: 0.8 }}>{t('totalGiven')}</div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '16px', fontWeight: 700, color: '#fcd34d' }}>
                     {formatCurrency(weeklyDiagnostic.totalBalance)}
                   </div>
-                  <div style={{ fontSize: '9px', opacity: 0.8 }}>Outstanding</div>
+                  <div style={{ fontSize: '9px', opacity: 0.8 }}>{t('outstanding')}</div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '16px', fontWeight: 700, color: '#86efac' }}>
                     {formatCurrency(weeklyDiagnostic.totalLoanAmount - weeklyDiagnostic.totalBalance)}
                   </div>
-                  <div style={{ fontSize: '9px', opacity: 0.8 }}>Collected</div>
+                  <div style={{ fontSize: '9px', opacity: 0.8 }}>{t('collected')}</div>
                 </div>
               </div>
               <div style={{
@@ -1218,7 +1250,7 @@ function Dashboard({ navigateTo }) {
                 fontWeight: 700,
                 color: '#1e293b'
               }}>
-                📅 Weekly Payments
+                📅 {t('weeklyPayments')}
               </h3>
               <input
                 type="date"
@@ -1306,19 +1338,19 @@ function Dashboard({ navigateTo }) {
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#86efac' }}>
                         {formatCurrency(paidTotal)}
                       </div>
-                      <div style={{ fontSize: '10px', opacity: 0.8 }}>Collected</div>
+                      <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('collected')}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#fca5a5' }}>
                         {formatCurrency(unpaidTotal)}
                       </div>
-                      <div style={{ fontSize: '10px', opacity: 0.8 }}>Pending</div>
+                      <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('pending')}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: '16px', fontWeight: 700 }}>
                         {formatCurrency(grandTotal)}
                       </div>
-                      <div style={{ fontSize: '10px', opacity: 0.8 }}>Total Due</div>
+                      <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('totalDue')}</div>
                     </div>
                   </div>
                 <div style={{
@@ -1341,7 +1373,7 @@ function Dashboard({ navigateTo }) {
                       color: '#065f46',
                       textAlign: 'center'
                     }}>
-                      ✓ PAID ({paidLoans.length})
+                      ✓ {t('paid').toUpperCase()} ({paidLoans.length})
                     </h4>
                     <div style={{ display: 'grid', gap: '4px' }}>
                       {paidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
@@ -1436,7 +1468,7 @@ function Dashboard({ navigateTo }) {
                         fontWeight: 700,
                         color: '#991b1b'
                       }}>
-                        ✗ UNPAID ({unpaidLoans.length})
+                        ✗ {t('unpaid').toUpperCase()} ({unpaidLoans.length})
                       </h4>
                       {unpaidLoans.length > 0 && (
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -1584,6 +1616,151 @@ function Dashboard({ navigateTo }) {
             })()}
           </div>
 
+          {/* Charts Section */}
+          <div style={{
+            background: isDarkMode ? theme.backgroundCard : 'white',
+            borderRadius: '12px',
+            padding: '16px',
+            marginTop: '10px',
+            boxShadow: isDarkMode ? theme.shadow : '0 2px 6px rgba(0,0,0,0.1)'
+          }}>
+            <div
+              onClick={() => setShowCharts(!showCharts)}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer',
+                marginBottom: showCharts ? '16px' : 0
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: isDarkMode ? theme.text : '#1e293b' }}>
+                {language === 'ta' ? '📊 கடன் விநியோகம்' : '📊 Loan Distribution Chart'}
+              </h3>
+              <span style={{ fontSize: '16px', transition: 'transform 0.3s', transform: showCharts ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                {showCharts ? '▲' : '▼'}
+              </span>
+            </div>
+
+            {showCharts && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                {/* Pie Chart - Loan Distribution */}
+                <div style={{ height: '200px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: language === 'ta' ? 'வாராந்திர' : 'Weekly', value: stats?.total_loan_amount || 0 },
+                          { name: language === 'ta' ? 'தினசரி' : 'Daily', value: dailySummary?.total_given || 0 },
+                          { name: language === 'ta' ? 'வட்டி' : 'Vaddi', value: vaddiSummary?.totalAmount || 0 }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={30}
+                        outerRadius={60}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        <Cell fill="#3b82f6" />
+                        <Cell fill="#22c55e" />
+                        <Cell fill="#f59e0b" />
+                      </Pie>
+                      <Tooltip formatter={(value) => formatCurrency(value)} />
+                      <Legend wrapperStyle={{ fontSize: '11px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Bar Chart - Collections vs Outstanding */}
+                <div style={{ height: '200px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={[
+                        {
+                          name: language === 'ta' ? 'வாராந்திர' : 'Weekly',
+                          collected: (stats?.total_loan_amount || 0) - (stats?.total_balance || 0),
+                          balance: stats?.total_balance || 0
+                        },
+                        {
+                          name: language === 'ta' ? 'தினசரி' : 'Daily',
+                          collected: (dailySummary?.total_given || 0) - (dailySummary?.total_outstanding || 0),
+                          balance: dailySummary?.total_outstanding || 0
+                        }
+                      ]}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
+                    >
+                      <XAxis dataKey="name" tick={{ fill: isDarkMode ? theme.text : '#64748b', fontSize: 10 }} />
+                      <YAxis tick={{ fill: isDarkMode ? theme.text : '#64748b', fontSize: 9 }} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(value) => formatCurrency(value)} />
+                      <Legend wrapperStyle={{ fontSize: '10px' }} />
+                      <Bar dataKey="collected" name={language === 'ta' ? 'வசூல்' : 'Collected'} fill="#22c55e" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="balance" name={language === 'ta' ? 'நிலுவை' : 'Balance'} fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Spacer for bottom bar */}
+          <div style={{ height: '70px' }} />
+
+        </div>
+      </div>
+
+      {/* Bottom Settings Bar */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: isDarkMode ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+        padding: '12px 16px',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '20px',
+        boxShadow: '0 -2px 10px rgba(0,0,0,0.1)',
+        zIndex: 100
+      }}>
+        {/* Dark Mode Toggle */}
+        <div
+          onClick={toggleDarkMode}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+            transition: 'all 0.3s'
+          }}
+        >
+          <span style={{ fontSize: '18px' }}>{isDarkMode ? '☀️' : '🌙'}</span>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: isDarkMode ? theme.text : '#374151' }}>
+            {isDarkMode ? t('light') : t('dark')}
+          </span>
+        </div>
+
+        {/* Language Toggle */}
+        <div
+          onClick={toggleLanguage}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+            transition: 'all 0.3s'
+          }}
+        >
+          <span style={{ fontSize: '18px' }}>🌐</span>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: isDarkMode ? theme.text : '#374151' }}>
+            {language === 'en' ? 'தமிழ்' : 'English'}
+          </span>
         </div>
       </div>
 
@@ -2115,6 +2292,7 @@ function QuickReferenceModal({ customers, onClose, formatCurrency }) {
             </table>
           )}
         </div>
+
       </div>
     </div>
   );

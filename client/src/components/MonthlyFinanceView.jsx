@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import useSWR from 'swr';
 import { API_URL } from '../config';
 
@@ -64,9 +64,40 @@ function MonthlyFinanceView({ navigateTo }) {
     );
   }
 
+  // Handler to update data and refresh selected customer
+  const handleCustomerUpdate = async () => {
+    try {
+      // Force re-fetch and wait for new data
+      const newData = await mutate(undefined, { revalidate: true });
+      console.log('Mutate returned:', newData);
+
+      // Update selectedCustomer with fresh data from server
+      if (selectedCustomer && newData && Array.isArray(newData)) {
+        const updatedCustomer = newData.find(c => c.id === selectedCustomer.id);
+        console.log('Updated customer found:', updatedCustomer);
+        if (updatedCustomer) {
+          setSelectedCustomer(updatedCustomer);
+        }
+      } else {
+        // If mutate didn't return data, manually fetch
+        console.log('Mutate returned no data, fetching manually...');
+        const response = await fetch(`${API_URL}/monthly-finance/customers`);
+        const freshData = await response.json();
+        if (selectedCustomer && freshData && Array.isArray(freshData)) {
+          const updatedCustomer = freshData.find(c => c.id === selectedCustomer.id);
+          if (updatedCustomer) {
+            setSelectedCustomer(updatedCustomer);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating customer:', error);
+    }
+  };
+
   // Detail view for selected customer
   if (selectedCustomer) {
-    return <MonthlyFinanceDetailView customer={selectedCustomer} onBack={() => setSelectedCustomer(null)} onUpdate={mutate} />;
+    return <MonthlyFinanceDetailView customer={selectedCustomer} onBack={() => setSelectedCustomer(null)} onUpdate={handleCustomerUpdate} />;
   }
 
   return (
@@ -653,6 +684,8 @@ Thank you for choosing us!
 // Detail view component for a single Monthly Finance customer
 function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
   const [loading, setLoading] = useState(false);
+  const [processingMonth, setProcessingMonth] = useState(null); // Track which month is being processed
+  const isProcessingRef = useRef(false); // Ref for immediate check (faster than state)
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -694,7 +727,13 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
   const monthsPaid = paymentSchedule.filter(p => p.paid).length;
 
   const handlePaymentToggle = async (monthIndex) => {
-    // Prevent double submission
+    // CRITICAL: Use ref for immediate check (prevents race condition)
+    if (isProcessingRef.current) {
+      console.log('Payment already in progress, ignoring click');
+      return;
+    }
+
+    // Also check state-based loading
     if (loading) return;
 
     const payment = paymentSchedule[monthIndex];
@@ -705,8 +744,12 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
       return;
     }
 
+    // Set ref IMMEDIATELY before any async operation
+    isProcessingRef.current = true;
+
     try {
       setLoading(true);
+      setProcessingMonth(monthIndex);
 
       // Add payment via API
       const response = await fetch(`${API_URL}/monthly-finance/customers/${customer.id}/payments`, {
@@ -746,16 +789,94 @@ Thank you for your payment!
       // Refresh data
       await onUpdate();
 
-      setLoading(false);
     } catch (error) {
       console.error('Error recording payment:', error);
       alert('Failed to record payment: ' + error.message);
+    } finally {
+      // Always reset both ref and state
+      isProcessingRef.current = false;
+      setLoading(false);
+      setProcessingMonth(null);
+    }
+  };
+
+  // Undo last payment
+  const handleUndoPayment = async () => {
+    if (loading) return;
+
+    const confirmUndo = window.confirm(
+      `Are you sure you want to undo the last payment of ${formatCurrency(customer.monthly_amount)} for ${customer.name}?`
+    );
+
+    if (!confirmUndo) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/monthly-finance/customers/${customer.id}/undo-payment`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to undo payment');
+      }
+
+      alert('Last payment undone successfully!');
+      await onUpdate();
+    } catch (error) {
+      console.error('Error undoing payment:', error);
+      alert('Failed to undo payment: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete customer
+  const handleDeleteCustomer = async () => {
+    if (loading) return;
+
+    const confirmDelete = window.confirm(
+      `⚠️ WARNING: Are you sure you want to DELETE "${customer.name}"?\n\nThis will permanently delete:\n- Customer record\n- All payment history\n\nThis action CANNOT be undone!`
+    );
+
+    if (!confirmDelete) return;
+
+    // Double confirmation for safety
+    const doubleConfirm = window.confirm(
+      `FINAL CONFIRMATION\n\nYou are about to permanently delete "${customer.name}" and all their data.\n\nType OK to proceed.`
+    );
+
+    if (!doubleConfirm) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/monthly-finance/customers/${customer.id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete customer');
+      }
+
+      alert('Customer deleted successfully!');
+      onBack(); // Go back to customer list
+    } catch (error) {
+      console.error('Error deleting customer:', error);
+      alert('Failed to delete customer: ' + error.message);
+    } finally {
       setLoading(false);
     }
   };
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
       {/* Header */}
       <div className="navbar" style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' }}>
         <svg
@@ -837,6 +958,70 @@ Thank you for your payment!
               }} />
             </div>
           </div>
+
+          {/* Undo Button */}
+          {monthsPaid > 0 && (
+            <button
+              onClick={handleUndoPayment}
+              disabled={loading}
+              style={{
+                marginTop: '16px',
+                width: '100%',
+                padding: '12px',
+                background: loading ? '#94a3b8' : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              {loading ? (
+                <>
+                  <span style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid white',
+                    borderTopColor: 'transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  Processing...
+                </>
+              ) : (
+                <>↩️ Undo Last Payment</>
+              )}
+            </button>
+          )}
+
+          {/* Delete Customer Button */}
+          <button
+            onClick={handleDeleteCustomer}
+            disabled={loading}
+            style={{
+              marginTop: '12px',
+              width: '100%',
+              padding: '12px',
+              background: loading ? '#94a3b8' : 'linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            🗑️ Delete Customer
+          </button>
         </div>
 
         {/* Payment Schedule */}
@@ -874,25 +1059,36 @@ Thank you for your payment!
                     Due: {formatDate(payment.date)} | {formatCurrency(payment.amount)}
                   </div>
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '8px' }}>
-                  <input
-                    type="checkbox"
-                    checked={payment.paid}
-                    onChange={() => handlePaymentToggle(index)}
-                    disabled={loading}
-                    style={{
+                <label style={{ display: 'flex', alignItems: 'center', cursor: loading ? 'not-allowed' : 'pointer', gap: '8px' }}>
+                  {processingMonth === index ? (
+                    <div style={{
                       width: '24px',
                       height: '24px',
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      accentColor: '#10b981'
-                    }}
-                  />
+                      border: '3px solid #e2e8f0',
+                      borderTopColor: '#10b981',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                  ) : (
+                    <input
+                      type="checkbox"
+                      checked={payment.paid}
+                      onChange={() => handlePaymentToggle(index)}
+                      disabled={loading || payment.paid}
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        cursor: loading || payment.paid ? 'not-allowed' : 'pointer',
+                        accentColor: '#10b981'
+                      }}
+                    />
+                  )}
                   <span style={{
                     fontSize: '14px',
                     fontWeight: 600,
-                    color: payment.paid ? '#10b981' : '#ef4444'
+                    color: processingMonth === index ? '#6366f1' : (payment.paid ? '#10b981' : '#ef4444')
                   }}>
-                    {payment.paid ? 'Paid' : 'Unpaid'}
+                    {processingMonth === index ? 'Saving...' : (payment.paid ? 'Paid' : 'Unpaid')}
                   </span>
                 </label>
               </div>
