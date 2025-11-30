@@ -1643,10 +1643,10 @@ function Dashboard({ navigateTo }) {
             </div>
 
             {showCharts && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', minHeight: '200px' }}>
                 {/* Pie Chart - Loan Distribution */}
-                <div style={{ height: '200px' }}>
-                  <ResponsiveContainer width="100%" height="100%">
+                <div style={{ height: '200px', minWidth: '150px' }}>
+                  <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
                       <Pie
                         data={[
@@ -1672,8 +1672,8 @@ function Dashboard({ navigateTo }) {
                 </div>
 
                 {/* Bar Chart - Collections vs Outstanding */}
-                <div style={{ height: '200px' }}>
-                  <ResponsiveContainer width="100%" height="100%">
+                <div style={{ height: '200px', minWidth: '150px' }}>
+                  <ResponsiveContainer width="100%" height={200}>
                     <BarChart
                       data={[
                         {
