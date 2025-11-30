@@ -47,12 +47,51 @@ app.get('/api/health', (req, res) => {
 app.get('/api/customers', async (req, res) => {
   try {
     const { search } = req.query;
-    let customersQuery = db.collection('customers');
 
-    // Get all customers
-    const customersSnapshot = await customersQuery.get();
+    // OPTIMIZED: Fetch all data in parallel (3 queries instead of N+1)
+    const [customersSnapshot, loansSnapshot, paymentsSnapshot] = await Promise.all([
+      db.collection('customers').get(),
+      db.collection('loans').where('status', '==', 'active').get(),
+      db.collection('payments').get()
+    ]);
+
+    // Build payments lookup: loan_id -> last payment date
+    const lastPaymentByLoan = {};
+    paymentsSnapshot.docs.forEach(doc => {
+      const payment = doc.data();
+      const loanId = payment.loan_id;
+      const paymentDate = payment.payment_date;
+      if (!lastPaymentByLoan[loanId] || paymentDate > lastPaymentByLoan[loanId]) {
+        lastPaymentByLoan[loanId] = paymentDate;
+      }
+    });
+
+    // Build loans lookup: customer_id -> array of loans
+    const loansByCustomer = {};
+    loansSnapshot.docs.forEach(loanDoc => {
+      const loanData = loanDoc.data();
+      const customerId = loanData.customer_id;
+      if (!loansByCustomer[customerId]) {
+        loansByCustomer[customerId] = [];
+      }
+      loansByCustomer[customerId].push({
+        loan_id: loanDoc.id,
+        loan_name: loanData.loan_name || 'General Loan',
+        loan_type: loanData.loan_type || 'Weekly',
+        loan_amount: loanData.loan_amount,
+        balance: loanData.balance,
+        weekly_amount: loanData.weekly_amount || 0,
+        monthly_amount: loanData.monthly_amount || 0,
+        status: loanData.status,
+        start_date: loanData.start_date,
+        loan_given_date: loanData.loan_given_date,
+        last_payment_date: lastPaymentByLoan[loanDoc.id] || null,
+        created_at: loanData.created_at
+      });
+    });
+
+    // Build customers array
     const customers = [];
-
     for (const doc of customersSnapshot.docs) {
       const customerData = { id: doc.id, ...doc.data() };
 
@@ -65,58 +104,9 @@ app.get('/api/customers', async (req, res) => {
         }
       }
 
-      // Get ALL active loans for this customer (grouped approach)
-      const loansSnapshot = await db.collection('loans')
-        .where('customer_id', '==', doc.id)
-        .where('status', '==', 'active')
-        .get();
+      const loans = loansByCustomer[doc.id] || [];
+      const totalBalance = loans.reduce((sum, loan) => sum + loan.balance, 0);
 
-      const loans = [];
-      let totalBalance = 0;
-
-      if (!loansSnapshot.empty) {
-        // Build array of all loans for this customer
-        for (const loanDoc of loansSnapshot.docs) {
-          const loanData = loanDoc.data();
-
-          // Get last payment date for this specific loan
-          let lastPaymentDate = null;
-          try {
-            const paymentsSnapshot = await db.collection('payments')
-              .where('loan_id', '==', loanDoc.id)
-              .get();
-
-            if (!paymentsSnapshot.empty) {
-              // Sort by payment_date in memory to avoid needing a Firestore index
-              const payments = paymentsSnapshot.docs.map(doc => doc.data());
-              payments.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
-              lastPaymentDate = payments[0].payment_date;
-            }
-          } catch (error) {
-            // If payments query fails, just set to null
-            lastPaymentDate = null;
-          }
-
-          loans.push({
-            loan_id: loanDoc.id,
-            loan_name: loanData.loan_name || 'General Loan', // Include loan name
-            loan_type: loanData.loan_type || 'Weekly', // Default to Weekly for old loans
-            loan_amount: loanData.loan_amount,
-            balance: loanData.balance,
-            weekly_amount: loanData.weekly_amount || 0,
-            monthly_amount: loanData.monthly_amount || 0,
-            status: loanData.status,
-            start_date: loanData.start_date,
-            loan_given_date: loanData.loan_given_date,
-            last_payment_date: lastPaymentDate,
-            created_at: loanData.created_at
-          });
-
-          totalBalance += loanData.balance;
-        }
-      }
-
-      // Add customer with all their loans grouped together
       customers.push({
         ...customerData,
         loans: loans,
