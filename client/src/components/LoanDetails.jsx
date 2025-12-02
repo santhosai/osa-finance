@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { mutate as globalMutate } from 'swr';
 import AddPaymentModal from './AddPaymentModal';
 import AddLoanModal from './AddLoanModal';
 import { API_URL } from '../config';
@@ -35,6 +35,7 @@ function LoanDetails({ loanId, navigateTo }) {
   };
 
   const formatCurrency = (amount) => {
+    if (amount === undefined || amount === null) return '₹0';
     return `₹${amount.toLocaleString('en-IN')}`;
   };
 
@@ -51,6 +52,8 @@ function LoanDetails({ loanId, navigateTo }) {
       });
 
       if (response.ok) {
+        // Force immediate refresh of all customer data globally
+        globalMutate(`${API_URL}/customers`);
         mutate(); // SWR: Re-fetch data to show updated name
         alert('Loan name updated successfully!');
       } else {
@@ -88,6 +91,8 @@ function LoanDetails({ loanId, navigateTo }) {
       });
 
       if (response.ok) {
+        // Force immediate refresh of all customer data globally
+        globalMutate(`${API_URL}/customers`);
         mutate();
         setShowEditLoanModal(false);
         alert('Loan details updated successfully!');
@@ -127,6 +132,8 @@ function LoanDetails({ loanId, navigateTo }) {
       });
 
       if (response.ok) {
+        // Force immediate refresh of all customer data globally
+        globalMutate(`${API_URL}/customers`);
         // Refresh loan details to update balance, progress, etc.
         mutate(); // SWR: Re-fetch data automatically
       } else {
@@ -160,6 +167,8 @@ function LoanDetails({ loanId, navigateTo }) {
       });
 
       if (response.ok) {
+        // Force immediate refresh of all customer data globally
+        globalMutate(`${API_URL}/customers`);
         alert('Loan closed successfully!');
         navigateTo('customers');
       } else {
@@ -185,6 +194,8 @@ function LoanDetails({ loanId, navigateTo }) {
       });
 
       if (response.ok) {
+        // Force immediate refresh of all customer data globally
+        globalMutate(`${API_URL}/customers`);
         alert('Loan archived successfully! You can find it in the Archive section.');
         navigateTo('customers');
       } else {

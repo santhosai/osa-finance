@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { mutate as globalMutate } from 'swr';
 import { API_URL } from '../config';
 import AddCustomerModal from './AddCustomerModal';
 
@@ -161,6 +162,9 @@ Thank you for choosing our service!
         // Send WhatsApp message to customer
         const paymentAmount = loanType === 'Weekly' ? weeklyAmount : monthlyAmount;
         await sendWhatsAppMessage(selectedCustomerId, loanAmount, paymentAmount, loanType);
+
+        // Force immediate refresh of all customer data globally
+        globalMutate(`${API_URL}/customers`);
 
         // Show success message and keep modal open
         setShowSuccess(true);

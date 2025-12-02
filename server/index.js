@@ -246,7 +246,7 @@ app.get('/api/loans/:id', async (req, res) => {
 
     // Get customer data
     const customerDoc = await db.collection('customers').doc(loanData.customer_id).get();
-    const customerData = customerDoc.data();
+    const customerData = customerDoc.exists ? customerDoc.data() : { name: 'Unknown', phone: 'N/A' };
 
     // Get payments for this loan
     const paymentsSnapshot = await db.collection('payments')

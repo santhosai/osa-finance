@@ -85,8 +85,16 @@ function ExcelPaymentTracker({ navigateTo }) {
           periodsPaid,
           loanAmount: loanDetails.loan_amount,
           paymentsByDate,
-          totalPaid: loanDetails.loan_amount - loanDetails.balance
+          totalPaid: loanDetails.loan_amount - loanDetails.balance,
+          createdAt: loanDetails.created_at || loanDetails.start_date || null // Store loan creation date
         });
+      });
+
+      // Sort rows by loan created date (newest first)
+      rows.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+        const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+        return dateB - dateA; // Descending order (newest first)
       });
 
       const sortedDates = Array.from(allDates).sort((a, b) => {

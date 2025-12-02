@@ -106,6 +106,10 @@ function Dashboard({ navigateTo }) {
         customer.loans.forEach(loan => {
           if (loan.status === 'closed' || loan.loan_type !== 'Weekly' || loan.balance <= 0) return;
 
+          // Skip loans where first payment Sunday hasn't arrived yet
+          const firstPaymentSunday = getFirstPaymentSunday(loan.start_date);
+          if (firstPaymentSunday > selected) return; // First payment is in the future
+
           // NEW LOGIC: Week number based on payments made, not calendar weeks
           // paymentsMade = how much collected / weekly amount
           const collected = loan.loan_amount - loan.balance;
@@ -1013,6 +1017,37 @@ function Dashboard({ navigateTo }) {
             </button>
           </div>
         )}
+
+        {/* Firebase Usage Monitor Quick Link */}
+        <div
+          onClick={() => window.open('https://console.firebase.google.com/project/financetracker-ba33d/usage', '_blank')}
+          style={{
+            background: isDarkMode
+              ? 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)'
+              : 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+            padding: '10px 16px',
+            margin: '10px 10px 0 10px',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            cursor: 'pointer'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>📊</span>
+            <div>
+              <div style={{ color: 'white', fontSize: '12px', fontWeight: 600 }}>
+                Firebase Usage Monitor
+              </div>
+              <div style={{ color: 'white', fontSize: '10px', opacity: 0.85 }}>
+                Check database reads & billing
+              </div>
+            </div>
+          </div>
+          <span style={{ color: 'white', fontSize: '16px' }}>→</span>
+        </div>
 
         {/* Stats Grid */}
         <div style={{ padding: '10px' }}>

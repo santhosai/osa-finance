@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { mutate as globalMutate } from 'swr';
 import { API_URL } from '../config';
 
 function AddPaymentModal({ loan, onClose, onSuccess }) {
@@ -58,6 +59,12 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
         const data = await response.json();
         setLastPayment(data);
         setSuccess(true);
+
+        // Force immediate refresh of all customer data globally
+        globalMutate(`${API_URL}/customers`);
+        // Also refresh the specific loan
+        globalMutate(`${API_URL}/loans/${loan.id}`);
+
         // Auto-refresh parent component immediately after payment
         onSuccess();
       } else {
