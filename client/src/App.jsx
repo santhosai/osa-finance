@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
-import OTPLogin from './components/OTPLogin';
+import Login from './components/Login';
+import OTPRegistration from './components/OTPRegistration';
 import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
 import CustomerLoans from './components/CustomerLoans';
@@ -122,6 +123,8 @@ function App() {
     return loggedIn;
   });
 
+  const [showRegistration, setShowRegistration] = useState(false);
+
   useEffect(() => {
     // Save login state to localStorage
     localStorage.setItem('isLoggedIn', isLoggedIn);
@@ -132,9 +135,12 @@ function App() {
     localStorage.removeItem('isLoggedIn');
   };
 
-  // Show OTP login page if not logged in
+  // Show login or registration page if not logged in
   if (!isLoggedIn) {
-    return <OTPLogin onLoginSuccess={() => setIsLoggedIn(true)} />;
+    if (showRegistration) {
+      return <OTPRegistration onBackToLogin={() => setShowRegistration(false)} />;
+    }
+    return <Login onLoginSuccess={() => setIsLoggedIn(true)} onShowRegistration={() => setShowRegistration(true)} />;
   }
 
   return (

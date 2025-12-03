@@ -5,7 +5,7 @@ import './Login.css';
 // PASSWORD VERSION - Change this when you change password to logout all devices
 const PASSWORD_VERSION = '2025-01-27-v2';
 
-function Login({ onLogin }) {
+function Login({ onLoginSuccess, onShowRegistration }) {
   const [mode, setMode] = useState('login'); // 'login', 'register', 'admin'
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +29,7 @@ function Login({ onLogin }) {
       localStorage.setItem('passwordVersion', PASSWORD_VERSION);
       localStorage.setItem('userRole', 'admin');
       localStorage.setItem('userName', 'Admin');
-      onLogin(true);
+      onLoginSuccess();
     } else {
       setError('Invalid Admin ID or Password');
       setTimeout(() => setError(''), 3000);
@@ -61,7 +61,7 @@ function Login({ onLogin }) {
         localStorage.setItem('userRole', data.user.role);
         localStorage.setItem('userName', data.user.name);
         localStorage.setItem('userId', data.user.id);
-        onLogin(true);
+        onLoginSuccess();
       } else {
         setError(data.error || 'Login failed');
         setTimeout(() => setError(''), 5000);
@@ -206,7 +206,7 @@ function Login({ onLogin }) {
             <div style={{ marginTop: '16px', textAlign: 'center' }}>
               <button
                 type="button"
-                onClick={() => { setMode('register'); setError(''); }}
+                onClick={() => { onShowRegistration(); setError(''); }}
                 style={{
                   background: 'transparent',
                   border: 'none',
