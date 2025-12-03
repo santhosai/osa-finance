@@ -75,7 +75,8 @@ function OTPLogin({ onLoginSuccess }) {
       const result = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
 
       setConfirmationResult(result);
-      setStep(isNewUser ? 'name' : 'otp');
+      // Use checkData.exists directly instead of isNewUser state (which hasn't updated yet)
+      setStep(checkData.exists ? 'otp' : 'name');
       setLoading(false);
     } catch (err) {
       console.error('Error sending OTP:', err);
