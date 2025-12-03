@@ -2048,6 +2048,170 @@ app.put('/api/users/:id/reject', async (req, res) => {
   }
 });
 
+// Check if phone number exists and get status (for OTP login)
+app.post('/api/users/check-phone', async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    const usersSnapshot = await db.collection('app_users')
+      .where('phone', '==', phone)
+      .get();
+
+    if (usersSnapshot.empty) {
+      return res.json({ exists: false });
+    }
+
+    const userData = usersSnapshot.docs[0].data();
+
+    res.json({
+      exists: true,
+      status: userData.status,
+      name: userData.name
+    });
+  } catch (error) {
+    console.error('Error checking phone:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Register new user with OTP (after OTP verification)
+app.post('/api/users/register-with-otp', async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+
+    if (!name || !phone) {
+      return res.status(400).json({ error: 'Name and phone are required' });
+    }
+
+    // Check if phone already exists
+    const existingPhone = await db.collection('app_users')
+      .where('phone', '==', phone)
+      .get();
+
+    if (!existingPhone.empty) {
+      return res.status(400).json({ error: 'Phone number already registered' });
+    }
+
+    const userData = {
+      name,
+      phone,
+      email: '',
+      status: 'pending', // pending, approved, rejected
+      role: 'user',
+      created_at: new Date().toISOString(),
+      phone_verified: true // OTP verified
+    };
+
+    const docRef = await db.collection('app_users').add(userData);
+
+    console.log(`✅ New user registered via OTP: ${phone} (pending approval)`);
+
+    res.status(201).json({
+      message: 'Registration successful! Please wait for admin approval.',
+      user_id: docRef.id
+    });
+  } catch (error) {
+    console.error('Error registering user with OTP:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Login with OTP (after OTP verification)
+app.post('/api/users/login-with-otp', async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    const usersSnapshot = await db.collection('app_users')
+      .where('phone', '==', phone)
+      .get();
+
+    if (usersSnapshot.empty) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const userDoc = usersSnapshot.docs[0];
+    const userData = userDoc.data();
+
+    // Check status
+    if (userData.status === 'pending') {
+      return res.status(403).json({
+        error: 'Your account is pending approval. Please wait for admin to approve your access.',
+        status: 'pending'
+      });
+    }
+
+    if (userData.status === 'rejected') {
+      return res.status(403).json({
+        error: 'Your account has been rejected. Please contact admin.',
+        status: 'rejected'
+      });
+    }
+
+    // Update last login
+    await db.collection('app_users').doc(userDoc.id).update({
+      last_login: new Date().toISOString()
+    });
+
+    console.log(`✅ User logged in via OTP: ${phone}`);
+
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: userDoc.id,
+        name: userData.name,
+        phone: userData.phone,
+        role: userData.role,
+        status: userData.status
+      }
+    });
+  } catch (error) {
+    console.error('Error logging in with OTP:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all pending users (admin only)
+app.get('/api/users/pending', async (req, res) => {
+  try {
+    const { admin_password } = req.query;
+
+    // Verify admin password
+    if (admin_password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Invalid admin password' });
+    }
+
+    const pendingSnapshot = await db.collection('app_users')
+      .where('status', '==', 'pending')
+      .orderBy('created_at', 'desc')
+      .get();
+
+    const pendingUsers = [];
+    pendingSnapshot.forEach(doc => {
+      const data = doc.data();
+      pendingUsers.push({
+        id: doc.id,
+        name: data.name,
+        phone: data.phone,
+        email: data.email,
+        created_at: data.created_at
+      });
+    });
+
+    res.json({ users: pendingUsers });
+  } catch (error) {
+    console.error('Error fetching pending users:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete user (admin only)
 app.delete('/api/users/:id', async (req, res) => {
   try {

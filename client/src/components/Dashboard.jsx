@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import AddCustomerModal from './AddCustomerModal';
 import PaymentsThisWeekModal from './PaymentsThisWeekModal';
 import DatabaseMonitorModal from './DatabaseMonitorModal';
+import AdminApprovalPanel from './AdminApprovalPanel';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -18,6 +19,7 @@ function Dashboard({ navigateTo }) {
 
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
+  const [showAdminApprovalPanel, setShowAdminApprovalPanel] = useState(false);
   const [showDatabaseMonitorModal, setShowDatabaseMonitorModal] = useState(false);
   const [showQuickRefModal, setShowQuickRefModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -1043,6 +1045,37 @@ function Dashboard({ navigateTo }) {
               </div>
               <div style={{ color: 'white', fontSize: '10px', opacity: 0.85 }}>
                 Check database reads & billing
+              </div>
+            </div>
+          </div>
+          <span style={{ color: 'white', fontSize: '16px' }}>→</span>
+        </div>
+
+        {/* Admin User Approval Panel Quick Link */}
+        <div
+          onClick={() => setShowAdminApprovalPanel(true)}
+          style={{
+            background: isDarkMode
+              ? 'linear-gradient(135deg, #b45309 0%, #92400e 100%)'
+              : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+            padding: '10px 16px',
+            margin: '10px 10px 0 10px',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            cursor: 'pointer'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>👥</span>
+            <div>
+              <div style={{ color: 'white', fontSize: '12px', fontWeight: 600 }}>
+                User Approval Panel
+              </div>
+              <div style={{ color: 'white', fontSize: '10px', opacity: 0.85 }}>
+                Approve/Reject pending users
               </div>
             </div>
           </div>
@@ -2329,6 +2362,11 @@ function QuickReferenceModal({ customers, onClose, formatCurrency }) {
         </div>
 
       </div>
+
+      {/* Admin Approval Panel Modal */}
+      {showAdminApprovalPanel && (
+        <AdminApprovalPanel onClose={() => setShowAdminApprovalPanel(false)} />
+      )}
     </div>
   );
 }

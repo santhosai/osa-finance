@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
-import Login from './components/Login';
+import OTPLogin from './components/OTPLogin';
 import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
 import CustomerLoans from './components/CustomerLoans';
@@ -132,9 +132,9 @@ function App() {
     localStorage.removeItem('isLoggedIn');
   };
 
-  // Show login page if not logged in
+  // Show OTP login page if not logged in
   if (!isLoggedIn) {
-    return <Login onLogin={setIsLoggedIn} />;
+    return <OTPLogin onLoginSuccess={() => setIsLoggedIn(true)} />;
   }
 
   return (
