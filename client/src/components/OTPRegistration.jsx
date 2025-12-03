@@ -150,6 +150,44 @@ function OTPRegistration({ onBackToLogin }) {
       position: 'relative',
       overflow: 'hidden'
     }}>
+      {/* Flying Butterflies */}
+      <div style={{
+        position: 'absolute',
+        left: '10%',
+        top: '20%',
+        fontSize: '40px',
+        opacity: 0.7,
+        pointerEvents: 'none',
+        animation: 'fly 12s infinite ease-in-out 0s'
+      }}>🦋</div>
+      <div style={{
+        position: 'absolute',
+        left: '80%',
+        top: '30%',
+        fontSize: '35px',
+        opacity: 0.7,
+        pointerEvents: 'none',
+        animation: 'fly 15s infinite ease-in-out 3s'
+      }}>🦋</div>
+      <div style={{
+        position: 'absolute',
+        left: '50%',
+        top: '60%',
+        fontSize: '45px',
+        opacity: 0.7,
+        pointerEvents: 'none',
+        animation: 'fly 18s infinite ease-in-out 6s'
+      }}>🦋</div>
+      <div style={{
+        position: 'absolute',
+        left: '20%',
+        top: '70%',
+        fontSize: '38px',
+        opacity: 0.7,
+        pointerEvents: 'none',
+        animation: 'fly 14s infinite ease-in-out 9s'
+      }}>🦋</div>
+
       {/* Animated floating circles background */}
       <div style={{
         position: 'absolute',
@@ -182,6 +220,20 @@ function OTPRegistration({ onBackToLogin }) {
         @keyframes slideIn {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fly {
+          0%, 100% {
+            transform: translate(0, 0) rotate(0deg) scale(1);
+          }
+          25% {
+            transform: translate(100px, -80px) rotate(15deg) scale(1.1);
+          }
+          50% {
+            transform: translate(-50px, -150px) rotate(-15deg) scale(0.9);
+          }
+          75% {
+            transform: translate(150px, -100px) rotate(20deg) scale(1.05);
+          }
         }
       `}</style>
 
