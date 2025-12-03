@@ -706,6 +706,28 @@ function Dashboard({ navigateTo }) {
             📦 {t('archivedLoans')}
           </button>
 
+          {localStorage.getItem('userRole') === 'admin' && (
+            <button
+              onClick={() => { setShowSidebar(false); navigateTo('user-management'); }}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: 'transparent',
+                color: 'white',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                transition: 'background 0.15s'
+              }}
+              onMouseOver={(e) => e.target.style.background = '#334155'}
+              onMouseOut={(e) => e.target.style.background = 'transparent'}
+            >
+              👥 {t('userManagement')}
+            </button>
+          )}
+
           {/* Admin Profit - Password Protected */}
           <button
             onClick={() => { setShowSidebar(false); navigateTo('admin-profit'); }}
