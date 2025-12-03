@@ -6,9 +6,9 @@ import { API_URL } from '../config';
 function OTPRegistration({ onBackToLogin }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
   const [confirmationResult, setConfirmationResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -27,8 +27,7 @@ function OTPRegistration({ onBackToLogin }) {
   };
 
   // Send OTP
-  const handleSendOTP = async (e) => {
-    e.preventDefault();
+  const handleSendOTP = async () => {
     setError('');
     setLoading(true);
 
@@ -41,6 +40,12 @@ function OTPRegistration({ onBackToLogin }) {
 
       if (!/^\d{10}$/.test(phone)) {
         setError('Please enter a valid 10-digit mobile number');
+        setLoading(false);
+        return;
+      }
+
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters');
         setLoading(false);
         return;
       }
@@ -77,39 +82,22 @@ function OTPRegistration({ onBackToLogin }) {
     }
   };
 
-  // Verify OTP
-  const handleVerifyOTP = async () => {
-    if (otp.length !== 6) {
-      setError('Please enter 6-digit OTP');
-      return;
-    }
-
-    setError('');
-    setLoading(true);
-
-    try {
-      await confirmationResult.confirm(otp);
-      setOtpVerified(true);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error verifying OTP:', err);
-      setError('Invalid OTP. Please try again.');
-      setLoading(false);
-    }
-  };
-
-  // Register user with password
-  const handleRegister = async (e) => {
+  // Verify OTP and Register
+  const handleVerifyAndRegister = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters');
+      if (otp.length !== 6) {
+        setError('Please enter 6-digit OTP');
         setLoading(false);
         return;
       }
+
+      // Verify OTP with Firebase
+      await confirmationResult.confirm(otp);
+      setOtpVerified(true);
 
       // Register user with password
       const registerResponse = await fetch(`${API_URL}/users/register`, {
@@ -133,7 +121,7 @@ function OTPRegistration({ onBackToLogin }) {
       setRegistrationComplete(true);
       setLoading(false);
     } catch (err) {
-      console.error('Error registering:', err);
+      console.error('Error:', err);
       setError(err.message || 'Registration failed. Please try again.');
       setLoading(false);
     }
@@ -150,66 +138,6 @@ function OTPRegistration({ onBackToLogin }) {
       position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* Flying Butterflies */}
-      <div style={{
-        position: 'absolute',
-        left: '10%',
-        top: '20%',
-        fontSize: '40px',
-        opacity: 0.7,
-        pointerEvents: 'none',
-        animation: 'fly 12s infinite ease-in-out 0s'
-      }}>🦋</div>
-      <div style={{
-        position: 'absolute',
-        left: '80%',
-        top: '30%',
-        fontSize: '35px',
-        opacity: 0.7,
-        pointerEvents: 'none',
-        animation: 'fly 15s infinite ease-in-out 3s'
-      }}>🦋</div>
-      <div style={{
-        position: 'absolute',
-        left: '50%',
-        top: '60%',
-        fontSize: '45px',
-        opacity: 0.7,
-        pointerEvents: 'none',
-        animation: 'fly 18s infinite ease-in-out 6s'
-      }}>🦋</div>
-      <div style={{
-        position: 'absolute',
-        left: '20%',
-        top: '70%',
-        fontSize: '38px',
-        opacity: 0.7,
-        pointerEvents: 'none',
-        animation: 'fly 14s infinite ease-in-out 9s'
-      }}>🦋</div>
-
-      {/* Animated floating circles background */}
-      <div style={{
-        position: 'absolute',
-        width: '300px',
-        height: '300px',
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.1)',
-        top: '-100px',
-        left: '-100px',
-        animation: 'float 6s ease-in-out infinite'
-      }} />
-      <div style={{
-        position: 'absolute',
-        width: '200px',
-        height: '200px',
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.1)',
-        bottom: '-50px',
-        right: '-50px',
-        animation: 'float 8s ease-in-out infinite reverse'
-      }} />
-
       <div id="recaptcha-container"></div>
 
       <style>{`
@@ -221,18 +149,18 @@ function OTPRegistration({ onBackToLogin }) {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes fly {
+        @keyframes fly-inside {
           0%, 100% {
-            transform: translate(0, 0) rotate(0deg) scale(1);
+            transform: translate(0, 0) rotate(0deg);
           }
           25% {
-            transform: translate(100px, -80px) rotate(15deg) scale(1.1);
+            transform: translate(30px, -20px) rotate(15deg);
           }
           50% {
-            transform: translate(-50px, -150px) rotate(-15deg) scale(0.9);
+            transform: translate(-20px, -40px) rotate(-15deg);
           }
           75% {
-            transform: translate(150px, -100px) rotate(20deg) scale(1.05);
+            transform: translate(40px, -30px) rotate(20deg);
           }
         }
       `}</style>
@@ -246,9 +174,39 @@ function OTPRegistration({ onBackToLogin }) {
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
         animation: 'slideIn 0.5s ease-out',
         position: 'relative',
-        zIndex: 1
+        zIndex: 1,
+        overflow: 'hidden'
       }}>
-        <div style={{ textAlign: 'center', marginBottom: '35px' }}>
+        {/* Butterflies INSIDE the card */}
+        <div style={{
+          position: 'absolute',
+          left: '10%',
+          top: '15%',
+          fontSize: '25px',
+          opacity: 0.3,
+          pointerEvents: 'none',
+          animation: 'fly-inside 10s infinite ease-in-out 0s'
+        }}>🦋</div>
+        <div style={{
+          position: 'absolute',
+          right: '10%',
+          top: '40%',
+          fontSize: '22px',
+          opacity: 0.3,
+          pointerEvents: 'none',
+          animation: 'fly-inside 12s infinite ease-in-out 3s'
+        }}>🦋</div>
+        <div style={{
+          position: 'absolute',
+          left: '15%',
+          bottom: '20%',
+          fontSize: '28px',
+          opacity: 0.3,
+          pointerEvents: 'none',
+          animation: 'fly-inside 14s infinite ease-in-out 6s'
+        }}>🦋</div>
+
+        <div style={{ textAlign: 'center', marginBottom: '35px', position: 'relative', zIndex: 10 }}>
           <h1 style={{
             color: '#FF6B35',
             margin: '0 0 5px 0',
@@ -280,7 +238,7 @@ function OTPRegistration({ onBackToLogin }) {
 
         {!registrationComplete ? (
           <>
-            <h2 style={{ textAlign: 'center', color: '#1e293b', marginBottom: '25px', fontSize: '20px' }}>
+            <h2 style={{ textAlign: 'center', color: '#1e293b', marginBottom: '25px', fontSize: '20px', position: 'relative', zIndex: 10 }}>
               Create New Account
             </h2>
 
@@ -292,13 +250,15 @@ function OTPRegistration({ onBackToLogin }) {
                 padding: '12px',
                 marginBottom: '20px',
                 color: '#dc2626',
-                fontSize: '14px'
+                fontSize: '14px',
+                position: 'relative',
+                zIndex: 10
               }}>
                 {error}
               </div>
             )}
 
-            <form onSubmit={otpVerified ? handleRegister : handleSendOTP}>
+            <form onSubmit={handleVerifyAndRegister} style={{ position: 'relative', zIndex: 10 }}>
               {/* Name */}
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1e293b' }}>
@@ -309,15 +269,13 @@ function OTPRegistration({ onBackToLogin }) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Enter your full name"
-                  disabled={otpSent}
                   style={{
                     width: '100%',
                     padding: '12px',
                     border: '2px solid #e2e8f0',
                     borderRadius: '8px',
                     fontSize: '16px',
-                    outline: 'none',
-                    background: otpSent ? '#f8fafc' : 'white'
+                    outline: 'none'
                   }}
                   required
                 />
@@ -344,173 +302,134 @@ function OTPRegistration({ onBackToLogin }) {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder="Enter 10-digit mobile number"
-                    disabled={otpSent}
                     style={{
                       width: '100%',
                       padding: '12px 12px 12px 50px',
                       border: '2px solid #e2e8f0',
                       borderRadius: '8px',
                       fontSize: '16px',
-                      outline: 'none',
-                      background: otpSent ? '#f8fafc' : 'white'
+                      outline: 'none'
                     }}
                     required
                     maxLength="10"
                   />
                 </div>
+                {!otpSent && (
+                  <button
+                    type="button"
+                    onClick={handleSendOTP}
+                    disabled={loading || !name || !phone || !password}
+                    style={{
+                      marginTop: '10px',
+                      padding: '10px 20px',
+                      background: loading || !name || !phone || !password ? '#cbd5e1' : '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: loading || !name || !phone || !password ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {loading ? '⏳ Sending...' : '📱 Send OTP'}
+                  </button>
+                )}
               </div>
 
-              {/* Send OTP Button */}
-              {!otpSent && (
+              {/* OTP Input (shown after OTP sent) */}
+              {otpSent && !otpVerified && (
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1e293b' }}>
+                    Enter OTP
+                  </label>
+                  <p style={{ color: '#10b981', fontSize: '13px', marginBottom: '10px' }}>
+                    ✓ OTP sent to +91{phone} (Check SMS)
+                  </p>
+                  <input
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="Enter 6-digit OTP"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '2px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '20px',
+                      textAlign: 'center',
+                      letterSpacing: '8px',
+                      outline: 'none'
+                    }}
+                    required
+                    maxLength="6"
+                  />
+                </div>
+              )}
+
+              {/* Email */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1e293b' }}>
+                  Email (Optional)
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              {/* Password */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1e293b' }}>
+                  Create Password *
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Create password (min 6 chars)"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    outline: 'none'
+                  }}
+                  required
+                  minLength="6"
+                />
+              </div>
+
+              {/* Register Button */}
+              {otpSent && (
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || otp.length !== 6}
                   style={{
                     width: '100%',
                     padding: '16px',
-                    background: loading ? '#cbd5e1' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: loading || otp.length !== 6 ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '12px',
                     fontSize: '16px',
                     fontWeight: 700,
-                    cursor: loading ? 'not-allowed' : 'pointer',
+                    cursor: loading || otp.length !== 6 ? 'not-allowed' : 'pointer',
                     marginBottom: '15px'
                   }}
                 >
-                  {loading ? '⏳ Sending...' : '📱 Send OTP'}
+                  {loading ? 'Registering...' : '✓ Register'}
                 </button>
-              )}
-
-              {/* OTP Input (shown after OTP sent) */}
-              {otpSent && !otpVerified && (
-                <>
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1e293b' }}>
-                      Enter OTP
-                    </label>
-                    <p style={{ color: '#10b981', fontSize: '13px', marginBottom: '10px' }}>
-                      ✓ OTP sent to +91{phone} (Check SMS)
-                    </p>
-                    <input
-                      type="text"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="Enter 6-digit OTP"
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        border: '2px solid #e2e8f0',
-                        borderRadius: '8px',
-                        fontSize: '20px',
-                        textAlign: 'center',
-                        letterSpacing: '8px',
-                        outline: 'none'
-                      }}
-                      required
-                      maxLength="6"
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleVerifyOTP}
-                    disabled={loading || otp.length !== 6}
-                    style={{
-                      width: '100%',
-                      padding: '14px',
-                      background: loading || otp.length !== 6 ? '#94a3b8' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontSize: '16px',
-                      fontWeight: 600,
-                      cursor: loading || otp.length !== 6 ? 'not-allowed' : 'pointer',
-                      marginBottom: '15px'
-                    }}
-                  >
-                    {loading ? 'Verifying...' : '✓ Verify OTP'}
-                  </button>
-                </>
-              )}
-
-              {/* Email and Password (shown after OTP verified) */}
-              {otpVerified && (
-                <>
-                  <div style={{
-                    background: '#d1fae5',
-                    padding: '10px',
-                    borderRadius: '8px',
-                    marginBottom: '20px',
-                    textAlign: 'center',
-                    color: '#065f46',
-                    fontWeight: 600,
-                    fontSize: '14px'
-                  }}>
-                    ✓ Phone Verified! Complete your registration
-                  </div>
-
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1e293b' }}>
-                      Email (Optional)
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        border: '2px solid #e2e8f0',
-                        borderRadius: '8px',
-                        fontSize: '16px',
-                        outline: 'none'
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1e293b' }}>
-                      Create Password *
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Create password (min 6 chars)"
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        border: '2px solid #e2e8f0',
-                        borderRadius: '8px',
-                        fontSize: '16px',
-                        outline: 'none'
-                      }}
-                      required
-                      minLength="6"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    style={{
-                      width: '100%',
-                      padding: '16px',
-                      background: loading ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '12px',
-                      fontSize: '16px',
-                      fontWeight: 700,
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      marginBottom: '15px'
-                    }}
-                  >
-                    {loading ? 'Registering...' : '✓ Register'}
-                  </button>
-                </>
               )}
 
               <button
@@ -533,7 +452,7 @@ function OTPRegistration({ onBackToLogin }) {
             </form>
           </>
         ) : (
-          <div style={{ textAlign: 'center' }}>
+          <div style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
             <div style={{ fontSize: '60px', marginBottom: '20px' }}>⏳</div>
             <h3 style={{ color: '#1e293b', marginBottom: '10px' }}>Registration Successful!</h3>
             <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.6' }}>
