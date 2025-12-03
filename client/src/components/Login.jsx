@@ -20,6 +20,24 @@ function Login({ onLoginSuccess, onShowRegistration }) {
   // Helper to check if a string is likely a phone number
   const isPhoneNumber = (value) => /^\d{10}$/.test(value);
 
+  // Confetti blast animation
+  const triggerConfetti = () => {
+    const colors = ['#ff6b35', '#667eea', '#764ba2', '#fbbf24', '#10b981', '#f472b6', '#8b5cf6'];
+    const confettiCount = 100;
+
+    for (let i = 0; i < confettiCount; i++) {
+      const confetti = document.createElement('div');
+      confetti.className = 'confetti';
+      confetti.style.left = Math.random() * 100 + 'vw';
+      confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+      confetti.style.animationDelay = Math.random() * 0.5 + 's';
+      confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
+      document.body.appendChild(confetti);
+
+      setTimeout(() => confetti.remove(), 3000);
+    }
+  };
+
   const handleAdminLogin = (e) => {
     e.preventDefault();
 
@@ -135,6 +153,12 @@ function Login({ onLoginSuccess, onShowRegistration }) {
 
   return (
     <div className="login-container">
+      {/* Flying Butterflies */}
+      <div className="butterfly butterfly1" style={{ fontSize: '40px' }}>🦋</div>
+      <div className="butterfly butterfly2" style={{ fontSize: '35px' }}>🦋</div>
+      <div className="butterfly butterfly3" style={{ fontSize: '45px' }}>🦋</div>
+      <div className="butterfly butterfly4" style={{ fontSize: '38px' }}>🦋</div>
+
       <div className="login-box">
         <div className="company-header">
           <div className="company-name-container">
@@ -206,7 +230,7 @@ function Login({ onLoginSuccess, onShowRegistration }) {
             <div style={{ marginTop: '16px', textAlign: 'center' }}>
               <button
                 type="button"
-                onClick={() => { onShowRegistration(); setError(''); }}
+                onClick={() => { triggerConfetti(); setTimeout(() => onShowRegistration(), 100); setError(''); }}
                 style={{
                   background: 'transparent',
                   border: 'none',

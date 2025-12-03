@@ -5,6 +5,80 @@
   justify-content: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Flying Butterflies Animation */
+.butterfly {
+  position: absolute;
+  animation: fly 15s infinite ease-in-out;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.butterfly1 {
+  left: 10%;
+  top: 20%;
+  animation-delay: 0s;
+  animation-duration: 12s;
+}
+
+.butterfly2 {
+  left: 80%;
+  top: 30%;
+  animation-delay: 3s;
+  animation-duration: 15s;
+}
+
+.butterfly3 {
+  left: 50%;
+  top: 60%;
+  animation-delay: 6s;
+  animation-duration: 18s;
+}
+
+.butterfly4 {
+  left: 20%;
+  top: 70%;
+  animation-delay: 9s;
+  animation-duration: 14s;
+}
+
+@keyframes fly {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translate(100px, -80px) rotate(15deg) scale(1.1);
+  }
+  50% {
+    transform: translate(-50px, -150px) rotate(-15deg) scale(0.9);
+  }
+  75% {
+    transform: translate(150px, -100px) rotate(20deg) scale(1.05);
+  }
+}
+
+/* Confetti Animation */
+.confetti {
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  animation: confetti-fall 3s linear forwards;
+  z-index: 9999;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
 }
 
 .login-box {
