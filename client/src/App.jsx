@@ -16,6 +16,8 @@ import ArchivedLoans from './components/ArchivedLoans';
 import UserManagement from './components/UserManagement';
 import DailyFinance from './components/DailyFinance';
 import AdminProfit from './components/AdminProfit';
+import UserCollections from './components/UserCollections';
+import AdminCollections from './components/AdminCollections';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -106,6 +108,16 @@ function AdminProfitWrapper() {
   return <AdminProfit navigateTo={(path) => navigate(`/${path}`)} />;
 }
 
+function UserCollectionsWrapper() {
+  const navigate = useNavigate();
+  return <UserCollections navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+function AdminCollectionsWrapper() {
+  const navigate = useNavigate();
+  return <AdminCollections navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     // Check localStorage for existing login session
@@ -159,6 +171,8 @@ function App() {
               <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
               <Route path="/user-management" element={<UserManagementWrapper />} />
               <Route path="/admin-profit" element={<AdminProfitWrapper />} />
+              <Route path="/my-collections" element={<UserCollectionsWrapper />} />
+              <Route path="/admin-collections" element={<AdminCollectionsWrapper />} />
             </Routes>
           </div>
         </BrowserRouter>

@@ -299,7 +299,9 @@ function Dashboard({ navigateTo }) {
           amount: amount,
           payment_date: selectedDate,
           payment_method: 'Cash',
-          notes: `Quick payment - Week ${quickPayConfirm.weekNumber}`
+          notes: `Quick payment - Week ${quickPayConfirm.weekNumber}`,
+          collected_by: localStorage.getItem('userId') || '',
+          collected_by_name: localStorage.getItem('userName') || ''
         })
       });
 
@@ -725,6 +727,54 @@ function Dashboard({ navigateTo }) {
               onMouseOut={(e) => e.target.style.background = 'transparent'}
             >
               👥 {t('userManagement')}
+            </button>
+          )}
+
+          {/* My Collections - For Users */}
+          {localStorage.getItem('userRole') !== 'admin' && (
+            <button
+              onClick={() => { setShowSidebar(false); navigateTo('my-collections'); }}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                color: 'white',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                transition: 'background 0.15s',
+                marginTop: '8px'
+              }}
+              onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)'}
+              onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'}
+            >
+              💰 My Collections
+            </button>
+          )}
+
+          {/* User Collections - For Admin */}
+          {localStorage.getItem('userRole') === 'admin' && (
+            <button
+              onClick={() => { setShowSidebar(false); navigateTo('admin-collections'); }}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                transition: 'background 0.15s',
+                marginTop: '8px'
+              }}
+              onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'}
+              onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'}
+            >
+              📊 User Collections
             </button>
           )}
 

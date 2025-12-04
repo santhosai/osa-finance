@@ -490,7 +490,7 @@ app.get('/api/payments', async (req, res) => {
 // Create payment
 app.post('/api/payments', async (req, res) => {
   try {
-    const { loan_id, amount, payment_date, payment_mode, offline_amount, online_amount } = req.body;
+    const { loan_id, amount, payment_date, payment_mode, offline_amount, online_amount, collected_by, collected_by_name } = req.body;
 
     if (!loan_id || !amount || !payment_date) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -551,6 +551,8 @@ app.post('/api/payments', async (req, res) => {
       periods_covered: periodsCovered, // Can be weeks or months depending on loan type
       period_number: periodNumber,
       balance_after: newBalance,
+      collected_by: collected_by || '',
+      collected_by_name: collected_by_name || '',
       created_at: new Date().toISOString()
     };
 
@@ -2919,6 +2921,272 @@ app.put('/api/daily-loans/:id/close', async (req, res) => {
     res.json({ message: 'Loan closed successfully' });
   } catch (error) {
     console.error('Error closing daily loan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== USER COLLECTION TRACKING ====================
+
+// Record a transfer from user to admin (user sends collected money to admin's bank)
+app.post('/api/user-transfers', async (req, res) => {
+  try {
+    const { user_id, user_name, amount, transfer_date, transfer_mode, notes } = req.body;
+
+    if (!user_id || !amount || !transfer_date) {
+      return res.status(400).json({ error: 'User ID, amount, and transfer date are required' });
+    }
+
+    const transferData = {
+      user_id,
+      user_name: user_name || '',
+      amount: Number(amount),
+      transfer_date,
+      transfer_mode: transfer_mode || 'bank', // bank, cash, upi
+      notes: notes || '',
+      status: 'pending', // pending, confirmed by admin
+      created_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('user_transfers').add(transferData);
+
+    res.status(201).json({
+      id: docRef.id,
+      ...transferData,
+      message: 'Transfer recorded successfully'
+    });
+  } catch (error) {
+    console.error('Error recording transfer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all transfers for a specific user
+app.get('/api/user-transfers/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    let query = db.collection('user_transfers').where('user_id', '==', userId);
+
+    const snapshot = await query.orderBy('created_at', 'desc').get();
+
+    const transfers = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // Filter by date if provided
+    let filteredTransfers = transfers;
+    if (startDate && endDate) {
+      filteredTransfers = transfers.filter(t =>
+        t.transfer_date >= startDate && t.transfer_date <= endDate
+      );
+    }
+
+    // Calculate totals
+    const totalTransferred = filteredTransfers.reduce((sum, t) => sum + t.amount, 0);
+
+    res.json({
+      transfers: filteredTransfers,
+      totalTransferred
+    });
+  } catch (error) {
+    console.error('Error fetching user transfers:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get collections summary for a user (payments they collected)
+app.get('/api/user-collections/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    // Get all payments collected by this user
+    const paymentsSnapshot = await db.collection('payments')
+      .where('collected_by', '==', userId)
+      .get();
+
+    let payments = paymentsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // Filter by date if provided
+    if (startDate && endDate) {
+      payments = payments.filter(p =>
+        p.payment_date >= startDate && p.payment_date <= endDate
+      );
+    }
+
+    // Get customer and loan details for each payment
+    const enrichedPayments = [];
+    for (const payment of payments) {
+      const loanDoc = await db.collection('loans').doc(payment.loan_id).get();
+      if (loanDoc.exists) {
+        const loanData = loanDoc.data();
+        const customerDoc = await db.collection('customers').doc(loanData.customer_id).get();
+        const customerData = customerDoc.exists ? customerDoc.data() : {};
+
+        enrichedPayments.push({
+          ...payment,
+          customer_name: customerData.name || 'Unknown',
+          customer_phone: customerData.phone || ''
+        });
+      }
+    }
+
+    // Calculate totals
+    const totalCollected = enrichedPayments.reduce((sum, p) => sum + p.amount, 0);
+    const cashCollected = enrichedPayments.filter(p => p.payment_mode === 'cash')
+      .reduce((sum, p) => sum + p.amount, 0);
+    const onlineCollected = enrichedPayments.filter(p => p.payment_mode !== 'cash')
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    // Get transfers for this user
+    const transfersSnapshot = await db.collection('user_transfers')
+      .where('user_id', '==', userId)
+      .get();
+
+    let transfers = transfersSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    if (startDate && endDate) {
+      transfers = transfers.filter(t =>
+        t.transfer_date >= startDate && t.transfer_date <= endDate
+      );
+    }
+
+    const totalTransferred = transfers.reduce((sum, t) => sum + t.amount, 0);
+    const balanceInHand = totalCollected - totalTransferred;
+
+    res.json({
+      payments: enrichedPayments,
+      transfers,
+      summary: {
+        totalCollected,
+        cashCollected,
+        onlineCollected,
+        totalTransferred,
+        balanceInHand
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching user collections:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin: Get all users' collection summary
+app.get('/api/admin/all-collections', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Get all approved users
+    const usersSnapshot = await db.collection('app_users')
+      .where('status', '==', 'approved')
+      .get();
+
+    const usersSummary = [];
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const userId = userDoc.id;
+
+      // Get payments collected by this user
+      const paymentsSnapshot = await db.collection('payments')
+        .where('collected_by', '==', userId)
+        .get();
+
+      let payments = paymentsSnapshot.docs.map(doc => doc.data());
+
+      if (startDate && endDate) {
+        payments = payments.filter(p =>
+          p.payment_date >= startDate && p.payment_date <= endDate
+        );
+      }
+
+      const totalCollected = payments.reduce((sum, p) => sum + p.amount, 0);
+
+      // Get transfers from this user
+      const transfersSnapshot = await db.collection('user_transfers')
+        .where('user_id', '==', userId)
+        .get();
+
+      let transfers = transfersSnapshot.docs.map(doc => doc.data());
+
+      if (startDate && endDate) {
+        transfers = transfers.filter(t =>
+          t.transfer_date >= startDate && t.transfer_date <= endDate
+        );
+      }
+
+      const totalTransferred = transfers.reduce((sum, t) => sum + t.amount, 0);
+      const balanceInHand = totalCollected - totalTransferred;
+
+      if (totalCollected > 0 || totalTransferred > 0) {
+        usersSummary.push({
+          user_id: userId,
+          user_name: userData.name,
+          user_phone: userData.phone,
+          totalCollected,
+          totalTransferred,
+          balanceInHand,
+          paymentsCount: payments.length,
+          transfersCount: transfers.length
+        });
+      }
+    }
+
+    // Sort by balance in hand (highest first)
+    usersSummary.sort((a, b) => b.balanceInHand - a.balanceInHand);
+
+    // Calculate grand totals
+    const grandTotal = {
+      totalCollected: usersSummary.reduce((sum, u) => sum + u.totalCollected, 0),
+      totalTransferred: usersSummary.reduce((sum, u) => sum + u.totalTransferred, 0),
+      totalBalanceInHand: usersSummary.reduce((sum, u) => sum + u.balanceInHand, 0)
+    };
+
+    res.json({
+      users: usersSummary,
+      grandTotal
+    });
+  } catch (error) {
+    console.error('Error fetching all collections:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin: Confirm a user transfer
+app.put('/api/user-transfers/:id/confirm', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await db.collection('user_transfers').doc(id).update({
+      status: 'confirmed',
+      confirmed_at: new Date().toISOString()
+    });
+
+    res.json({ message: 'Transfer confirmed' });
+  } catch (error) {
+    console.error('Error confirming transfer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a user transfer
+app.delete('/api/user-transfers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await db.collection('user_transfers').doc(id).delete();
+
+    res.json({ message: 'Transfer deleted' });
+  } catch (error) {
+    console.error('Error deleting transfer:', error);
     res.status(500).json({ error: error.message });
   }
 });

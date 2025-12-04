@@ -147,7 +147,9 @@ function SundayDashboard({ navigateTo }) {
         body: JSON.stringify({
           loan_id: loanId,
           amount: weeklyAmount,
-          payment_date: selectedSunday
+          payment_date: selectedSunday,
+          collected_by: localStorage.getItem('userId') || '',
+          collected_by_name: localStorage.getItem('userName') || ''
         })
       });
 

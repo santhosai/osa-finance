@@ -51,7 +51,9 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
           offline_amount: parseInt(offlineAmount || 0),
           online_amount: parseInt(onlineAmount || 0),
           payment_date: paymentDate,
-          payment_mode: paymentMode
+          payment_mode: paymentMode,
+          collected_by: localStorage.getItem('userId') || '',
+          collected_by_name: localStorage.getItem('userName') || ''
         })
       });
 
