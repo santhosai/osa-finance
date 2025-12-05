@@ -43,10 +43,12 @@ app.get('/api/health', (req, res) => {
 
 // ============ CUSTOMER ROUTES ============
 
-// Get all customers with their active loans
+// Get all customers with their active loans (with optional pagination)
 app.get('/api/customers', async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, limit, page } = req.query;
+    const pageSize = limit ? parseInt(limit) : null; // null = no pagination (fetch all)
+    const pageNum = page ? parseInt(page) : 1;
 
     // OPTIMIZED: Fetch all data in parallel (3 queries instead of N+1)
     const [customersSnapshot, loansSnapshot, paymentsSnapshot] = await Promise.all([
@@ -118,7 +120,27 @@ app.get('/api/customers', async (req, res) => {
     // Sort by name
     customers.sort((a, b) => a.name.localeCompare(b.name));
 
-    res.json(customers);
+    // Apply pagination if limit is specified
+    if (pageSize) {
+      const totalCustomers = customers.length;
+      const totalPages = Math.ceil(totalCustomers / pageSize);
+      const startIndex = (pageNum - 1) * pageSize;
+      const paginatedCustomers = customers.slice(startIndex, startIndex + pageSize);
+
+      res.json({
+        customers: paginatedCustomers,
+        pagination: {
+          page: pageNum,
+          limit: pageSize,
+          totalCustomers,
+          totalPages,
+          hasMore: pageNum < totalPages
+        }
+      });
+    } else {
+      // No pagination - return all (for backward compatibility)
+      res.json(customers);
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -3187,6 +3209,122 @@ app.delete('/api/user-transfers/:id', async (req, res) => {
     res.json({ message: 'Transfer deleted' });
   } catch (error) {
     console.error('Error deleting transfer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ COMPLETE BACKUP ENDPOINT ============
+// Download ALL data from database for backup
+app.get('/api/backup/complete', async (req, res) => {
+  try {
+    console.log('📦 Starting complete backup...');
+
+    // Fetch ALL collections in parallel
+    const [
+      customersSnapshot,
+      loansSnapshot,
+      paymentsSnapshot,
+      vaddiEntriesSnapshot,
+      vaddiPaymentsSnapshot,
+      dailyCustomersSnapshot,
+      dailyLoansSnapshot,
+      dailyPaymentsSnapshot,
+      investmentsSnapshot
+    ] = await Promise.all([
+      db.collection('customers').get(),
+      db.collection('loans').get(),
+      db.collection('payments').get(),
+      db.collection('vaddi_entries').get(),
+      db.collection('vaddi_payments').get(),
+      db.collection('daily_customers').get(),
+      db.collection('daily_loans').get(),
+      db.collection('daily_payments').get(),
+      db.collection('investments').get()
+    ]);
+
+    // Build backup data object
+    const backupData = {
+      backup_date: new Date().toISOString(),
+      backup_version: '1.0',
+
+      // Weekly Finance - Customers
+      customers: customersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+
+      // Weekly Finance - Loans
+      loans: loansSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+
+      // Weekly Finance - Payments
+      payments: paymentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+
+      // Vaddi (Interest) - Entries
+      vaddi_entries: vaddiEntriesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+
+      // Vaddi (Interest) - Monthly Payments
+      vaddi_payments: vaddiPaymentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+
+      // Daily Finance (100 Days) - Customers
+      daily_customers: dailyCustomersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+
+      // Daily Finance (100 Days) - Loans
+      daily_loans: dailyLoansSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+
+      // Daily Finance (100 Days) - Payments
+      daily_payments: dailyPaymentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+
+      // Investments
+      investments: investmentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+
+      // Summary counts
+      summary: {
+        customers: customersSnapshot.size,
+        loans: loansSnapshot.size,
+        payments: paymentsSnapshot.size,
+        vaddi_entries: vaddiEntriesSnapshot.size,
+        vaddi_payments: vaddiPaymentsSnapshot.size,
+        daily_customers: dailyCustomersSnapshot.size,
+        daily_loans: dailyLoansSnapshot.size,
+        daily_payments: dailyPaymentsSnapshot.size,
+        investments: investmentsSnapshot.size
+      }
+    };
+
+    console.log('✅ Backup complete:', backupData.summary);
+
+    // Set headers for file download
+    const filename = `Finance_Complete_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    res.json(backupData);
+  } catch (error) {
+    console.error('Error creating backup:', error);
     res.status(500).json({ error: error.message });
   }
 });

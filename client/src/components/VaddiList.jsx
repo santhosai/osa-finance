@@ -168,16 +168,6 @@ const VaddiList = ({ navigateTo }) => {
     const myShare = parseInt(paymentData.myShare) || 0;
     const friendShare = parseInt(paymentData.friendShare) || 0;
 
-    if (total <= 0 || myShare < 0 || friendShare < 0) {
-      alert('Please enter valid amounts');
-      return;
-    }
-
-    if (myShare + friendShare !== total) {
-      alert('My Share + Friend Share must equal Total Amount');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -1568,28 +1558,6 @@ const VaddiList = ({ navigateTo }) => {
                   }}
                 />
               </div>
-
-              {/* Validation Message */}
-              {paymentData.totalAmount && paymentData.myShare && paymentData.friendShare && (
-                <div style={{
-                  padding: '12px',
-                  marginBottom: '16px',
-                  borderRadius: '8px',
-                  background: parseInt(paymentData.myShare) + parseInt(paymentData.friendShare) === parseInt(paymentData.totalAmount)
-                    ? '#f0fdf4'
-                    : '#fef2f2',
-                  color: parseInt(paymentData.myShare) + parseInt(paymentData.friendShare) === parseInt(paymentData.totalAmount)
-                    ? '#059669'
-                    : '#dc2626',
-                  fontSize: '13px',
-                  fontWeight: 600
-                }}>
-                  {parseInt(paymentData.myShare) + parseInt(paymentData.friendShare) === parseInt(paymentData.totalAmount)
-                    ? '✓ Shares add up correctly!'
-                    : `✗ Shares (${formatCurrency(parseInt(paymentData.myShare || 0) + parseInt(paymentData.friendShare || 0))}) don't match total (${formatCurrency(parseInt(paymentData.totalAmount || 0))})`
-                  }
-                </div>
-              )}
 
               <button
                 type="submit"

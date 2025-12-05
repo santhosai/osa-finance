@@ -41,7 +41,7 @@ function Dashboard({ navigateTo }) {
 
   // Fetch customers with loans for the table
   const { data: customers = [], mutate: mutateCustomers } = useSWR(`${API_URL}/customers`, fetcher, {
-    refreshInterval: 30000,
+    refreshInterval: 30000, // Auto-refresh every 30 seconds
     revalidateOnFocus: true,
     dedupingInterval: 2000,
   });
@@ -457,6 +457,36 @@ function Dashboard({ navigateTo }) {
     }
   };
 
+  // Download COMPLETE backup (ALL data - Weekly, Vaddi, Daily, Investments)
+  const downloadCompleteBackup = async () => {
+    try {
+      const response = await fetch(`${API_URL}/backup/complete`);
+      const backupData = await response.json();
+
+      // Download as JSON file
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Finance_Complete_Backup_${new Date().toISOString().split('T')[0]}.json`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Record download date and hide backup reminder
+      const today = new Date();
+      const downloadDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      localStorage.setItem('lastBackupDownload', downloadDate);
+      setShowBackupReminder(false);
+
+      alert(`✅ Complete Backup Downloaded!\n\nSummary:\n• Customers: ${backupData.summary.customers}\n• Loans: ${backupData.summary.loans}\n• Payments: ${backupData.summary.payments}\n• Vaddi Entries: ${backupData.summary.vaddi_entries}\n• Daily Loans: ${backupData.summary.daily_loans}\n• Investments: ${backupData.summary.investments}`);
+    } catch (error) {
+      console.error('Error downloading complete backup:', error);
+      alert('Failed to download complete backup');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', maxWidth: '100vw', overflowX: 'hidden' }}>
       <style>{`
@@ -798,6 +828,28 @@ function Dashboard({ navigateTo }) {
             🔐 {t('adminProfit')}
           </button>
 
+          {/* Backup Data Button */}
+          <button
+            onClick={() => { setShowSidebar(false); downloadCompleteBackup(); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)'}
+          >
+            💾 Backup All Data
+          </button>
+
         </div>
 
         <button
@@ -1034,37 +1086,61 @@ function Dashboard({ navigateTo }) {
             padding: '12px 16px',
             margin: '10px 10px 0 10px',
             borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
             animation: 'slideIn 0.3s ease'
           }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ color: 'white', fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>
-                🔔 Monthly Backup Reminder
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div>
+                <div style={{ color: 'white', fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>
+                  🔔 Monthly Backup Reminder
+                </div>
+                <div style={{ color: 'white', fontSize: '11px', opacity: 0.95 }}>
+                  Download your data backup to keep your records safe
+                </div>
               </div>
-              <div style={{ color: 'white', fontSize: '11px', opacity: 0.95 }}>
-                Download your data backup to keep your records safe
-              </div>
+              <button
+                onClick={() => setShowBackupReminder(false)}
+                style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '18px', cursor: 'pointer', opacity: 0.8 }}
+              >
+                ✕
+              </button>
             </div>
-            <button
-              onClick={downloadAllData}
-              style={{
-                background: 'white',
-                color: '#d97706',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
-              }}
-            >
-              📥 Download Now
-            </button>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                onClick={downloadCompleteBackup}
+                style={{
+                  background: 'white',
+                  color: '#059669',
+                  border: 'none',
+                  padding: '10px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                  flex: 1
+                }}
+              >
+                💾 Complete Backup (ALL Data)
+              </button>
+              <button
+                onClick={downloadAllData}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                  border: '1px solid rgba(255,255,255,0.5)',
+                  padding: '10px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                📥 Weekly Loans CSV
+              </button>
+            </div>
           </div>
         )}
 

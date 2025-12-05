@@ -29,7 +29,7 @@ const DailyFinance = ({ navigateTo }) => {
   const { data: collections = [], mutate: mutateCollections } = useSWR(
     `${API_URL}/daily-collections/${selectedDate}`,
     fetcher,
-    { refreshInterval: 10000, revalidateOnFocus: true }
+    { refreshInterval: 30000, revalidateOnFocus: true }
   );
 
   // Fetch all daily customers
