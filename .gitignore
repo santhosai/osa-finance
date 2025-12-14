@@ -39,3 +39,12 @@ firebase-debug.log
 # Misc
 nul
 PROJECT_DOCUMENTATION.md
+
+# TestCafe testing
+tests/
+artifacts/
+screenshots/
+videos/
+node_modules/
+package.json
+package-lock.json
