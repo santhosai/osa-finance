@@ -23,9 +23,11 @@ function Dashboard({ navigateTo }) {
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [weeklyPaymentsData, setWeeklyPaymentsData] = useState({ paidLoans: [], unpaidLoans: [], loading: true });
+  const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0); // To trigger re-fetch
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedUnpaid, setSelectedUnpaid] = useState(new Set());
+  const [selectedPaid, setSelectedPaid] = useState(new Set()); // For bulk undo
   const [quickPayConfirm, setQuickPayConfirm] = useState(null); // { loan, customer, amount, weekNumber }
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
   const [undoPaymentConfirm, setUndoPaymentConfirm] = useState(null); // { loan, customer, paymentId }
@@ -132,26 +134,33 @@ function Dashboard({ navigateTo }) {
         const paymentsResponse = await fetch(`${API_URL}/payments-by-date?date=${sundayDate}`);
         const paymentsOnDate = paymentsResponse.ok ? await paymentsResponse.json() : [];
 
-        // Create a Set of loan_ids that have payments on this date
-        const paidLoanIds = new Set(paymentsOnDate.map(p => p.loan_id));
+        // Create a Map of loan_id -> payment data (includes balance_after and week_number)
+        const paidLoanPayments = new Map(paymentsOnDate.map(p => [p.loan_id, p]));
 
         const paidLoans = [];
         const unpaidLoans = [];
 
         loansToCheck.forEach(({ customer, loan, weekNumber }) => {
           const totalWeeks = 10;
-          const remainingWeeks = totalWeeks - weekNumber;
-          const isPaid = paidLoanIds.has(loan.loan_id);
+          const payment = paidLoanPayments.get(loan.loan_id);
+          const isPaid = !!payment;
+
+          // For paid loans, use the actual payment data (balance_after, week_number)
+          // For unpaid loans, use the calculated values
+          const actualWeekNumber = isPaid && payment.week_number ? payment.week_number : weekNumber;
+          const actualBalance = isPaid && payment.balance_after !== undefined ? payment.balance_after : loan.balance;
+          const remainingWeeks = totalWeeks - actualWeekNumber;
 
           const result = {
             customer,
             loan,
-            weekNumber,
+            weekNumber: actualWeekNumber,
             totalWeeks,
             remainingWeeks,
             paymentAmount: loan.weekly_amount,
-            balance: loan.balance,
-            isPaid
+            balance: actualBalance,
+            isPaid,
+            payment // Include payment data for WhatsApp
           };
 
           if (isPaid) {
@@ -170,7 +179,7 @@ function Dashboard({ navigateTo }) {
 
     fetchWeeklyPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, customersLength]);
+  }, [selectedDate, customersLength, paymentsRefreshKey]);
 
   // Fetch weekly diagnostic data for overview
   useEffect(() => {
@@ -310,7 +319,7 @@ function Dashboard({ navigateTo }) {
         // Reset state and trigger re-fetch of weekly payments
         setQuickPayConfirm(null);
         // Force refresh weekly payments data
-        setWeeklyPaymentsData(prev => ({ ...prev, loading: true }));
+        setPaymentsRefreshKey(k => k + 1);
       } else {
         const error = await response.json();
         alert('Payment failed: ' + (error.error || 'Unknown error'));
@@ -352,7 +361,7 @@ function Dashboard({ navigateTo }) {
         mutateCustomers();
         setUndoPaymentConfirm(null);
         // Force refresh weekly payments data
-        setWeeklyPaymentsData(prev => ({ ...prev, loading: true }));
+        setPaymentsRefreshKey(k => k + 1);
       } else {
         const error = await response.json();
         alert('Failed to undo payment: ' + (error.error || 'Unknown error'));
@@ -365,127 +374,122 @@ function Dashboard({ navigateTo }) {
     }
   };
 
-  // Check if backup reminder should be shown
-  const shouldShowBackupReminder = () => {
-    const today = new Date();
-    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    const lastDownload = localStorage.getItem('lastBackupDownload');
+  // Bulk Undo - undo multiple selected payments
+  const handleBulkUndo = async () => {
+    if (selectedPaid.size === 0 || isPaymentLoading) return;
 
-    // Show reminder if:
-    // 1. Never downloaded before, OR
-    // 2. Haven't downloaded this month yet
-    return !lastDownload || !lastDownload.startsWith(currentMonth);
-  };
+    const confirmMsg = `Are you sure you want to undo ${selectedPaid.size} payment(s)?`;
+    if (!window.confirm(confirmMsg)) return;
 
-  const [showBackupReminder, setShowBackupReminder] = useState(shouldShowBackupReminder());
+    setIsPaymentLoading(true);
 
-  const downloadAllData = async () => {
     try {
-      const response = await fetch(`${API_URL}/customers`);
-      const customers = await response.json();
+      // Get payment IDs for selected loans
+      const paymentsResponse = await fetch(`${API_URL}/payments-by-date?date=${selectedDate}`);
+      const payments = await paymentsResponse.json();
 
-      // Fetch detailed info for each loan
-      const loanDetailsPromises = [];
-      const customerLoanMap = [];
+      let successCount = 0;
+      let failCount = 0;
 
-      for (const customer of customers) {
-        if (customer.loans && customer.loans.length > 0) {
-          for (const loan of customer.loans) {
-            const promise = fetch(`${API_URL}/loans/${loan.loan_id}`)
-              .then(res => res.json())
-              .then(loanData => ({
-                customerName: customer.name,
-                customerPhone: customer.phone,
-                loanData
-              }));
-            loanDetailsPromises.push(promise);
-          }
-        } else {
-          // Customer with no loans
-          customerLoanMap.push({
-            customerName: customer.name,
-            customerPhone: customer.phone,
-            loanData: null
+      for (const loanId of selectedPaid) {
+        const payment = payments.find(p => p.loan_id === loanId);
+        if (!payment) {
+          failCount++;
+          continue;
+        }
+
+        try {
+          const response = await fetch(`${API_URL}/payments/${payment.id}`, {
+            method: 'DELETE'
           });
+          if (response.ok) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch {
+          failCount++;
         }
       }
 
-      const loansWithDetails = await Promise.all(loanDetailsPromises);
-      const allRows = [...customerLoanMap, ...loansWithDetails];
+      // Refresh data
+      mutate();
+      mutateCustomers();
+      setSelectedPaid(new Set());
+      setPaymentsRefreshKey(k => k + 1);
 
-      const csvHeader = 'Customer Name,Phone,Loan Name,Loan Amount,Balance,Weekly Payment,Status,Total Paid,Progress %,Start Date,Last Payment Date,Weeks Remaining,Expected Completion Date\n';
-
-      const csvRows = allRows.map(row => {
-        if (row.loanData) {
-          const loan = row.loanData;
-          const totalPaid = loan.loan_amount - loan.balance;
-          const progress = ((totalPaid / loan.loan_amount) * 100).toFixed(1);
-          const lastPayment = loan.payments && loan.payments.length > 0 ? loan.payments[0].payment_date : 'No payments';
-          const weeksRemaining = loan.weeksRemaining || 0;
-          const startDate = loan.start_date || '';
-          const expectedDate = startDate ? new Date(startDate) : null;
-          if (expectedDate) {
-            expectedDate.setDate(expectedDate.getDate() + (loan.totalWeeks * 7));
-          }
-          const expectedCompletion = expectedDate ? expectedDate.toISOString().split('T')[0] : '-';
-          const loanName = loan.loan_name || 'General Loan';
-          return `${row.customerName},${row.customerPhone},${loanName},${loan.loan_amount},${loan.balance},${loan.weekly_amount},${loan.status},${totalPaid},${progress}%,${startDate},${lastPayment},${weeksRemaining},${expectedCompletion}`;
-        } else {
-          return `${row.customerName},${row.customerPhone},No Active Loan,-,-,-,-,-,-,-,-,-,-`;
-        }
-      }).join('\n');
-
-      const csvContent = csvHeader + csvRows;
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `All_Customers_Report_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Record download date and hide backup reminder
-      const today = new Date();
-      const downloadDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      localStorage.setItem('lastBackupDownload', downloadDate);
-      setShowBackupReminder(false);
+      if (failCount > 0) {
+        alert(`Undo complete: ${successCount} succeeded, ${failCount} failed`);
+      }
     } catch (error) {
-      console.error('Error downloading data:', error);
-      alert('Failed to download report');
+      console.error('Bulk undo error:', error);
+      alert('Failed to undo payments. Please try again.');
+    } finally {
+      setIsPaymentLoading(false);
     }
   };
 
-  // Download COMPLETE backup (ALL data - Weekly, Vaddi, Daily, Investments)
-  const downloadCompleteBackup = async () => {
-    try {
-      const response = await fetch(`${API_URL}/backup/complete`);
-      const backupData = await response.json();
+  // Show loading screen while initial data loads
+  if (isLoading && !stats) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)',
+        color: 'white'
+      }}>
+        <div style={{
+          width: '50px',
+          height: '50px',
+          border: '4px solid rgba(255,255,255,0.3)',
+          borderTop: '4px solid #d97706',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        <p style={{ marginTop: '16px', fontSize: '14px', opacity: 0.9 }}>Loading Dashboard...</p>
+      </div>
+    );
+  }
 
-      // Download as JSON file
-      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `Finance_Complete_Backup_${new Date().toISOString().split('T')[0]}.json`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Record download date and hide backup reminder
-      const today = new Date();
-      const downloadDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      localStorage.setItem('lastBackupDownload', downloadDate);
-      setShowBackupReminder(false);
-
-      alert(`✅ Complete Backup Downloaded!\n\nSummary:\n• Customers: ${backupData.summary.customers}\n• Loans: ${backupData.summary.loans}\n• Payments: ${backupData.summary.payments}\n• Vaddi Entries: ${backupData.summary.vaddi_entries}\n• Daily Loans: ${backupData.summary.daily_loans}\n• Investments: ${backupData.summary.investments}`);
-    } catch (error) {
-      console.error('Error downloading complete backup:', error);
-      alert('Failed to download complete backup');
-    }
-  };
+  // Show error if API fails
+  if (error && !stats) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)',
+        color: 'white',
+        padding: '20px',
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+        <p style={{ fontSize: '16px', marginBottom: '12px' }}>Failed to load dashboard</p>
+        <p style={{ fontSize: '12px', opacity: 0.7, marginBottom: '20px' }}>Please check your internet connection</p>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            background: '#d97706',
+            color: 'white',
+            border: 'none',
+            padding: '12px 24px',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: 600,
+            cursor: 'pointer'
+          }}
+        >
+          🔄 Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', maxWidth: '100vw', overflowX: 'hidden' }}>
@@ -828,27 +832,6 @@ function Dashboard({ navigateTo }) {
             🔐 {t('adminProfit')}
           </button>
 
-          {/* Backup Data Button */}
-          <button
-            onClick={() => { setShowSidebar(false); downloadCompleteBackup(); }}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
-              color: 'white',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-              transition: 'background 0.15s',
-              marginTop: '8px'
-            }}
-            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)'}
-            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)'}
-          >
-            💾 Backup All Data
-          </button>
 
         </div>
 
@@ -1079,70 +1062,6 @@ function Dashboard({ navigateTo }) {
           </div>
         </div>
 
-        {/* Monthly Backup Reminder Banner */}
-        {showBackupReminder && (
-          <div style={{
-            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-            padding: '12px 16px',
-            margin: '10px 10px 0 10px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-            animation: 'slideIn 0.3s ease'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <div>
-                <div style={{ color: 'white', fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>
-                  🔔 Monthly Backup Reminder
-                </div>
-                <div style={{ color: 'white', fontSize: '11px', opacity: 0.95 }}>
-                  Download your data backup to keep your records safe
-                </div>
-              </div>
-              <button
-                onClick={() => setShowBackupReminder(false)}
-                style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '18px', cursor: 'pointer', opacity: 0.8 }}
-              >
-                ✕
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button
-                onClick={downloadCompleteBackup}
-                style={{
-                  background: 'white',
-                  color: '#059669',
-                  border: 'none',
-                  padding: '10px 16px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                  flex: 1
-                }}
-              >
-                💾 Complete Backup (ALL Data)
-              </button>
-              <button
-                onClick={downloadAllData}
-                style={{
-                  background: 'rgba(255,255,255,0.2)',
-                  color: 'white',
-                  border: '1px solid rgba(255,255,255,0.5)',
-                  padding: '10px 16px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                📥 Weekly Loans CSV
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Firebase Usage Monitor Quick Link */}
         <div
@@ -1528,30 +1447,92 @@ function Dashboard({ navigateTo }) {
                     padding: '10px',
                     minWidth: '250px'
                   }}>
-                    <h4 style={{
-                      margin: '0 0 8px 0',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: '#065f46',
-                      textAlign: 'center'
-                    }}>
-                      ✓ {t('paid').toUpperCase()} ({paidLoans.length})
-                    </h4>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <h4 style={{
+                        margin: 0,
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#065f46'
+                      }}>
+                        ✓ {t('paid').toUpperCase()} ({paidLoans.length})
+                      </h4>
+                      {paidLoans.length > 0 && (
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#065f46', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedPaid.size === paidLoans.length && paidLoans.length > 0}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedPaid(new Set(paidLoans.map(p => p.loan.loan_id)));
+                                } else {
+                                  setSelectedPaid(new Set());
+                                }
+                              }}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            All
+                          </label>
+                          {selectedPaid.size > 0 && (
+                            <button
+                              onClick={handleBulkUndo}
+                              disabled={isPaymentLoading}
+                              style={{
+                                background: '#dc2626',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                                opacity: isPaymentLoading ? 0.6 : 1
+                              }}
+                            >
+                              {isPaymentLoading ? '...' : `Undo (${selectedPaid.size})`}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div style={{ display: 'grid', gap: '4px' }}>
-                      {paidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
+                      {paidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance, payment }) => (
                         <div
                           key={loan.loan_id}
                           style={{
-                            background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
+                            background: selectedPaid.has(loan.loan_id)
+                              ? 'linear-gradient(135deg, #bbf7d0 0%, #86efac 100%)'
+                              : 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
                             padding: '6px 8px',
                             borderRadius: '6px',
-                            border: '1px solid #6ee7b7',
+                            border: selectedPaid.has(loan.loan_id) ? '2px solid #22c55e' : '1px solid #6ee7b7',
                             transition: 'all 0.15s',
                             display: 'flex',
                             alignItems: 'flex-start',
                             gap: '8px'
                           }}
                         >
+                          {/* Checkbox for bulk selection */}
+                          <input
+                            type="checkbox"
+                            checked={selectedPaid.has(loan.loan_id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const newSelected = new Set(selectedPaid);
+                              if (newSelected.has(loan.loan_id)) {
+                                newSelected.delete(loan.loan_id);
+                              } else {
+                                newSelected.add(loan.loan_id);
+                              }
+                              setSelectedPaid(newSelected);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              cursor: 'pointer',
+                              marginTop: '2px',
+                              accentColor: '#22c55e'
+                            }}
+                          />
                           {/* Customer Info */}
                           <div
                             style={{ flex: 1, cursor: 'pointer' }}
@@ -1581,31 +1562,80 @@ function Dashboard({ navigateTo }) {
                             </div>
                           </div>
 
-                          {/* Undo Button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setUndoPaymentConfirm({ loan, customer, amount: paymentAmount, weekNumber });
-                            }}
-                            style={{
-                              background: '#fee2e2',
-                              border: '1px solid #fca5a5',
-                              borderRadius: '4px',
-                              padding: '4px 6px',
-                              cursor: 'pointer',
-                              fontSize: '9px',
-                              color: '#dc2626',
-                              fontWeight: 600,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              gap: '1px'
-                            }}
-                            title="Undo this payment"
-                          >
-                            ↩️
-                            <span>Undo</span>
-                          </button>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {/* WhatsApp Button */}
+                            {customer.phone && (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const phone = customer.phone.replace(/\D/g, '');
+                                  const friendNameLine = loan.loan_name && loan.loan_name !== 'General Loan'
+                                    ? `Friend name: ${loan.loan_name}\n`
+                                    : '';
+                                  const message = `Payment Receipt\n\nCustomer: ${customer.name}\n${friendNameLine}Amount: ${formatCurrency(paymentAmount)}\nDate: ${new Date(selectedDate).toLocaleDateString('en-IN')}\nWeek: ${weekNumber}\nBalance Remaining: ${formatCurrency(balance)}\n\nThank you for your payment!`;
+                                  window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`, '_blank');
+                                  // Mark as sent in database
+                                  if (payment?.id) {
+                                    try {
+                                      await fetch(`${API_URL}/payments/${payment.id}/whatsapp-sent`, {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ sent_by: localStorage.getItem('userName') || 'Unknown' })
+                                      });
+                                      // Refresh to show updated status
+                                      setPaymentsRefreshKey(k => k + 1);
+                                    } catch (err) {
+                                      console.error('Error marking WhatsApp sent:', err);
+                                    }
+                                  }
+                                }}
+                                style={{
+                                  background: payment?.whatsapp_sent ? '#e5e7eb' : '#dcfce7',
+                                  border: payment?.whatsapp_sent ? '1px solid #9ca3af' : '1px solid #86efac',
+                                  borderRadius: '4px',
+                                  padding: '4px 6px',
+                                  cursor: 'pointer',
+                                  fontSize: '9px',
+                                  color: payment?.whatsapp_sent ? '#6b7280' : '#16a34a',
+                                  fontWeight: 600,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '1px'
+                                }}
+                                title={payment?.whatsapp_sent ? `Already sent by ${payment.whatsapp_sent_by}` : 'Send WhatsApp receipt'}
+                              >
+                                {payment?.whatsapp_sent ? '✓' : '📱'}
+                                <span>{payment?.whatsapp_sent ? 'Sent' : 'WA'}</span>
+                              </button>
+                            )}
+
+                            {/* Undo Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setUndoPaymentConfirm({ loan, customer, amount: paymentAmount, weekNumber });
+                              }}
+                              style={{
+                                background: '#fee2e2',
+                                border: '1px solid #fca5a5',
+                                borderRadius: '4px',
+                                padding: '4px 6px',
+                                cursor: 'pointer',
+                                fontSize: '9px',
+                                color: '#dc2626',
+                                fontWeight: 600,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '1px'
+                              }}
+                              title="Undo this payment"
+                            >
+                              ↩️
+                              <span>Undo</span>
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

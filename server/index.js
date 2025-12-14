@@ -463,10 +463,31 @@ app.get('/api/payments-by-date', async (req, res) => {
       id: doc.id,
       loan_id: doc.data().loan_id,
       amount: doc.data().amount,
-      payment_date: doc.data().payment_date
+      payment_date: doc.data().payment_date,
+      balance_after: doc.data().balance_after,
+      week_number: doc.data().period_number || doc.data().week_number,
+      whatsapp_sent: doc.data().whatsapp_sent || false,
+      whatsapp_sent_by: doc.data().whatsapp_sent_by || null
     }));
 
     res.json(payments);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark payment as WhatsApp sent
+app.put('/api/payments/:id/whatsapp-sent', async (req, res) => {
+  try {
+    const { sent_by } = req.body;
+
+    await db.collection('payments').doc(req.params.id).update({
+      whatsapp_sent: true,
+      whatsapp_sent_by: sent_by || 'Unknown',
+      whatsapp_sent_at: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: 'WhatsApp status updated' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -646,22 +667,24 @@ app.delete('/api/payments/:id', async (req, res) => {
 
     paymentsToUpdate.sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
 
-    // Update each payment with correct sequential period_number
-    const updatePromises = paymentsToUpdate.map((payment, index) => {
-      return db.collection('payments').doc(payment.id).update({
-        period_number: index + 1
+    // Recalculate both period_number AND balance_after for each payment
+    let runningBalance = loanData.loan_amount; // Start from original loan amount
+
+    for (let i = 0; i < paymentsToUpdate.length; i++) {
+      runningBalance = runningBalance - paymentsToUpdate[i].amount;
+      await db.collection('payments').doc(paymentsToUpdate[i].id).update({
+        period_number: i + 1,
+        balance_after: runningBalance
       });
-    });
+    }
 
-    await Promise.all(updatePromises);
-
-    res.json({ message: 'Payment deleted and week numbers recalculated successfully' });
+    res.json({ message: 'Payment deleted and all payment data recalculated successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Fix all existing payment week numbers (one-time migration)
+// Fix all existing payment week numbers AND balance_after (one-time migration)
 app.post('/api/migrate-payment-numbers', async (req, res) => {
   try {
     // Get all loans
@@ -670,6 +693,7 @@ app.post('/api/migrate-payment-numbers', async (req, res) => {
 
     for (const loanDoc of loansSnapshot.docs) {
       const loanId = loanDoc.id;
+      const loanData = loanDoc.data();
 
       // Get all payments for this loan
       const paymentsSnapshot = await db.collection('payments')
@@ -689,21 +713,34 @@ app.post('/api/migrate-payment-numbers', async (req, res) => {
 
       payments.sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
 
-      // Update each payment with correct sequential period_number
+      // Recalculate both period_number AND balance_after for each payment
+      let runningBalance = loanData.loan_amount; // Start from original loan amount
+
       for (let i = 0; i < payments.length; i++) {
+        runningBalance = runningBalance - payments[i].amount;
         await db.collection('payments').doc(payments[i].id).update({
-          period_number: i + 1
+          period_number: i + 1,
+          balance_after: runningBalance
         });
         totalFixed++;
       }
+
+      // ALSO update the loan's actual balance to match final payment balance
+      const updateData = { balance: runningBalance };
+      if (runningBalance === 0) {
+        updateData.status = 'closed';
+      } else if (loanData.status === 'closed' && runningBalance > 0) {
+        updateData.status = 'active';
+      }
+      await db.collection('loans').doc(loanId).update(updateData);
     }
 
     res.json({
-      message: 'All payment week numbers recalculated successfully',
+      message: 'All payment data (week numbers and balances) recalculated successfully',
       totalFixed
     });
   } catch (error) {
-    console.error('Error migrating payment numbers:', error);
+    console.error('Error migrating payment data:', error);
     res.status(500).json({ error: error.message });
   }
 });
