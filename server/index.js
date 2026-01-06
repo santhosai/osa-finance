@@ -1441,7 +1441,7 @@ app.get('/api/vaddi-entries', async (req, res) => {
 // Create new vaddi entry
 app.post('/api/vaddi-entries', async (req, res) => {
   try {
-    const { day, name, amount, phone } = req.body;
+    const { day, name, amount, phone, loan_date, principal_amount, aadhar_number } = req.body;
 
     // Validate required fields
     if (!day || !name || !amount || !phone) {
@@ -1453,8 +1453,8 @@ app.post('/api/vaddi-entries', async (req, res) => {
       return res.status(400).json({ error: 'Day must be between 1 and 31' });
     }
 
-    // Validate phone number format
-    if (phone.length !== 10) {
+    // Validate phone number format (optional for existing entries)
+    if (phone && phone.length !== 10) {
       return res.status(400).json({ error: 'Phone number must be 10 digits' });
     }
 
@@ -1462,7 +1462,11 @@ app.post('/api/vaddi-entries', async (req, res) => {
       day: parseInt(day),
       name,
       amount: parseInt(amount),
-      phone,
+      phone: phone || '',
+      loan_date: loan_date || new Date().toISOString().split('T')[0],
+      principal_amount: principal_amount ? parseInt(principal_amount) : null,
+      aadhar_number: aadhar_number || '',
+      signed_acknowledgment: '',
       createdAt: new Date().toISOString()
     };
 
@@ -1474,6 +1478,35 @@ app.post('/api/vaddi-entries', async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating vaddi entry:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload signed acknowledgment for vaddi entry
+app.put('/api/vaddi-entries/:id/acknowledgment', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { signed_acknowledgment } = req.body;
+
+    const entryRef = db.collection('vaddi_entries').doc(id);
+    const entryDoc = await entryRef.get();
+
+    if (!entryDoc.exists) {
+      return res.status(404).json({ error: 'Vaddi entry not found' });
+    }
+
+    await entryRef.update({
+      signed_acknowledgment: signed_acknowledgment || '',
+      acknowledgment_uploaded_at: new Date().toISOString()
+    });
+
+    const updatedDoc = await entryRef.get();
+    res.json({
+      id,
+      ...updatedDoc.data()
+    });
+  } catch (error) {
+    console.error('Error uploading acknowledgment:', error);
     res.status(500).json({ error: error.message });
   }
 });

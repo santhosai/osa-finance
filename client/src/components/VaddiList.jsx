@@ -9,8 +9,17 @@ const VaddiList = ({ navigateTo }) => {
   const [activeTab, setActiveTab] = useState('monthly'); // 'monthly' or 'grid'
   const [selectedDay, setSelectedDay] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', amount: '', phone: '' });
+  const [formData, setFormData] = useState({
+    name: '',
+    amount: '',
+    phone: '',
+    loan_date: new Date().toISOString().split('T')[0],
+    principal_amount: '',
+    aadhar_number: ''
+  });
   const [loading, setLoading] = useState(false);
+  const [showAcknowledgmentModal, setShowAcknowledgmentModal] = useState(false);
+  const [selectedEntryForAck, setSelectedEntryForAck] = useState(null);
 
   // Monthly View state
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -62,13 +71,26 @@ const VaddiList = ({ navigateTo }) => {
   const paidEntryIds = new Set(monthPayments.map(p => p.entryId));
 
   // Separate into paid and unpaid for the month
+  // Only show loans given BEFORE selected month in unpaid (interest starts from next month)
   const paidThisMonth = activeEntries.filter(e => paidEntryIds.has(e.id));
-  const unpaidThisMonth = activeEntries.filter(e => !paidEntryIds.has(e.id));
+  const unpaidThisMonth = activeEntries.filter(e => {
+    if (paidEntryIds.has(e.id)) return false;
+    // If loan was given in the selected month, don't show in unpaid (interest starts next month)
+    const loanMonth = e.loan_date ? e.loan_date.slice(0, 7) : e.createdAt?.slice(0, 7);
+    return loanMonth < selectedMonth; // Only show if loan was given before selected month
+  });
 
-  // Group entries by day
+  // Loans given this month (new loans, not due yet)
+  const newLoansThisMonth = activeEntries.filter(e => {
+    if (paidEntryIds.has(e.id)) return false;
+    const loanMonth = e.loan_date ? e.loan_date.slice(0, 7) : e.createdAt?.slice(0, 7);
+    return loanMonth >= selectedMonth;
+  });
+
+  // Group entries by day - ONLY active entries (hide settled completely from grid)
   const entriesByDay = {};
   for (let day = 1; day <= 31; day++) {
-    entriesByDay[day] = safeEntries.filter(e => e.day === day);
+    entriesByDay[day] = activeEntries.filter(e => e.day === day);
   }
 
   // Calculate total amount for a day
@@ -106,14 +128,28 @@ const VaddiList = ({ navigateTo }) => {
   const handleDayClick = (day) => {
     setSelectedDay(day);
     setShowModal(true);
-    setFormData({ name: '', amount: '', phone: '' });
+    setFormData({
+      name: '',
+      amount: '',
+      phone: '',
+      loan_date: new Date().toISOString().split('T')[0],
+      principal_amount: '',
+      aadhar_number: ''
+    });
   };
 
   // Close modal
   const closeModal = () => {
     setShowModal(false);
     setSelectedDay(null);
-    setFormData({ name: '', amount: '', phone: '' });
+    setFormData({
+      name: '',
+      amount: '',
+      phone: '',
+      loan_date: new Date().toISOString().split('T')[0],
+      principal_amount: '',
+      aadhar_number: ''
+    });
   };
 
   // Open payment modal
@@ -245,7 +281,7 @@ const VaddiList = ({ navigateTo }) => {
     if (loading) return;
 
     if (!formData.name || !formData.amount || !formData.phone) {
-      alert('Please fill all fields');
+      alert('Please fill Name, Interest Amount and Phone');
       return;
     }
 
@@ -264,7 +300,10 @@ const VaddiList = ({ navigateTo }) => {
           day: selectedDay,
           name: formData.name,
           amount: parseInt(formData.amount),
-          phone: formData.phone
+          phone: formData.phone,
+          loan_date: formData.loan_date,
+          principal_amount: formData.principal_amount ? parseInt(formData.principal_amount) : null,
+          aadhar_number: formData.aadhar_number
         })
       });
 
@@ -273,7 +312,14 @@ const VaddiList = ({ navigateTo }) => {
       }
 
       mutate();
-      setFormData({ name: '', amount: '', phone: '' });
+      setFormData({
+        name: '',
+        amount: '',
+        phone: '',
+        loan_date: new Date().toISOString().split('T')[0],
+        principal_amount: '',
+        aadhar_number: ''
+      });
       alert('Entry added successfully!');
     } catch (error) {
       console.error('Error adding entry:', error);
@@ -281,6 +327,168 @@ const VaddiList = ({ navigateTo }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Generate Acknowledgment PDF
+  const generateAcknowledgmentPDF = (entry) => {
+    const doc = new jsPDF();
+    const loanDate = entry.loan_date || new Date().toISOString().split('T')[0];
+    const formattedDate = new Date(loanDate).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    // Header
+    doc.setFillColor(30, 58, 138);
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LOAN ACKNOWLEDGMENT', 105, 20, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text('OM SAI MURUGAN FINANCE', 105, 32, { align: 'center' });
+
+    // Body
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+
+    let yPos = 60;
+
+    // Date
+    doc.text(`Date: ${formattedDate}`, 20, yPos);
+    yPos += 20;
+
+    // Main content
+    doc.setFontSize(11);
+    const mainText = `I, ${entry.name}, hereby acknowledge that I have received a loan from Santhosh Kumar (OM SAI MURUGAN FINANCE) as per the following terms:`;
+    const splitMain = doc.splitTextToSize(mainText, 170);
+    doc.text(splitMain, 20, yPos);
+    yPos += splitMain.length * 7 + 15;
+
+    // Loan Details Box
+    doc.setFillColor(240, 240, 250);
+    doc.rect(15, yPos - 5, 180, 50, 'F');
+    doc.setDrawColor(102, 126, 234);
+    doc.rect(15, yPos - 5, 180, 50, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('LOAN DETAILS', 20, yPos + 5);
+    doc.setFont('helvetica', 'normal');
+
+    if (entry.principal_amount) {
+      doc.text(`Principal Amount: Rs. ${entry.principal_amount.toLocaleString('en-IN')}/-`, 25, yPos + 18);
+    }
+    doc.text(`Monthly Interest: Rs. ${entry.amount.toLocaleString('en-IN')}/-`, 25, yPos + 28);
+    doc.text(`Interest Due Day: ${entry.day} of every month`, 25, yPos + 38);
+    yPos += 60;
+
+    // Terms
+    doc.setFont('helvetica', 'bold');
+    doc.text('TERMS & CONDITIONS:', 20, yPos);
+    doc.setFont('helvetica', 'normal');
+    yPos += 10;
+
+    const terms = [
+      '1. I agree to pay the monthly interest on or before the due date.',
+      '2. I understand that failure to pay interest will result in legal action.',
+      '3. I will repay the principal amount as per mutual agreement.',
+      '4. This acknowledgment serves as proof of my debt obligation.'
+    ];
+
+    terms.forEach(term => {
+      const splitTerm = doc.splitTextToSize(term, 170);
+      doc.text(splitTerm, 25, yPos);
+      yPos += splitTerm.length * 6 + 4;
+    });
+
+    yPos += 10;
+
+    // Borrower Details
+    doc.setFillColor(255, 250, 240);
+    doc.rect(15, yPos, 180, 40, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.text('BORROWER DETAILS:', 20, yPos + 10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Name: ${entry.name}`, 25, yPos + 22);
+    doc.text(`Phone: ${entry.phone}`, 25, yPos + 32);
+    if (entry.aadhar_number) {
+      doc.text(`Aadhar: ${entry.aadhar_number}`, 120, yPos + 22);
+    }
+    yPos += 55;
+
+    // Signature Section
+    doc.line(20, yPos + 25, 80, yPos + 25);
+    doc.line(130, yPos + 25, 190, yPos + 25);
+    doc.text('Borrower Signature', 30, yPos + 35);
+    doc.text('Lender Signature', 145, yPos + 35);
+
+    yPos += 45;
+
+    // Aadhar note
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text('* Please write your Aadhar number below your signature', 20, yPos);
+
+    // Footer
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Generated on ${new Date().toLocaleDateString('en-IN')} | This is a legal document`, 105, 285, { align: 'center' });
+
+    // Save
+    doc.save(`Acknowledgment_${entry.name.replace(/\s+/g, '_')}_${loanDate}.pdf`);
+  };
+
+  // Upload signed acknowledgment
+  const handleUploadAcknowledgment = async (file) => {
+    if (!file || !selectedEntryForAck) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      // Compress image
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const maxSize = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedData = canvas.toDataURL('image/jpeg', 0.7);
+
+        try {
+          const response = await fetch(`${API_URL}/vaddi-entries/${selectedEntryForAck.id}/acknowledgment`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ signed_acknowledgment: compressedData })
+          });
+
+          if (response.ok) {
+            mutate();
+            setShowAcknowledgmentModal(false);
+            setSelectedEntryForAck(null);
+            alert('Signed acknowledgment uploaded successfully!');
+          } else {
+            throw new Error('Failed to upload');
+          }
+        } catch (error) {
+          console.error('Error uploading acknowledgment:', error);
+          alert('Failed to upload acknowledgment');
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
   };
 
   // Mark as fully settled (gray out)
@@ -1221,7 +1429,7 @@ const VaddiList = ({ navigateTo }) => {
               <form onSubmit={handleAddEntry} style={{ marginBottom: '20px' }}>
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
-                    👤 Name
+                    👤 Name *
                   </label>
                   <input
                     type="text"
@@ -1240,45 +1448,117 @@ const VaddiList = ({ navigateTo }) => {
                   />
                 </div>
 
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
-                    💰 Monthly Interest Amount
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={formData.amount}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9]/g, '');
-                      setFormData({ ...formData, amount: value });
-                    }}
-                    placeholder="Amount in ₹"
-                    autoComplete="off"
-                    required
-                    disabled={loading}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      border: '2px solid #e5e7eb',
-                      borderRadius: '6px',
-                      fontSize: '14px'
-                    }}
-                  />
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                      💰 Interest/Month *
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={formData.amount}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        setFormData({ ...formData, amount: value });
+                      }}
+                      placeholder="₹ Interest"
+                      autoComplete="off"
+                      required
+                      disabled={loading}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                      🏦 Principal
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={formData.principal_amount}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        setFormData({ ...formData, principal_amount: value });
+                      }}
+                      placeholder="₹ Loan Amount"
+                      autoComplete="off"
+                      disabled={loading}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                      📱 Phone *
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="10 digits"
+                      required
+                      pattern="[0-9]{10}"
+                      maxLength="10"
+                      disabled={loading}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                      📅 Loan Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.loan_date}
+                      onChange={(e) => setFormData({ ...formData, loan_date: e.target.value })}
+                      required
+                      disabled={loading}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
-                    📱 Mobile Number
+                    🆔 Aadhar Number
                   </label>
                   <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="10 digits"
-                    required
-                    pattern="[0-9]{10}"
-                    maxLength="10"
+                    type="text"
+                    value={formData.aadhar_number}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 12);
+                      setFormData({ ...formData, aadhar_number: value });
+                    }}
+                    placeholder="12 digit Aadhar (optional)"
+                    maxLength="12"
                     disabled={loading}
                     style={{
                       width: '100%',
@@ -1352,19 +1632,44 @@ const VaddiList = ({ navigateTo }) => {
                                 {entry.name} {isSettled && '🔒'}
                               </div>
                               <div style={{ fontSize: '13px', color: isSettled ? '#9ca3af' : '#059669', fontWeight: 600, marginBottom: '2px' }}>
-                                {formatCurrency(entry.amount)}
+                                Interest: {formatCurrency(entry.amount)}/month
+                                {entry.principal_amount && ` • Principal: ${formatCurrency(entry.principal_amount)}`}
                               </div>
                               <div style={{ fontSize: '12px', color: '#6b7280' }}>
                                 📱 {entry.phone}
+                                {entry.loan_date && ` • 📅 ${new Date(entry.loan_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}`}
                               </div>
+                              {entry.aadhar_number && (
+                                <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                                  🆔 {entry.aadhar_number}
+                                </div>
+                              )}
                               {isSettled && entry.settledDate && (
                                 <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
                                   Settled: {entry.settledDate}
                                 </div>
                               )}
                             </div>
-                            <div style={{ display: 'flex', gap: '6px', flexDirection: 'column' }}>
-                              {isSettled ? (
+                            <div style={{ display: 'flex', gap: '6px', flexDirection: 'column', alignItems: 'flex-end' }}>
+                              {!isSettled && (
+                                <button
+                                  onClick={() => handleSettle(entry.id)}
+                                  style={{
+                                    background: '#10b981',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    padding: '6px 12px',
+                                    fontSize: '12px',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  ✓ Settled
+                                </button>
+                              )}
+                              {isSettled && (
                                 <button
                                   onClick={() => handleReactivate(entry.id)}
                                   style={{
@@ -1381,26 +1686,62 @@ const VaddiList = ({ navigateTo }) => {
                                 >
                                   ↩ Reactivate
                                 </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleSettle(entry.id)}
-                                  style={{
-                                    background: '#10b981',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    padding: '6px 12px',
-                                    fontSize: '12px',
-                                    cursor: 'pointer',
-                                    fontWeight: 600,
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                >
-                                  ✓ Full Settled
-                                </button>
                               )}
                             </div>
                           </div>
+                          {/* Action Buttons Row */}
+                          {!isSettled && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+                              <button
+                                onClick={() => generateAcknowledgmentPDF(entry)}
+                                style={{
+                                  background: '#f59e0b',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '5px 10px',
+                                  fontSize: '11px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600
+                                }}
+                              >
+                                📄 Download Ack
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedEntryForAck(entry);
+                                  setShowAcknowledgmentModal(true);
+                                }}
+                                style={{
+                                  background: entry.signed_acknowledgment ? '#10b981' : '#8b5cf6',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '5px 10px',
+                                  fontSize: '11px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600
+                                }}
+                              >
+                                {entry.signed_acknowledgment ? '✓ Signed' : '📷 Upload Signed'}
+                              </button>
+                              <button
+                                onClick={() => handleDelete(entry.id)}
+                                style={{
+                                  background: '#ef4444',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '5px 10px',
+                                  fontSize: '11px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600
+                                }}
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1578,6 +1919,148 @@ const VaddiList = ({ navigateTo }) => {
                 {isSubmitting ? 'Recording...' : '✓ Record Payment'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Acknowledgment Upload Modal */}
+      {showAcknowledgmentModal && selectedEntryForAck && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10001
+          }}
+          onClick={() => {
+            setShowAcknowledgmentModal(false);
+            setSelectedEntryForAck(null);
+          }}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              padding: '16px',
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              color: 'white',
+              borderRadius: '12px 12px 0 0'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
+                  📷 Upload Signed Acknowledgment
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowAcknowledgmentModal(false);
+                    setSelectedEntryForAck(null);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'white',
+                    fontSize: '24px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '14px', opacity: 0.9 }}>
+                {selectedEntryForAck.name}
+              </div>
+            </div>
+
+            <div style={{ padding: '20px' }}>
+              <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                Upload the signed acknowledgment document received from the customer. This will be stored for legal purposes.
+              </p>
+
+              {selectedEntryForAck.signed_acknowledgment ? (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                    Current signed acknowledgment:
+                  </div>
+                  <img
+                    src={selectedEntryForAck.signed_acknowledgment}
+                    alt="Signed Acknowledgment"
+                    style={{
+                      width: '100%',
+                      borderRadius: '8px',
+                      border: '2px solid #e5e7eb'
+                    }}
+                  />
+                </div>
+              ) : null}
+
+              <input
+                type="file"
+                accept="image/*"
+                id="acknowledgmentUpload"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) handleUploadAcknowledgment(file);
+                }}
+              />
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => document.getElementById('acknowledgmentUpload').click()}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  📁 Choose File
+                </button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  id="acknowledgmentCapture"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) handleUploadAcknowledgment(file);
+                  }}
+                />
+                <button
+                  onClick={() => document.getElementById('acknowledgmentCapture').click()}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  📷 Camera
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
