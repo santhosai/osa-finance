@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { API_URL } from '../config';
+import { useOnlineStatus, useOfflineApi } from '../hooks/useOffline';
 
 const fetcher = (url) => fetch(url).then(res => res.json());
 
 const DailyFinance = ({ navigateTo }) => {
+  // Offline mode hooks
+  const isOnline = useOnlineStatus();
+  const { pendingCount, isSyncing, syncData } = useOfflineApi(API_URL);
+
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
@@ -20,6 +25,229 @@ const DailyFinance = ({ navigateTo }) => {
   const [isDrawingSignature, setIsDrawingSignature] = useState(false);
   const signatureCanvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [gpsEnabled, setGpsEnabled] = useState(true); // GPS tracking toggle
+  const [bluetoothDevice, setBluetoothDevice] = useState(null);
+  const [printerConnected, setPrinterConnected] = useState(false);
+
+  // Bluetooth Printer Functions
+  const connectPrinter = async () => {
+    try {
+      // Request Bluetooth device - common thermal printer service UUIDs
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [
+          '000018f0-0000-1000-8000-00805f9b34fb', // Generic thermal printer
+          '49535343-fe7d-4ae5-8fa9-9fafd205e455', // Common SPP-like service
+          '00001101-0000-1000-8000-00805f9b34fb'  // Serial Port Profile
+        ]
+      });
+
+      const server = await device.gatt.connect();
+      setBluetoothDevice({ device, server });
+      setPrinterConnected(true);
+      alert('Printer connected: ' + device.name);
+    } catch (error) {
+      console.error('Bluetooth error:', error);
+      alert('Could not connect to printer. Make sure Bluetooth is enabled.');
+    }
+  };
+
+  const disconnectPrinter = () => {
+    if (bluetoothDevice?.device?.gatt?.connected) {
+      bluetoothDevice.device.gatt.disconnect();
+    }
+    setBluetoothDevice(null);
+    setPrinterConnected(false);
+  };
+
+  // Generate ESC/POS receipt data
+  const generateReceiptData = (customer, loan, payment) => {
+    const ESC = '\x1B';
+    const GS = '\x1D';
+    const now = new Date().toLocaleString('en-IN');
+
+    let receipt = '';
+
+    // Initialize printer
+    receipt += ESC + '@';
+
+    // Center alignment
+    receipt += ESC + 'a' + '\x01';
+
+    // Bold header
+    receipt += ESC + 'E' + '\x01';
+    receipt += 'OSM FINANCE\n';
+    receipt += ESC + 'E' + '\x00';
+    receipt += 'Daily Collection Receipt\n';
+    receipt += '================================\n';
+
+    // Left alignment
+    receipt += ESC + 'a' + '\x00';
+
+    receipt += `Date: ${now}\n`;
+    receipt += `Customer: ${customer}\n`;
+    receipt += `Phone: ${loan?.customer_phone || ''}\n`;
+    receipt += '--------------------------------\n';
+    receipt += `Loan Amount: ${formatCurrency(loan?.asked_amount || 0)}\n`;
+    receipt += `Daily Amount: ${formatCurrency(loan?.daily_amount || 0)}\n`;
+    receipt += `Day: ${payment?.day_number || 0}/100\n`;
+    receipt += '--------------------------------\n';
+
+    // Bold amount
+    receipt += ESC + 'E' + '\x01';
+    receipt += `PAID: ${formatCurrency(payment?.amount || loan?.daily_amount || 0)}\n`;
+    receipt += ESC + 'E' + '\x00';
+
+    receipt += `Balance: ${formatCurrency(loan?.balance || 0)}\n`;
+    receipt += '--------------------------------\n';
+
+    // Center alignment for footer
+    receipt += ESC + 'a' + '\x01';
+    receipt += 'Thank You!\n';
+    receipt += 'OSM Finance\n';
+    receipt += '\n\n\n';
+
+    // Cut paper
+    receipt += GS + 'V' + '\x00';
+
+    return receipt;
+  };
+
+  // Print receipt via Bluetooth
+  const printReceipt = async (customer, loan, payment) => {
+    if (!printerConnected || !bluetoothDevice) {
+      // Fallback to browser print
+      printReceiptFallback(customer, loan, payment);
+      return;
+    }
+
+    try {
+      const services = await bluetoothDevice.server.getPrimaryServices();
+
+      for (const service of services) {
+        const characteristics = await service.getCharacteristics();
+
+        for (const char of characteristics) {
+          if (char.properties.write || char.properties.writeWithoutResponse) {
+            const receiptData = generateReceiptData(customer, loan, payment);
+            const encoder = new TextEncoder();
+            const data = encoder.encode(receiptData);
+
+            // Send in chunks (BLE has packet size limits)
+            const chunkSize = 20;
+            for (let i = 0; i < data.length; i += chunkSize) {
+              const chunk = data.slice(i, i + chunkSize);
+              if (char.properties.writeWithoutResponse) {
+                await char.writeValueWithoutResponse(chunk);
+              } else {
+                await char.writeValue(chunk);
+              }
+            }
+
+            alert('Receipt printed!');
+            return;
+          }
+        }
+      }
+
+      // If no writable characteristic found
+      printReceiptFallback(customer, loan, payment);
+    } catch (error) {
+      console.error('Print error:', error);
+      printReceiptFallback(customer, loan, payment);
+    }
+  };
+
+  // Fallback: Browser print
+  const printReceiptFallback = (customer, loan, payment) => {
+    const now = new Date().toLocaleString('en-IN');
+    const printWindow = window.open('', '_blank', 'width=300,height=500');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Receipt</title>
+          <style>
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              width: 280px;
+              padding: 10px;
+              margin: 0;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .line { border-bottom: 1px dashed #000; margin: 8px 0; }
+            .amount { font-size: 16px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="center bold" style="font-size: 16px;">OSM FINANCE</div>
+          <div class="center">Daily Collection Receipt</div>
+          <div class="line"></div>
+          <div>Date: ${now}</div>
+          <div>Customer: ${customer}</div>
+          <div>Phone: ${loan?.customer_phone || ''}</div>
+          <div class="line"></div>
+          <div>Loan Amount: ${formatCurrency(loan?.asked_amount || 0)}</div>
+          <div>Daily Amount: ${formatCurrency(loan?.daily_amount || 0)}</div>
+          <div>Day: ${payment?.day_number || 0}/100</div>
+          <div class="line"></div>
+          <div class="center amount">PAID: ${formatCurrency(payment?.amount || loan?.daily_amount || 0)}</div>
+          <div>Balance: ${formatCurrency(loan?.balance || 0)}</div>
+          <div class="line"></div>
+          <div class="center">Thank You!</div>
+          <div class="center">OSM Finance</div>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
+  // Get current GPS location
+  const getCurrentLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation not supported'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          let address = '';
+
+          // Try to get address from coordinates using reverse geocoding
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const data = await response.json();
+            if (data.display_name) {
+              // Get short address (locality, city)
+              const parts = data.display_name.split(',');
+              address = parts.slice(0, 3).join(',').trim();
+            }
+          } catch (e) {
+            console.log('Could not fetch address');
+          }
+
+          resolve({ latitude, longitude, address });
+        },
+        (error) => {
+          console.error('GPS Error:', error);
+          resolve({ latitude: null, longitude: null, address: '' }); // Continue without location
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    });
+  };
 
   // Fetch daily summary
   const { data: summary = {}, mutate: mutateSummary } = useSWR(
@@ -51,19 +279,32 @@ const DailyFinance = ({ navigateTo }) => {
     }).format(amount || 0);
   };
 
-  // Handle mark payment
+  // Handle mark payment with GPS tracking
   const handleMarkPayment = async (loanId, dailyAmount) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
     try {
+      // Get GPS location if enabled
+      let location = { latitude: null, longitude: null, address: '' };
+      if (gpsEnabled) {
+        try {
+          location = await getCurrentLocation();
+        } catch (e) {
+          console.log('Location not available');
+        }
+      }
+
       const response = await fetch(`${API_URL}/daily-payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           loan_id: loanId,
           amount: dailyAmount,
-          payment_date: selectedDate
+          payment_date: selectedDate,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          address: location.address
         })
       });
 
@@ -287,9 +528,77 @@ const DailyFinance = ({ navigateTo }) => {
             Back
           </button>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Daily Finance</h1>
-          <div style={{ width: '60px' }}></div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              onClick={() => setGpsEnabled(!gpsEnabled)}
+              style={{
+                background: gpsEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.2)',
+                border: gpsEnabled ? '2px solid #10b981' : '2px solid transparent',
+                color: 'white',
+                padding: '6px 8px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '11px'
+              }}
+              title={gpsEnabled ? 'GPS Tracking ON' : 'GPS Tracking OFF'}
+            >
+              📍
+            </button>
+            <button
+              onClick={printerConnected ? disconnectPrinter : connectPrinter}
+              style={{
+                background: printerConnected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.2)',
+                border: printerConnected ? '2px solid #10b981' : '2px solid transparent',
+                color: 'white',
+                padding: '6px 8px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '11px'
+              }}
+              title={printerConnected ? 'Printer Connected - Click to Disconnect' : 'Connect Bluetooth Printer'}
+            >
+              🖨️
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Offline Indicator */}
+      {(!isOnline || pendingCount > 0) && (
+        <div style={{
+          background: !isOnline ? '#ef4444' : '#f59e0b',
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <div style={{ color: 'white', fontSize: '13px', fontWeight: 600 }}>
+            {!isOnline ? (
+              <>📴 Offline Mode - Changes saved locally</>
+            ) : (
+              <>{pendingCount} pending sync{pendingCount !== 1 ? 's' : ''}</>
+            )}
+          </div>
+          {isOnline && pendingCount > 0 && (
+            <button
+              onClick={syncData}
+              disabled={isSyncing}
+              style={{
+                background: 'white',
+                border: 'none',
+                padding: '4px 12px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#f59e0b',
+                cursor: 'pointer'
+              }}
+            >
+              {isSyncing ? 'Syncing...' : 'Sync Now'}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
@@ -1378,22 +1687,42 @@ const DailyFinance = ({ navigateTo }) => {
               <div style={{ marginTop: '12px', color: '#94a3b8', fontSize: '13px' }}>
                 Started: {selectedLoan.start_date}
               </div>
-              <button
-                onClick={() => handleDeleteLoan(selectedLoan.id)}
-                style={{
-                  marginTop: '16px',
-                  width: '100%',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#ef4444',
-                  color: 'white',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                Delete This Loan
-              </button>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                <button
+                  onClick={() => printReceipt(
+                    selectedLoan.customer_name,
+                    selectedLoan,
+                    selectedLoan.payments?.[selectedLoan.payments.length - 1] || { day_number: 0, amount: selectedLoan.daily_amount }
+                  )}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#3b82f6',
+                    color: 'white',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🖨️ Print Receipt
+                </button>
+                <button
+                  onClick={() => handleDeleteLoan(selectedLoan.id)}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#ef4444',
+                    color: 'white',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Delete Loan
+                </button>
+              </div>
             </div>
 
             {/* Payment History */}
@@ -1408,33 +1737,83 @@ const DailyFinance = ({ navigateTo }) => {
                     background: '#334155',
                     borderRadius: '8px',
                     padding: '12px',
-                    marginBottom: '8px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
+                    marginBottom: '8px'
                   }}
                 >
-                  <div>
-                    <div style={{ color: 'white', fontWeight: 600 }}>Day {payment.day_number}</div>
-                    <div style={{ color: '#94a3b8', fontSize: '12px' }}>{payment.payment_date}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ color: 'white', fontWeight: 600 }}>Day {payment.day_number}</div>
+                      <div style={{ color: '#94a3b8', fontSize: '12px' }}>{payment.payment_date}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ color: '#10b981', fontWeight: 600 }}>{formatCurrency(payment.amount)}</div>
+                      <button
+                        onClick={() => printReceipt(selectedLoan.customer_name, selectedLoan, payment)}
+                        style={{
+                          background: '#3b82f6',
+                          border: 'none',
+                          color: 'white',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🖨️
+                      </button>
+                      <button
+                        onClick={() => handleDeletePayment(payment.id)}
+                        style={{
+                          background: '#ef4444',
+                          border: 'none',
+                          color: 'white',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ color: '#10b981', fontWeight: 600 }}>{formatCurrency(payment.amount)}</div>
-                    <button
-                      onClick={() => handleDeletePayment(payment.id)}
-                      style={{
-                        background: '#ef4444',
-                        border: 'none',
-                        color: 'white',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  {/* GPS Location Info */}
+                  {payment.latitude && payment.longitude && (
+                    <div style={{
+                      marginTop: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid #475569',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <span style={{ color: '#10b981', fontSize: '14px' }}>📍</span>
+                      <div style={{ flex: 1 }}>
+                        {payment.address ? (
+                          <div style={{ color: '#94a3b8', fontSize: '11px' }}>{payment.address}</div>
+                        ) : (
+                          <div style={{ color: '#94a3b8', fontSize: '11px' }}>
+                            {payment.latitude.toFixed(4)}, {payment.longitude.toFixed(4)}
+                          </div>
+                        )}
+                      </div>
+                      <a
+                        href={`https://www.google.com/maps?q=${payment.latitude},${payment.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          background: '#3b82f6',
+                          color: 'white',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        View Map
+                      </a>
+                    </div>
+                  )}
                 </div>
               ))}
               {(!selectedLoan.payments || selectedLoan.payments.length === 0) && (

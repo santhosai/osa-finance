@@ -2905,7 +2905,7 @@ app.delete('/api/daily-loans/:id', async (req, res) => {
 // Record daily payment
 app.post('/api/daily-payments', async (req, res) => {
   try {
-    const { loan_id, amount, payment_date } = req.body;
+    const { loan_id, amount, payment_date, latitude, longitude, address } = req.body;
 
     if (!loan_id) {
       return res.status(400).json({ error: 'Loan ID is required' });
@@ -2934,7 +2934,11 @@ app.post('/api/daily-payments', async (req, res) => {
       day_number,
       amount: Number(paymentAmount),
       payment_date: payment_date || new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      // GPS Location data
+      latitude: latitude || null,
+      longitude: longitude || null,
+      address: address || ''
     };
 
     const paymentRef = await db.collection('daily_payments').add(paymentData);
@@ -3872,6 +3876,110 @@ app.put('/api/chit-settings/:groupId/:month', async (req, res) => {
     res.json({ id: docId, ...settings });
   } catch (error) {
     console.error('Error saving chit settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ CHIT AUCTION/BIDDING ============
+
+// Get auction for a group/month
+app.get('/api/chit-auctions/:groupId/:month', async (req, res) => {
+  try {
+    const { groupId, month } = req.params;
+    const docId = `${groupId}_${month}`;
+
+    const doc = await db.collection('chit_auctions').doc(docId).get();
+
+    if (doc.exists) {
+      res.json({ id: doc.id, ...doc.data() });
+    } else {
+      res.json({
+        winner_member_id: '',
+        winner_name: '',
+        bid_amount: 0,
+        commission: 0,
+        total_collected: 0,
+        amount_to_winner: 0,
+        carry_forward: 0,
+        auction_date: '',
+        disbursement_date: '',
+        winner_photo: '',
+        winner_signature: '',
+        notes: ''
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching chit auction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save auction for a group/month
+app.put('/api/chit-auctions/:groupId/:month', async (req, res) => {
+  try {
+    const { groupId, month } = req.params;
+    const {
+      winner_member_id,
+      winner_name,
+      bid_amount,
+      commission,
+      total_collected,
+      amount_to_winner,
+      carry_forward,
+      auction_date,
+      disbursement_date,
+      winner_photo,
+      winner_signature,
+      notes
+    } = req.body;
+
+    const docId = `${groupId}_${month}`;
+
+    const auctionData = {
+      chit_group_id: groupId,
+      month,
+      winner_member_id: winner_member_id || '',
+      winner_name: winner_name || '',
+      bid_amount: Number(bid_amount) || 0,
+      commission: Number(commission) || 0,
+      total_collected: Number(total_collected) || 0,
+      amount_to_winner: Number(amount_to_winner) || 0,
+      carry_forward: Number(carry_forward) || 0,
+      auction_date: auction_date || '',
+      disbursement_date: disbursement_date || '',
+      winner_photo: winner_photo || '',
+      winner_signature: winner_signature || '',
+      notes: notes || '',
+      updated_at: new Date().toISOString()
+    };
+
+    await db.collection('chit_auctions').doc(docId).set(auctionData, { merge: true });
+
+    res.json({ id: docId, ...auctionData });
+  } catch (error) {
+    console.error('Error saving chit auction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all auctions for a chit group (history)
+app.get('/api/chit-auctions/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    const auctionsSnapshot = await db.collection('chit_auctions')
+      .where('chit_group_id', '==', groupId)
+      .orderBy('month', 'desc')
+      .get();
+
+    const auctions = auctionsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json(auctions);
+  } catch (error) {
+    console.error('Error fetching chit auctions:', error);
     res.status(500).json({ error: error.message });
   }
 });

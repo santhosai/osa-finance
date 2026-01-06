@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { API_URL } from '../config';
 import WhatsAppModal from './WhatsAppModal';
@@ -11,6 +11,8 @@ function ChitDashboard({ navigateTo }) {
   const [showAddChitModal, setShowAddChitModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showAuctionModal, setShowAuctionModal] = useState(false);
+  const [showAuctionHistoryModal, setShowAuctionHistoryModal] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [pendingWhatsApp, setPendingWhatsApp] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -18,24 +20,37 @@ function ChitDashboard({ navigateTo }) {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  // Fetch all chit groups
+  // Fetch all chit groups - 5 second refresh
   const { data: chitGroups = [], mutate: mutateChits } = useSWR(`${API_URL}/chit-groups`, fetcher, {
-    refreshInterval: 30000,
+    refreshInterval: 5000,
     revalidateOnFocus: true,
   });
 
-  // Fetch members and payments for selected chit
+  // Fetch members and payments for selected chit - 5 second refresh
   const { data: chitDetails, mutate: mutateDetails } = useSWR(
     selectedChit ? `${API_URL}/chit-groups/${selectedChit.id}?month=${selectedMonth}` : null,
     fetcher,
-    { revalidateOnFocus: true }
+    { refreshInterval: 5000, revalidateOnFocus: true }
   );
 
   // Fetch chit settings for selected chit and month
   const { data: chitSettings = { chit_number: '', custom_note: '' }, mutate: mutateSettings } = useSWR(
     selectedChit ? `${API_URL}/chit-settings/${selectedChit.id}/${selectedMonth}` : null,
     fetcher,
-    { revalidateOnFocus: true }
+    { refreshInterval: 5000, revalidateOnFocus: true }
+  );
+
+  // Fetch auction data for selected chit and month
+  const { data: auctionData = {}, mutate: mutateAuction } = useSWR(
+    selectedChit ? `${API_URL}/chit-auctions/${selectedChit.id}/${selectedMonth}` : null,
+    fetcher,
+    { refreshInterval: 5000, revalidateOnFocus: true }
+  );
+
+  // Fetch auction history
+  const { data: auctionHistory = [] } = useSWR(
+    selectedChit && showAuctionHistoryModal ? `${API_URL}/chit-auctions/${selectedChit.id}` : null,
+    fetcher
   );
 
   const formatCurrency = (amount) => `₹${(amount || 0).toLocaleString('en-IN')}`;
@@ -176,22 +191,56 @@ function ChitDashboard({ navigateTo }) {
           </button>
 
           {selectedChit && (
-            <button
-              onClick={() => { setShowSidebar(false); setShowSettingsModal(true); }}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                background: 'transparent',
-                color: 'white',
-                border: 'none',
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 600
-              }}
-            >
-              ⚙️ Month Settings
-            </button>
+            <>
+              <button
+                onClick={() => { setShowSidebar(false); setShowAuctionModal(true); }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: 'transparent',
+                  color: '#f59e0b',
+                  border: 'none',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                🏆 Monthly Auction
+              </button>
+              <button
+                onClick={() => { setShowSidebar(false); setShowAuctionHistoryModal(true); }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: 'transparent',
+                  color: 'white',
+                  border: 'none',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                📊 Auction History
+              </button>
+              <button
+                onClick={() => { setShowSidebar(false); setShowSettingsModal(true); }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: 'transparent',
+                  color: 'white',
+                  border: 'none',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                ⚙️ Month Settings
+              </button>
+            </>
           )}
 
           <div style={{ borderTop: '1px solid #334155', margin: '10px 0' }} />
@@ -413,7 +462,7 @@ function ChitDashboard({ navigateTo }) {
               marginBottom: '15px',
               color: 'white'
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <div>
                   <div style={{ fontSize: '12px', opacity: 0.8 }}>Collected</div>
                   <div style={{ fontSize: '20px', fontWeight: 700 }}>
@@ -433,7 +482,53 @@ function ChitDashboard({ navigateTo }) {
                   </div>
                 </div>
               </div>
+
+              {/* Auction Info */}
+              {auctionData?.winner_name && (
+                <div style={{
+                  borderTop: '1px solid rgba(255,255,255,0.2)',
+                  paddingTop: '12px',
+                  marginTop: '8px'
+                }}>
+                  <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '6px' }}>This Month's Auction</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#fbbf24' }}>
+                        🏆 {auctionData.winner_name}
+                      </div>
+                      <div style={{ fontSize: '11px', opacity: 0.7 }}>
+                        Bid: {formatCurrency(auctionData.bid_amount)} | Commission: {formatCurrency(auctionData.commission)}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#86efac' }}>
+                        {formatCurrency(auctionData.amount_to_winner)}
+                      </div>
+                      <div style={{ fontSize: '10px', opacity: 0.7 }}>Given to Winner</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Quick Auction Button */}
+            <button
+              onClick={() => setShowAuctionModal(true)}
+              style={{
+                width: '100%',
+                background: auctionData?.winner_name ? 'rgba(251, 191, 36, 0.2)' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                border: auctionData?.winner_name ? '1px solid #f59e0b' : 'none',
+                borderRadius: '8px',
+                padding: '12px',
+                color: 'white',
+                cursor: 'pointer',
+                marginBottom: '15px',
+                fontSize: '13px',
+                fontWeight: 600
+              }}
+            >
+              🏆 {auctionData?.winner_name ? 'Edit Auction Details' : 'Record Monthly Auction'}
+            </button>
 
             {/* Add Member Button */}
             <button
@@ -506,9 +601,16 @@ function ChitDashboard({ navigateTo }) {
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {member.is_paid ? (
                       <>
-                        <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 600 }}>
-                          ✅ Paid
-                        </span>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 600, display: 'block' }}>
+                            ✅ Paid
+                          </span>
+                          {member.payment_date && (
+                            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>
+                              {new Date(member.payment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            </span>
+                          )}
+                        </div>
                         <button
                           onClick={() => undoPayment(member.payment_id)}
                           style={{
@@ -620,6 +722,31 @@ function ChitDashboard({ navigateTo }) {
         messageType="chit"
         messageData={pendingWhatsApp?.messageData || {}}
       />
+
+      {/* Auction Modal */}
+      {showAuctionModal && selectedChit && (
+        <AuctionModal
+          chitId={selectedChit.id}
+          chitName={selectedChit.name}
+          month={selectedMonth}
+          chitAmount={selectedChit.chit_amount}
+          monthlyAmount={selectedChit.monthly_amount}
+          memberCount={selectedChit.member_count}
+          members={chitDetails?.members || []}
+          currentAuction={auctionData}
+          onClose={() => setShowAuctionModal(false)}
+          onSuccess={() => { mutateAuction(); setShowAuctionModal(false); }}
+        />
+      )}
+
+      {/* Auction History Modal */}
+      {showAuctionHistoryModal && selectedChit && (
+        <AuctionHistoryModal
+          chitName={selectedChit.name}
+          auctions={auctionHistory}
+          onClose={() => setShowAuctionHistoryModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1134,6 +1261,670 @@ function ChitSettingsModal({ chitId, chitName, month, currentSettings, onClose, 
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// Auction Modal Component
+function AuctionModal({ chitId, chitName, month, chitAmount, monthlyAmount, memberCount, members, currentAuction, onClose, onSuccess }) {
+  const [formData, setFormData] = useState({
+    winner_member_id: currentAuction.winner_member_id || '',
+    winner_name: currentAuction.winner_name || '',
+    bid_amount: currentAuction.bid_amount || '',
+    commission: currentAuction.commission || '',
+    total_collected: currentAuction.total_collected || (monthlyAmount * memberCount),
+    amount_to_winner: currentAuction.amount_to_winner || '',
+    carry_forward: currentAuction.carry_forward || '',
+    auction_date: currentAuction.auction_date || new Date().toISOString().split('T')[0],
+    disbursement_date: currentAuction.disbursement_date || '',
+    winner_photo: currentAuction.winner_photo || '',
+    winner_signature: currentAuction.winner_signature || '',
+    notes: currentAuction.notes || ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [isDrawingSignature, setIsDrawingSignature] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const signatureCanvasRef = useRef(null);
+
+  const formatCurrency = (amount) => `₹${(amount || 0).toLocaleString('en-IN')}`;
+
+  // Auto-calculate amounts when inputs change
+  useEffect(() => {
+    if (formData.bid_amount && formData.commission) {
+      const totalCollected = monthlyAmount * memberCount;
+      const bidAmount = Number(formData.bid_amount);
+      const commission = Number(formData.commission);
+      const amountToWinner = totalCollected - bidAmount - commission;
+      const carryForward = bidAmount; // Bid goes to pool/carry forward
+
+      setFormData(prev => ({
+        ...prev,
+        total_collected: totalCollected,
+        amount_to_winner: amountToWinner > 0 ? amountToWinner : 0,
+        carry_forward: carryForward
+      }));
+    }
+  }, [formData.bid_amount, formData.commission, monthlyAmount, memberCount]);
+
+  // Handle member selection
+  const handleMemberSelect = (memberId) => {
+    const member = members.find(m => m.id === memberId);
+    if (member) {
+      setFormData(prev => ({
+        ...prev,
+        winner_member_id: memberId,
+        winner_name: member.name
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.winner_name || !formData.bid_amount) {
+      alert('Please select winner and enter bid amount');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/chit-auctions/${chitId}/${month}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        onSuccess();
+      } else {
+        alert('Failed to save auction details');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Failed to save auction details');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.8)',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '20px',
+      overflow: 'auto'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '24px',
+        width: '100%',
+        maxWidth: '450px',
+        margin: '20px 0'
+      }}>
+        <h2 style={{ margin: '0 0 5px', fontSize: '18px', color: '#1e293b' }}>
+          🏆 Monthly Auction
+        </h2>
+        <p style={{ margin: '0 0 20px', fontSize: '12px', color: '#64748b' }}>
+          {chitName} • {month} • Total: {formatCurrency(chitAmount)}
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          {/* Winner Selection */}
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+              Auction Winner *
+            </label>
+            <select
+              value={formData.winner_member_id}
+              onChange={(e) => handleMemberSelect(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                fontSize: '14px'
+              }}
+            >
+              <option value="">Select winner...</option>
+              {members.map(m => (
+                <option key={m.id} value={m.id}>{m.member_number || ''} - {m.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Bid Amount & Commission */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+                Bid Amount *
+              </label>
+              <input
+                type="number"
+                placeholder="e.g., 5000"
+                value={formData.bid_amount}
+                onChange={(e) => setFormData({ ...formData, bid_amount: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+                Commission *
+              </label>
+              <input
+                type="number"
+                placeholder="e.g., 2500"
+                value={formData.commission}
+                onChange={(e) => setFormData({ ...formData, commission: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Calculated Amounts */}
+          <div style={{
+            background: '#f0fdf4',
+            padding: '15px',
+            borderRadius: '8px',
+            marginBottom: '15px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span style={{ color: '#64748b', fontSize: '12px' }}>Total Collected</span>
+              <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(formData.total_collected)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span style={{ color: '#64748b', fontSize: '12px' }}>(-) Bid Amount</span>
+              <span style={{ fontWeight: 600, color: '#ef4444' }}>- {formatCurrency(formData.bid_amount)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span style={{ color: '#64748b', fontSize: '12px' }}>(-) Commission</span>
+              <span style={{ fontWeight: 600, color: '#ef4444' }}>- {formatCurrency(formData.commission)}</span>
+            </div>
+            <div style={{ borderTop: '1px solid #d1fae5', paddingTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#059669', fontSize: '14px', fontWeight: 600 }}>Amount to Winner</span>
+              <span style={{ fontWeight: 700, color: '#059669', fontSize: '16px' }}>{formatCurrency(formData.amount_to_winner)}</span>
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+                Auction Date
+              </label>
+              <input
+                type="date"
+                value={formData.auction_date}
+                onChange={(e) => setFormData({ ...formData, auction_date: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+                Disbursement Date
+              </label>
+              <input
+                type="date"
+                value={formData.disbursement_date}
+                onChange={(e) => setFormData({ ...formData, disbursement_date: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Winner Photo */}
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+              Winner Photo (with amount)
+            </label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                id="winnerPhotoCapture"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const img = new Image();
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const maxSize = 500;
+                        let width = img.width;
+                        let height = img.height;
+                        if (width > height && width > maxSize) {
+                          height = (height * maxSize) / width;
+                          width = maxSize;
+                        } else if (height > maxSize) {
+                          width = (width * maxSize) / height;
+                          height = maxSize;
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        setFormData({ ...formData, winner_photo: canvas.toDataURL('image/jpeg', 0.7) });
+                      };
+                      img.src = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => document.getElementById('winnerPhotoCapture').click()}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#3b82f6',
+                  color: 'white',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '13px'
+                }}
+              >
+                📷 Capture Photo
+              </button>
+              {formData.winner_photo && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, winner_photo: '' })}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#ef4444',
+                    color: 'white',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {formData.winner_photo && (
+              <img src={formData.winner_photo} alt="Winner" style={{ width: '100%', maxHeight: '150px', objectFit: 'cover', borderRadius: '8px', marginTop: '8px' }} />
+            )}
+          </div>
+
+          {/* Winner Signature */}
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+              Winner Signature
+            </label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setIsDrawingSignature(true)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#10b981',
+                  color: 'white',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '13px'
+                }}
+              >
+                ✍️ Draw Signature
+              </button>
+              <input
+                type="file"
+                accept="image/*"
+                id="winnerSignatureUpload"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const img = new Image();
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const maxSize = 300;
+                        let width = img.width;
+                        let height = img.height;
+                        if (width > height && width > maxSize) {
+                          height = (height * maxSize) / width;
+                          width = maxSize;
+                        } else if (height > maxSize) {
+                          width = (width * maxSize) / height;
+                          height = maxSize;
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        setFormData({ ...formData, winner_signature: canvas.toDataURL('image/jpeg', 0.7) });
+                      };
+                      img.src = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => document.getElementById('winnerSignatureUpload').click()}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#8b5cf6',
+                  color: 'white',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '13px'
+                }}
+              >
+                📁 Upload
+              </button>
+            </div>
+
+            {/* Signature Drawing Canvas */}
+            {isDrawingSignature && (
+              <div style={{ marginTop: '12px' }}>
+                <canvas
+                  ref={signatureCanvasRef}
+                  width={280}
+                  height={120}
+                  style={{ background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', touchAction: 'none', width: '100%' }}
+                  onMouseDown={(e) => {
+                    setIsDrawing(true);
+                    const canvas = signatureCanvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    const rect = canvas.getBoundingClientRect();
+                    ctx.beginPath();
+                    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+                  }}
+                  onMouseMove={(e) => {
+                    if (!isDrawing) return;
+                    const canvas = signatureCanvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    const rect = canvas.getBoundingClientRect();
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
+                    ctx.strokeStyle = '#000';
+                    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+                    ctx.stroke();
+                  }}
+                  onMouseUp={() => setIsDrawing(false)}
+                  onMouseLeave={() => setIsDrawing(false)}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    setIsDrawing(true);
+                    const canvas = signatureCanvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    const rect = canvas.getBoundingClientRect();
+                    const touch = e.touches[0];
+                    ctx.beginPath();
+                    ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+                  }}
+                  onTouchMove={(e) => {
+                    e.preventDefault();
+                    if (!isDrawing) return;
+                    const canvas = signatureCanvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    const rect = canvas.getBoundingClientRect();
+                    const touch = e.touches[0];
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
+                    ctx.strokeStyle = '#000';
+                    ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+                    ctx.stroke();
+                  }}
+                  onTouchEnd={() => setIsDrawing(false)}
+                />
+                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const canvas = signatureCanvasRef.current;
+                      const ctx = canvas.getContext('2d');
+                      ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }}
+                    style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', background: '#64748b', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const canvas = signatureCanvasRef.current;
+                      setFormData({ ...formData, winner_signature: canvas.toDataURL('image/png') });
+                      setIsDrawingSignature(false);
+                    }}
+                    style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', background: '#10b981', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsDrawingSignature(false)}
+                    style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', background: '#ef4444', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {formData.winner_signature && !isDrawingSignature && (
+              <div style={{ marginTop: '8px', position: 'relative', display: 'inline-block' }}>
+                <img src={formData.winner_signature} alt="Signature" style={{ height: '60px', background: 'white', borderRadius: '8px', padding: '4px' }} />
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, winner_signature: '' })}
+                  style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    right: '-8px',
+                    width: '22px',
+                    height: '22px',
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: '#ef4444',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: '11px'
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+              Notes
+            </label>
+            <textarea
+              placeholder="Any additional notes..."
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={2}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                fontSize: '14px',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: 'white',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              {loading ? 'Saving...' : 'Save Auction'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Auction History Modal Component
+function AuctionHistoryModal({ chitName, auctions, onClose }) {
+  const formatCurrency = (amount) => `₹${(amount || 0).toLocaleString('en-IN')}`;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.8)',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '20px',
+      overflow: 'auto'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '24px',
+        width: '100%',
+        maxWidth: '450px',
+        margin: '20px 0'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ margin: 0, fontSize: '18px', color: '#1e293b' }}>
+            📊 Auction History
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: '#f1f5f9',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <p style={{ margin: '0 0 15px', fontSize: '12px', color: '#64748b' }}>{chitName}</p>
+
+        {auctions.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+            No auction history yet
+          </div>
+        ) : (
+          <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+            {auctions.map((auction, index) => (
+              <div
+                key={auction.id || index}
+                style={{
+                  background: '#f8fafc',
+                  borderRadius: '10px',
+                  padding: '15px',
+                  marginBottom: '12px',
+                  borderLeft: '4px solid #f59e0b'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ fontWeight: 600, color: '#7c3aed' }}>{auction.month}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>{auction.auction_date}</div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: '#1e293b' }}>🏆 {auction.winner_name}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                      Bid: {formatCurrency(auction.bid_amount)} | Commission: {formatCurrency(auction.commission)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 700, color: '#059669' }}>
+                      {formatCurrency(auction.amount_to_winner)}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#64748b' }}>Given</div>
+                  </div>
+                </div>
+                {auction.winner_photo && (
+                  <img src={auction.winner_photo} alt="Winner" style={{ width: '100%', maxHeight: '100px', objectFit: 'cover', borderRadius: '6px', marginTop: '10px' }} />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
