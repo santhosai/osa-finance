@@ -2684,7 +2684,7 @@ app.get('/api/daily-customers', async (req, res) => {
 // Create daily customer
 app.post('/api/daily-customers', async (req, res) => {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, aadhar, photo, signature } = req.body;
 
     if (!name || !phone) {
       return res.status(400).json({ error: 'Name and phone are required' });
@@ -2693,6 +2693,9 @@ app.post('/api/daily-customers', async (req, res) => {
     const customerData = {
       name,
       phone,
+      aadhar: aadhar || '',
+      photo: photo || '', // Base64 image
+      signature: signature || '', // Base64 image
       created_at: new Date().toISOString()
     };
 

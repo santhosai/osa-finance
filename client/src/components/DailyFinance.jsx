@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { API_URL } from '../config';
 
@@ -13,10 +13,13 @@ const DailyFinance = ({ navigateTo }) => {
   const [showLoanDetailsModal, setShowLoanDetailsModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [selectedLoan, setSelectedLoan] = useState(null);
-  const [customerForm, setCustomerForm] = useState({ name: '', phone: '' });
+  const [customerForm, setCustomerForm] = useState({ name: '', phone: '', aadhar: '', photo: '', signature: '' });
   const [loanForm, setLoanForm] = useState({ customer_id: '', asked_amount: '', loan_given_date: '', start_date: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('collections'); // 'collections', 'customers', 'all-loans'
+  const [isDrawingSignature, setIsDrawingSignature] = useState(false);
+  const signatureCanvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   // Fetch daily summary
   const { data: summary = {}, mutate: mutateSummary } = useSWR(
@@ -95,7 +98,8 @@ const DailyFinance = ({ navigateTo }) => {
 
       if (response.ok) {
         setShowAddCustomerModal(false);
-        setCustomerForm({ name: '', phone: '' });
+        setCustomerForm({ name: '', phone: '', aadhar: '', photo: '', signature: '' });
+        setIsDrawingSignature(false);
         mutateCustomers();
       } else {
         const error = await response.json();
@@ -729,7 +733,8 @@ const DailyFinance = ({ navigateTo }) => {
             maxWidth: '400px'
           }}>
             <h2 style={{ color: 'white', marginBottom: '20px', fontSize: '20px' }}>Add Daily Customer</h2>
-            <form onSubmit={handleAddCustomer}>
+            <form onSubmit={handleAddCustomer} style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {/* Name */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ color: '#94a3b8', fontSize: '14px', display: 'block', marginBottom: '8px' }}>Name *</label>
                 <input
@@ -749,7 +754,9 @@ const DailyFinance = ({ navigateTo }) => {
                   placeholder="Customer name"
                 />
               </div>
-              <div style={{ marginBottom: '20px' }}>
+
+              {/* Phone */}
+              <div style={{ marginBottom: '16px' }}>
                 <label style={{ color: '#94a3b8', fontSize: '14px', display: 'block', marginBottom: '8px' }}>Phone *</label>
                 <input
                   type="tel"
@@ -769,10 +776,331 @@ const DailyFinance = ({ navigateTo }) => {
                   placeholder="10-digit mobile"
                 />
               </div>
+
+              {/* Aadhar Number */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ color: '#94a3b8', fontSize: '14px', display: 'block', marginBottom: '8px' }}>Aadhar Number</label>
+                <input
+                  type="text"
+                  value={customerForm.aadhar}
+                  onChange={(e) => setCustomerForm({ ...customerForm, aadhar: e.target.value.replace(/\D/g, '') })}
+                  maxLength="12"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#334155',
+                    color: 'white',
+                    fontSize: '16px'
+                  }}
+                  placeholder="12-digit Aadhar number"
+                />
+              </div>
+
+              {/* Customer Photo */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ color: '#94a3b8', fontSize: '14px', display: 'block', marginBottom: '8px' }}>Customer Photo</label>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    id="photoCapture"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          // Compress the image
+                          const img = new Image();
+                          img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const maxSize = 400;
+                            let width = img.width;
+                            let height = img.height;
+                            if (width > height && width > maxSize) {
+                              height = (height * maxSize) / width;
+                              width = maxSize;
+                            } else if (height > maxSize) {
+                              width = (width * maxSize) / height;
+                              height = maxSize;
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            setCustomerForm({ ...customerForm, photo: canvas.toDataURL('image/jpeg', 0.7) });
+                          };
+                          img.src = reader.result;
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('photoCapture').click()}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#3b82f6',
+                      color: 'white',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}
+                  >
+                    📷 Camera / Gallery
+                  </button>
+                  {customerForm.photo && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomerForm({ ...customerForm, photo: '' })}
+                      style={{
+                        padding: '10px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: '#ef4444',
+                        color: 'white',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                {customerForm.photo && (
+                  <img src={customerForm.photo} alt="Customer" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
+                )}
+              </div>
+
+              {/* Signature */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ color: '#94a3b8', fontSize: '14px', display: 'block', marginBottom: '8px' }}>Signature</label>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsDrawingSignature(true)}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#10b981',
+                      color: 'white',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}
+                  >
+                    ✍️ Draw Signature
+                  </button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id="signatureUpload"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          const img = new Image();
+                          img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const maxSize = 300;
+                            let width = img.width;
+                            let height = img.height;
+                            if (width > height && width > maxSize) {
+                              height = (height * maxSize) / width;
+                              width = maxSize;
+                            } else if (height > maxSize) {
+                              width = (width * maxSize) / height;
+                              height = maxSize;
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            setCustomerForm({ ...customerForm, signature: canvas.toDataURL('image/jpeg', 0.7) });
+                          };
+                          img.src = reader.result;
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('signatureUpload').click()}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#8b5cf6',
+                      color: 'white',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}
+                  >
+                    📁 Upload Image
+                  </button>
+                </div>
+                {customerForm.signature && !isDrawingSignature && (
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <img src={customerForm.signature} alt="Signature" style={{ width: '150px', height: '80px', objectFit: 'contain', background: 'white', borderRadius: '8px', padding: '4px' }} />
+                    <button
+                      type="button"
+                      onClick={() => setCustomerForm({ ...customerForm, signature: '' })}
+                      style={{
+                        position: 'absolute',
+                        top: '-8px',
+                        right: '-8px',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: '#ef4444',
+                        color: 'white',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                {/* Signature Drawing Canvas */}
+                {isDrawingSignature && (
+                  <div style={{ marginTop: '12px' }}>
+                    <canvas
+                      ref={signatureCanvasRef}
+                      width={280}
+                      height={150}
+                      style={{ background: 'white', borderRadius: '8px', touchAction: 'none' }}
+                      onMouseDown={(e) => {
+                        setIsDrawing(true);
+                        const canvas = signatureCanvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        const rect = canvas.getBoundingClientRect();
+                        ctx.beginPath();
+                        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+                      }}
+                      onMouseMove={(e) => {
+                        if (!isDrawing) return;
+                        const canvas = signatureCanvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        const rect = canvas.getBoundingClientRect();
+                        ctx.lineWidth = 2;
+                        ctx.lineCap = 'round';
+                        ctx.strokeStyle = '#000';
+                        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+                        ctx.stroke();
+                      }}
+                      onMouseUp={() => setIsDrawing(false)}
+                      onMouseLeave={() => setIsDrawing(false)}
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        setIsDrawing(true);
+                        const canvas = signatureCanvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        const rect = canvas.getBoundingClientRect();
+                        const touch = e.touches[0];
+                        ctx.beginPath();
+                        ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+                      }}
+                      onTouchMove={(e) => {
+                        e.preventDefault();
+                        if (!isDrawing) return;
+                        const canvas = signatureCanvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        const rect = canvas.getBoundingClientRect();
+                        const touch = e.touches[0];
+                        ctx.lineWidth = 2;
+                        ctx.lineCap = 'round';
+                        ctx.strokeStyle = '#000';
+                        ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+                        ctx.stroke();
+                      }}
+                      onTouchEnd={() => setIsDrawing(false)}
+                    />
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const canvas = signatureCanvasRef.current;
+                          const ctx = canvas.getContext('2d');
+                          ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: '#475569',
+                          color: 'white',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const canvas = signatureCanvasRef.current;
+                          setCustomerForm({ ...customerForm, signature: canvas.toDataURL('image/png') });
+                          setIsDrawingSignature(false);
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: '#10b981',
+                          color: 'white',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Save Signature
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsDrawingSignature(false)}
+                        style={{
+                          flex: 1,
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: '#ef4444',
+                          color: 'white',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button
                   type="button"
-                  onClick={() => setShowAddCustomerModal(false)}
+                  onClick={() => {
+                    setShowAddCustomerModal(false);
+                    setIsDrawingSignature(false);
+                    setCustomerForm({ name: '', phone: '', aadhar: '', photo: '', signature: '' });
+                  }}
                   style={{
                     flex: 1,
                     padding: '14px',
