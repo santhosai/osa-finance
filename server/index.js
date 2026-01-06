@@ -443,6 +443,64 @@ app.put('/api/loans/:id/close', async (req, res) => {
   }
 });
 
+// Recalculate loan balance based on actual payments
+app.post('/api/loans/:id/recalculate-balance', async (req, res) => {
+  try {
+    const loanDoc = await db.collection('loans').doc(req.params.id).get();
+    if (!loanDoc.exists) {
+      return res.status(404).json({ error: 'Loan not found' });
+    }
+
+    const loanData = loanDoc.data();
+
+    // Get all payments for this loan
+    const paymentsSnapshot = await db.collection('payments')
+      .where('loan_id', '==', req.params.id)
+      .get();
+
+    // Calculate total paid
+    let totalPaid = 0;
+    paymentsSnapshot.docs.forEach(doc => {
+      totalPaid += doc.data().amount || 0;
+    });
+
+    // Calculate correct balance
+    const correctBalance = loanData.loan_amount - totalPaid;
+
+    // Update loan balance
+    await db.collection('loans').doc(req.params.id).update({
+      balance: correctBalance
+    });
+
+    // Also recalculate balance_after for each payment
+    const payments = paymentsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })).sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
+
+    let runningBalance = loanData.loan_amount;
+    for (let i = 0; i < payments.length; i++) {
+      runningBalance = runningBalance - payments[i].amount;
+      await db.collection('payments').doc(payments[i].id).update({
+        period_number: i + 1,
+        balance_after: runningBalance
+      });
+    }
+
+    console.log(`✅ Recalculated balance for loan ${req.params.id}: loan_amount=${loanData.loan_amount}, totalPaid=${totalPaid}, newBalance=${correctBalance}`);
+
+    res.json({
+      message: 'Balance recalculated successfully',
+      loan_amount: loanData.loan_amount,
+      total_paid: totalPaid,
+      new_balance: correctBalance,
+      payments_count: payments.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ PAYMENT ROUTES ============
 
 // Get all payments for a specific date (optimized batch query)
@@ -488,6 +546,84 @@ app.put('/api/payments/:id/whatsapp-sent', async (req, res) => {
     });
 
     res.json({ success: true, message: 'WhatsApp status updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get loans given on a specific date (by loan_given_date - when money was given)
+app.get('/api/loans-by-date', async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+
+    const loans = [];
+
+    // Get Weekly/Monthly loans with this loan_given_date
+    const loansSnapshot = await db.collection('loans')
+      .where('loan_given_date', '==', date)
+      .get();
+
+    for (const loanDoc of loansSnapshot.docs) {
+      const loanData = loanDoc.data();
+
+      // Get customer details
+      const customerDoc = await db.collection('customers').doc(loanData.customer_id).get();
+      const customerData = customerDoc.exists ? customerDoc.data() : { name: 'Unknown', phone: '' };
+
+      loans.push({
+        id: loanDoc.id,
+        customer_id: loanData.customer_id,
+        customer_name: customerData.name,
+        customer_phone: customerData.phone,
+        loan_name: loanData.loan_name || '',
+        loan_type: loanData.loan_type || 'Weekly',
+        loan_amount: loanData.loan_amount,
+        weekly_amount: loanData.weekly_amount,
+        monthly_amount: loanData.monthly_amount,
+        loan_given_date: loanData.loan_given_date,
+        status: loanData.status
+      });
+    }
+
+    // Get Daily Finance loans with this loan_given_date
+    const dailyLoansSnapshot = await db.collection('daily_loans')
+      .where('loan_given_date', '==', date)
+      .get();
+
+    for (const loanDoc of dailyLoansSnapshot.docs) {
+      const loanData = loanDoc.data();
+
+      // Get customer details from daily_customers
+      const customerDoc = await db.collection('daily_customers').doc(loanData.customer_id).get();
+      const customerData = customerDoc.exists ? customerDoc.data() : { name: 'Unknown', phone: '' };
+
+      loans.push({
+        id: loanDoc.id,
+        customer_id: loanData.customer_id,
+        customer_name: customerData.name,
+        customer_phone: customerData.phone,
+        loan_name: `Daily - ${customerData.name}`,
+        loan_type: 'Daily',
+        loan_amount: loanData.given_amount, // Amount actually given (90%)
+        asked_amount: loanData.asked_amount,
+        daily_amount: loanData.daily_amount,
+        loan_given_date: loanData.loan_given_date,
+        status: loanData.status
+      });
+    }
+
+    // Calculate total
+    const totalAmount = loans.reduce((sum, loan) => sum + (loan.loan_amount || 0), 0);
+
+    res.json({
+      loans,
+      total: totalAmount,
+      count: loans.length
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2661,7 +2797,7 @@ app.delete('/api/daily-customers/:id', async (req, res) => {
 // Create daily loan
 app.post('/api/daily-loans', async (req, res) => {
   try {
-    const { customer_id, asked_amount, start_date } = req.body;
+    const { customer_id, asked_amount, start_date, loan_given_date } = req.body;
 
     if (!customer_id || !asked_amount) {
       return res.status(400).json({ error: 'Customer ID and asked amount are required' });
@@ -2671,6 +2807,7 @@ app.post('/api/daily-loans', async (req, res) => {
     const given_amount = Math.floor(asked_amount * 0.9);
     const daily_amount = Math.floor(asked_amount / 100);
     const total_days = 100;
+    const today = new Date().toISOString().split('T')[0];
 
     const loanData = {
       customer_id,
@@ -2679,7 +2816,8 @@ app.post('/api/daily-loans', async (req, res) => {
       daily_amount,
       total_days,
       balance: Number(asked_amount), // Total to be collected
-      start_date: start_date || new Date().toISOString().split('T')[0],
+      loan_given_date: loan_given_date || today, // When money was given
+      start_date: start_date || today, // When payments start
       status: 'active',
       created_at: new Date().toISOString()
     };
@@ -2734,6 +2872,29 @@ app.get('/api/daily-loans/:id', async (req, res) => {
     res.json(loanData);
   } catch (error) {
     console.error('Error fetching daily loan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete daily loan
+app.delete('/api/daily-loans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Delete all payments for this loan
+    const paymentsSnapshot = await db.collection('daily_payments')
+      .where('loan_id', '==', id)
+      .get();
+
+    for (const paymentDoc of paymentsSnapshot.docs) {
+      await paymentDoc.ref.delete();
+    }
+
+    // Delete the loan
+    await db.collection('daily_loans').doc(id).delete();
+    res.json({ message: 'Daily loan deleted' });
+  } catch (error) {
+    console.error('Error deleting daily loan:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -3362,6 +3523,390 @@ app.get('/api/backup/complete', async (req, res) => {
     res.json(backupData);
   } catch (error) {
     console.error('Error creating backup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ CHIT FUND ENDPOINTS ============
+
+// Get all chit groups with payment summary for current month
+app.get('/api/chit-groups', async (req, res) => {
+  try {
+    const month = req.query.month || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+
+    const groupsSnapshot = await db.collection('chit_groups').orderBy('day_of_month').get();
+
+    const groups = await Promise.all(groupsSnapshot.docs.map(async (doc) => {
+      const data = doc.data();
+
+      // Count paid members for this month
+      const paymentsSnapshot = await db.collection('chit_payments')
+        .where('chit_group_id', '==', doc.id)
+        .where('month', '==', month)
+        .get();
+
+      return {
+        id: doc.id,
+        ...data,
+        paid_count: paymentsSnapshot.size
+      };
+    }));
+
+    res.json(groups);
+  } catch (error) {
+    console.error('Error fetching chit groups:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single chit group with members and payment status
+app.get('/api/chit-groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const month = req.query.month || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+
+    const groupDoc = await db.collection('chit_groups').doc(id).get();
+    if (!groupDoc.exists) {
+      return res.status(404).json({ error: 'Chit group not found' });
+    }
+
+    // Get all members (no orderBy to avoid index issues with optional fields)
+    const membersSnapshot = await db.collection('chit_members')
+      .where('chit_group_id', '==', id)
+      .get();
+
+    // Get payments for this month
+    const paymentsSnapshot = await db.collection('chit_payments')
+      .where('chit_group_id', '==', id)
+      .where('month', '==', month)
+      .get();
+
+    const paymentsByMember = {};
+    paymentsSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      paymentsByMember[data.member_id] = { id: doc.id, ...data };
+    });
+
+    const members = membersSnapshot.docs.map(doc => {
+      const data = doc.data();
+      const payment = paymentsByMember[doc.id];
+      return {
+        id: doc.id,
+        ...data,
+        is_paid: !!payment,
+        payment_id: payment?.id,
+        payment_date: payment?.payment_date
+      };
+    });
+
+    // Sort by member_number (if exists) then by name
+    members.sort((a, b) => {
+      if (a.member_number && b.member_number) return a.member_number - b.member_number;
+      if (a.member_number) return -1;
+      if (b.member_number) return 1;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    res.json({
+      id: groupDoc.id,
+      ...groupDoc.data(),
+      members,
+      paid_count: paymentsSnapshot.size
+    });
+  } catch (error) {
+    console.error('Error fetching chit group:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new chit group
+app.post('/api/chit-groups', async (req, res) => {
+  try {
+    const { name, chit_amount, member_count, day_of_month, duration_months, monthly_amount } = req.body;
+
+    if (!name || !chit_amount || !member_count || !day_of_month) {
+      return res.status(400).json({ error: 'Name, chit amount, member count, and day of month are required' });
+    }
+
+    const newGroup = {
+      name,
+      chit_amount: Number(chit_amount),
+      member_count: Number(member_count),
+      day_of_month: Number(day_of_month),
+      duration_months: Number(duration_months) || 20,
+      monthly_amount: Number(monthly_amount) || Math.round(chit_amount / member_count),
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('chit_groups').add(newGroup);
+
+    res.json({ id: docRef.id, ...newGroup });
+  } catch (error) {
+    console.error('Error creating chit group:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update chit group
+app.put('/api/chit-groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    await db.collection('chit_groups').doc(id).update(updates);
+
+    res.json({ message: 'Chit group updated' });
+  } catch (error) {
+    console.error('Error updating chit group:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete chit group
+app.delete('/api/chit-groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Delete all members and payments first
+    const membersSnapshot = await db.collection('chit_members').where('chit_group_id', '==', id).get();
+    const paymentsSnapshot = await db.collection('chit_payments').where('chit_group_id', '==', id).get();
+
+    const batch = db.batch();
+    membersSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    paymentsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    batch.delete(db.collection('chit_groups').doc(id));
+
+    await batch.commit();
+
+    res.json({ message: 'Chit group deleted' });
+  } catch (error) {
+    console.error('Error deleting chit group:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add member to chit group
+app.post('/api/chit-members', async (req, res) => {
+  try {
+    const { chit_group_id, name, phone, member_number } = req.body;
+
+    if (!chit_group_id || !name) {
+      return res.status(400).json({ error: 'Chit group ID and name are required' });
+    }
+
+    // Get next member number if not provided
+    let finalMemberNumber = member_number;
+    if (!finalMemberNumber) {
+      const existingMembers = await db.collection('chit_members')
+        .where('chit_group_id', '==', chit_group_id)
+        .get();
+      finalMemberNumber = existingMembers.size + 1;
+    }
+
+    const newMember = {
+      chit_group_id,
+      name,
+      phone: phone || null,
+      member_number: Number(finalMemberNumber),
+      created_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('chit_members').add(newMember);
+
+    res.json({ id: docRef.id, ...newMember });
+  } catch (error) {
+    console.error('Error adding chit member:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update chit member
+app.put('/api/chit-members/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    await db.collection('chit_members').doc(id).update(updates);
+
+    res.json({ message: 'Member updated' });
+  } catch (error) {
+    console.error('Error updating chit member:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete chit member
+app.delete('/api/chit-members/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Delete member's payments too
+    const paymentsSnapshot = await db.collection('chit_payments').where('member_id', '==', id).get();
+    const batch = db.batch();
+    paymentsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    batch.delete(db.collection('chit_members').doc(id));
+
+    await batch.commit();
+
+    res.json({ message: 'Member deleted' });
+  } catch (error) {
+    console.error('Error deleting chit member:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Record chit payment
+app.post('/api/chit-payments', async (req, res) => {
+  try {
+    const { chit_group_id, member_id, month, amount, payment_date } = req.body;
+
+    if (!chit_group_id || !member_id || !month || !amount) {
+      return res.status(400).json({ error: 'Chit group ID, member ID, month, and amount are required' });
+    }
+
+    // Check if payment already exists for this month
+    const existingPayment = await db.collection('chit_payments')
+      .where('chit_group_id', '==', chit_group_id)
+      .where('member_id', '==', member_id)
+      .where('month', '==', month)
+      .get();
+
+    if (!existingPayment.empty) {
+      return res.status(400).json({ error: 'Payment already recorded for this month' });
+    }
+
+    const newPayment = {
+      chit_group_id,
+      member_id,
+      month,
+      amount: Number(amount),
+      payment_date: payment_date || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('chit_payments').add(newPayment);
+
+    res.json({ id: docRef.id, ...newPayment });
+  } catch (error) {
+    console.error('Error recording chit payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete chit payment (undo)
+app.delete('/api/chit-payments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await db.collection('chit_payments').doc(id).delete();
+
+    res.json({ message: 'Payment deleted' });
+  } catch (error) {
+    console.error('Error deleting chit payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get chit payment history for a member
+app.get('/api/chit-members/:id/payments', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const paymentsSnapshot = await db.collection('chit_payments')
+      .where('member_id', '==', id)
+      .orderBy('month', 'desc')
+      .get();
+
+    const payments = paymentsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json(payments);
+  } catch (error) {
+    console.error('Error fetching member payments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get chit settings for a group/month
+app.get('/api/chit-settings/:groupId/:month', async (req, res) => {
+  try {
+    const { groupId, month } = req.params;
+    const docId = `${groupId}_${month}`;
+
+    const doc = await db.collection('chit_settings').doc(docId).get();
+
+    if (doc.exists) {
+      res.json({ id: doc.id, ...doc.data() });
+    } else {
+      res.json({ chit_number: '', custom_note: '' });
+    }
+  } catch (error) {
+    console.error('Error fetching chit settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save chit settings for a group/month
+app.put('/api/chit-settings/:groupId/:month', async (req, res) => {
+  try {
+    const { groupId, month } = req.params;
+    const { chit_number, custom_note } = req.body;
+    const docId = `${groupId}_${month}`;
+
+    const settings = {
+      chit_group_id: groupId,
+      month,
+      chit_number: chit_number || '',
+      custom_note: custom_note || '',
+      updated_at: new Date().toISOString()
+    };
+
+    await db.collection('chit_settings').doc(docId).set(settings, { merge: true });
+
+    res.json({ id: docId, ...settings });
+  } catch (error) {
+    console.error('Error saving chit settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ WHATSAPP SETTINGS ============
+
+// Get WhatsApp settings (language, quick note)
+app.get('/api/whatsapp-settings', async (req, res) => {
+  try {
+    const doc = await db.collection('app_settings').doc('whatsapp').get();
+
+    if (doc.exists) {
+      res.json({ id: doc.id, ...doc.data() });
+    } else {
+      res.json({ language: 'english', quick_note: '' });
+    }
+  } catch (error) {
+    console.error('Error fetching whatsapp settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save WhatsApp settings
+app.put('/api/whatsapp-settings', async (req, res) => {
+  try {
+    const { language, quick_note } = req.body;
+
+    const settings = {
+      language: language || 'english',
+      quick_note: quick_note || '',
+      updated_at: new Date().toISOString()
+    };
+
+    await db.collection('app_settings').doc('whatsapp').set(settings, { merge: true });
+
+    res.json({ id: 'whatsapp', ...settings });
+  } catch (error) {
+    console.error('Error saving whatsapp settings:', error);
     res.status(500).json({ error: error.message });
   }
 });

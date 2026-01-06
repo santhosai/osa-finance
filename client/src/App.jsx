@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import Login from './components/Login';
+import ModuleSelector from './components/ModuleSelector';
 import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
 import CustomerLoans from './components/CustomerLoans';
@@ -18,6 +19,7 @@ import DailyFinance from './components/DailyFinance';
 import AdminProfit from './components/AdminProfit';
 import UserCollections from './components/UserCollections';
 import AdminCollections from './components/AdminCollections';
+import ChitDashboard from './components/ChitDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -118,6 +120,12 @@ function AdminCollectionsWrapper() {
   return <AdminCollections navigateTo={(path) => navigate(`/${path}`)} />;
 }
 
+function ChitDashboardWrapper() {
+  const navigate = useNavigate();
+  return <ChitDashboard navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     // Check localStorage for existing login session
@@ -134,13 +142,20 @@ function App() {
     return loggedIn;
   });
 
+  const [selectedModule, setSelectedModule] = useState(null);
+
   useEffect(() => {
     // Save login state to localStorage
     localStorage.setItem('isLoggedIn', isLoggedIn);
+    // Reset module selection when logged out
+    if (!isLoggedIn) {
+      setSelectedModule(null);
+    }
   }, [isLoggedIn]);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setSelectedModule(null); // Reset module selection on logout
     localStorage.removeItem('isLoggedIn');
   };
 
@@ -149,36 +164,65 @@ function App() {
     return <Login onLoginSuccess={() => setIsLoggedIn(true)} />;
   }
 
-  return (
-    <ThemeProvider>
-      <LanguageProvider>
-        <BrowserRouter>
-          <div className="app">
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<DashboardWrapper />} />
-              <Route path="/customers" element={<CustomersWrapper />} />
-              <Route path="/customer-loans/:customerId" element={<CustomerLoansWrapper />} />
-              <Route path="/loan-details/:loanId" element={<LoanDetailsWrapper />} />
-              <Route path="/sunday-collections" element={<SundayCollectionsWrapper />} />
-              <Route path="/overdue-payments" element={<OverduePaymentsWrapper />} />
-              <Route path="/payment-tracker" element={<ExcelPaymentTrackerWrapper />} />
-              <Route path="/vaddi-list" element={<VaddiListWrapper />} />
-              <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
-              <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
-              <Route path="/investments" element={<InvestmentsListWrapper />} />
-              <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
-              <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
-              <Route path="/user-management" element={<UserManagementWrapper />} />
-              <Route path="/admin-profit" element={<AdminProfitWrapper />} />
-              <Route path="/my-collections" element={<UserCollectionsWrapper />} />
-              <Route path="/admin-collections" element={<AdminCollectionsWrapper />} />
-            </Routes>
-          </div>
-        </BrowserRouter>
-      </LanguageProvider>
-    </ThemeProvider>
-  );
+  // Show module selector after login
+  if (!selectedModule) {
+    return <ModuleSelector onSelectModule={setSelectedModule} />;
+  }
+
+  // FINANCE MODULE - Only Finance routes
+  if (selectedModule === 'finance') {
+    return (
+      <ThemeProvider>
+        <LanguageProvider>
+          <BrowserRouter>
+            <div className="app">
+              <Routes>
+                <Route path="/dashboard" element={<DashboardWrapper />} />
+                <Route path="/customers" element={<CustomersWrapper />} />
+                <Route path="/customer-loans/:customerId" element={<CustomerLoansWrapper />} />
+                <Route path="/loan-details/:loanId" element={<LoanDetailsWrapper />} />
+                <Route path="/sunday-collections" element={<SundayCollectionsWrapper />} />
+                <Route path="/overdue-payments" element={<OverduePaymentsWrapper />} />
+                <Route path="/payment-tracker" element={<ExcelPaymentTrackerWrapper />} />
+                <Route path="/vaddi-list" element={<VaddiListWrapper />} />
+                <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
+                <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
+                <Route path="/investments" element={<InvestmentsListWrapper />} />
+                <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
+                <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
+                <Route path="/user-management" element={<UserManagementWrapper />} />
+                <Route path="/admin-profit" element={<AdminProfitWrapper />} />
+                <Route path="/my-collections" element={<UserCollectionsWrapper />} />
+                <Route path="/admin-collections" element={<AdminCollectionsWrapper />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </div>
+          </BrowserRouter>
+        </LanguageProvider>
+      </ThemeProvider>
+    );
+  }
+
+  // CHIT MODULE - Only Chit routes
+  if (selectedModule === 'chit') {
+    return (
+      <ThemeProvider>
+        <LanguageProvider>
+          <BrowserRouter>
+            <div className="app">
+              <Routes>
+                <Route path="/chit-dashboard" element={<ChitDashboardWrapper />} />
+                <Route path="*" element={<Navigate to="/chit-dashboard" replace />} />
+              </Routes>
+            </div>
+          </BrowserRouter>
+        </LanguageProvider>
+      </ThemeProvider>
+    );
+  }
+
+  // Fallback (should never reach here)
+  return null;
 }
 
 export default App;

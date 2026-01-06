@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { mutate as globalMutate } from 'swr';
 import { API_URL } from '../config';
+import WhatsAppModal from './WhatsAppModal';
 
 function AddPaymentModal({ loan, onClose, onSuccess }) {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
@@ -10,6 +11,7 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
   const [success, setSuccess] = useState(false);
   const [lastPayment, setLastPayment] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
   const amount = parseInt(offlineAmount || 0) + parseInt(onlineAmount || 0);
 
@@ -81,21 +83,9 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
     }
   };
 
-  const sendWhatsAppMessage = () => {
+  const openWhatsAppModal = () => {
     if (!lastPayment) return;
-
-    // Build message with optional Friend name line
-    const friendNameLine = loan.loan_name && loan.loan_name !== 'General Loan'
-      ? `Friend name: ${loan.loan_name}\n`
-      : '';
-
-    const message = `Payment Receipt\n\nCustomer: ${lastPayment.customer_name}\n${friendNameLine}Amount: ₹${lastPayment.amount.toLocaleString('en-IN')}\nDate: ${new Date(lastPayment.payment_date).toLocaleDateString('en-IN')}\nWeek: ${lastPayment.week_number}\nBalance Remaining: ₹${lastPayment.balance_after.toLocaleString('en-IN')}\n\nThank you for your payment!`;
-
-    const phoneNumber = lastPayment.customer_phone.replace(/\D/g, '');
-    const whatsappUrl = `https://wa.me/91${phoneNumber}?text=${encodeURIComponent(message)}`;
-
-    window.open(whatsappUrl, '_blank');
-    // Don't auto-close - let user click "Done" button
+    setShowWhatsAppModal(true);
   };
 
   const formatCurrency = (amount) => {
@@ -271,7 +261,7 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
-                onClick={sendWhatsAppMessage}
+                onClick={openWhatsAppModal}
                 style={{
                   flex: 1,
                   background: '#25d366',
@@ -309,6 +299,25 @@ function AddPaymentModal({ loan, onClose, onSuccess }) {
               </button>
             </div>
           </div>
+        )}
+
+        {/* WhatsApp Modal */}
+        {showWhatsAppModal && lastPayment && (
+          <WhatsAppModal
+            isOpen={showWhatsAppModal}
+            onClose={() => setShowWhatsAppModal(false)}
+            onSend={() => setShowWhatsAppModal(false)}
+            phone={lastPayment.customer_phone}
+            messageType="loan"
+            messageData={{
+              customerName: lastPayment.customer_name,
+              loanName: loan.loan_name,
+              amount: `₹${lastPayment.amount.toLocaleString('en-IN')}`,
+              weekNumber: lastPayment.week_number || lastPayment.period_number,
+              balance: `₹${lastPayment.balance_after.toLocaleString('en-IN')}`,
+              date: new Date(lastPayment.payment_date).toLocaleDateString('en-IN')
+            }}
+          />
         )}
       </div>
     </div>

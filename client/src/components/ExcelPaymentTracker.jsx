@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import useSWR from 'swr';
 import { API_URL } from '../config';
 
@@ -84,16 +84,17 @@ function ExcelPaymentTracker({ navigateTo }) {
           totalPeriods,
           periodsPaid,
           loanAmount: loanDetails.loan_amount,
+          balance: loanDetails.balance, // Remaining balance
           paymentsByDate,
           totalPaid: loanDetails.loan_amount - loanDetails.balance,
-          createdAt: loanDetails.created_at || loanDetails.start_date || null // Store loan creation date
+          loanGivenDate: loanDetails.loan_given_date || loanDetails.start_date || null // Store loan given date
         });
       });
 
-      // Sort rows by loan created date (newest first)
+      // Sort rows by loan given date (newest first)
       rows.sort((a, b) => {
-        const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-        const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+        const dateA = a.loanGivenDate ? new Date(a.loanGivenDate) : new Date(0);
+        const dateB = b.loanGivenDate ? new Date(b.loanGivenDate) : new Date(0);
         return dateB - dateA; // Descending order (newest first)
       });
 
@@ -119,50 +120,137 @@ function ExcelPaymentTracker({ navigateTo }) {
     window.location.reload();
   };
 
-  const downloadExcel = () => {
+  const downloadExcel = async () => {
     const { rows, dates } = gridData;
 
-    // Create worksheet data
-    const wsData = [];
+    // Create workbook and worksheet
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(`${loanType} Tracker`);
 
-    // Header row
-    const headers = ['Date', 'Customer Name', 'Friend/Loan Name', 'Type', 'Periods', ...dates, 'Total Paid'];
-    wsData.push(headers);
+    // Define headers
+    const headers = ['Date', 'Customer', 'Friend Name', 'Type', 'Periods', 'Given', 'Balance', ...dates, 'Total Paid'];
 
-    // Data rows
-    rows.forEach(row => {
+    // Add header row
+    const headerRow = worksheet.addRow(headers);
+
+    // Style header row
+    headerRow.eachCell((cell, colNumber) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+
+      // Color coding for specific columns
+      if (colNumber === 6) { // Given column
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } };
+      } else if (colNumber === 7) { // Balance column
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+      } else if (colNumber === headers.length) { // Total Paid column
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFB45309' } };
+      } else {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+      }
+    });
+
+    // Add data rows
+    rows.forEach((row, rowIndex) => {
       const rowData = [
         new Date().toLocaleDateString('en-IN'),
         row.customerName,
-        row.friendName,
-        row.loanType === 'Monthly' ? 'Monthly' : 'Weekly',
+        row.friendName || '-',
+        row.loanType,
         `${row.periodsPaid}/${row.totalPeriods}`,
+        row.loanAmount,
+        row.balance,
         ...dates.map(date => row.paymentsByDate[date] || 0),
         row.totalPaid
       ];
-      wsData.push(rowData);
+
+      const dataRow = worksheet.addRow(rowData);
+
+      // Style data row
+      dataRow.eachCell((cell, colNumber) => {
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+        cell.alignment = { vertical: 'middle' };
+
+        // Alternate row colors
+        if (rowIndex % 2 === 0) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+        }
+
+        // Given column - green background
+        if (colNumber === 6) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+          cell.font = { bold: true, color: { argb: 'FF065F46' } };
+          cell.numFmt = '₹#,##0';
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+
+        // Balance column - red background
+        if (colNumber === 7) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+          cell.font = { bold: true, color: { argb: 'FF991B1B' } };
+          cell.numFmt = '₹#,##0';
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+
+        // Total Paid column - yellow background
+        if (colNumber === headers.length) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+          cell.font = { bold: true, color: { argb: 'FF92400E' } };
+          cell.numFmt = '₹#,##0';
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+
+        // Payment date columns
+        if (colNumber > 7 && colNumber < headers.length) {
+          const value = cell.value;
+          if (value && value > 0) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+            cell.font = { bold: true, color: { argb: 'FF065F46' } };
+          } else {
+            cell.font = { color: { argb: 'FF9CA3AF' } };
+          }
+          cell.numFmt = '₹#,##0';
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+      });
     });
 
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
     // Set column widths
-    ws['!cols'] = [
-      { wch: 12 }, // Date
-      { wch: 20 }, // Customer Name
-      { wch: 15 }, // Friend Name
-      { wch: 10 }, // Type
-      { wch: 10 }, // Periods
-      ...dates.map(() => ({ wch: 12 })), // Payment columns
-      { wch: 15 } // Total Paid
+    worksheet.columns = [
+      { width: 12 },  // Date
+      { width: 18 },  // Customer
+      { width: 15 },  // Friend Name
+      { width: 10 },  // Type
+      { width: 10 },  // Periods
+      { width: 14 },  // Given
+      { width: 14 },  // Balance
+      ...dates.map(() => ({ width: 12 })),  // Payment columns
+      { width: 14 }   // Total Paid
     ];
 
-    XLSX.utils.book_append_sheet(wb, ws, `${loanType} Tracker`);
+    // Freeze header row
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-    // Download
-    const fileName = `${loanType}_Payment_Tracker_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    // Generate and download file
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${loanType}_Payment_Tracker_${new Date().toISOString().split('T')[0]}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -524,6 +612,8 @@ function ExcelPaymentTracker({ navigateTo }) {
                       <th style={{ padding: '10px', textAlign: 'left', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>Friend/Loan Name</th>
                       <th style={{ padding: '10px', textAlign: 'center', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>Type</th>
                       <th style={{ padding: '10px', textAlign: 'center', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>Periods</th>
+                      <th style={{ padding: '10px', textAlign: 'right', whiteSpace: 'nowrap', borderRight: '1px solid #fff3', background: '#059669' }}>Given</th>
+                      <th style={{ padding: '10px', textAlign: 'right', whiteSpace: 'nowrap', borderRight: '1px solid #fff3', background: '#dc2626' }}>Balance</th>
                       {gridData.dates.map((date, idx) => (
                         <th key={idx} style={{ padding: '10px', textAlign: 'right', whiteSpace: 'nowrap', borderRight: '1px solid #fff3' }}>{date}</th>
                       ))}
@@ -553,6 +643,12 @@ function ExcelPaymentTracker({ navigateTo }) {
                         </td>
                         <td style={{ padding: '8px', borderRight: '1px solid #e5e7eb', textAlign: 'center', fontWeight: 600 }}>
                           {row.periodsPaid}/{row.totalPeriods}
+                        </td>
+                        <td style={{ padding: '8px', borderRight: '1px solid #e5e7eb', textAlign: 'right', fontWeight: 600, background: '#d1fae5', color: '#065f46', whiteSpace: 'nowrap' }}>
+                          {formatCurrency(row.loanAmount)}
+                        </td>
+                        <td style={{ padding: '8px', borderRight: '1px solid #e5e7eb', textAlign: 'right', fontWeight: 600, background: '#fee2e2', color: '#991b1b', whiteSpace: 'nowrap' }}>
+                          {formatCurrency(row.balance)}
                         </td>
                         {gridData.dates.map((date, dateIdx) => {
                           const amount = row.paymentsByDate[date] || 0;

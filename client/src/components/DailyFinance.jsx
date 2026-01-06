@@ -14,7 +14,7 @@ const DailyFinance = ({ navigateTo }) => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '' });
-  const [loanForm, setLoanForm] = useState({ customer_id: '', asked_amount: '', start_date: '' });
+  const [loanForm, setLoanForm] = useState({ customer_id: '', asked_amount: '', loan_given_date: '', start_date: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('collections'); // 'collections', 'customers', 'all-loans'
 
@@ -116,19 +116,21 @@ const DailyFinance = ({ navigateTo }) => {
     setIsSubmitting(true);
 
     try {
+      const today = new Date().toISOString().split('T')[0];
       const response = await fetch(`${API_URL}/daily-loans`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_id: loanForm.customer_id,
           asked_amount: Number(loanForm.asked_amount),
-          start_date: loanForm.start_date || new Date().toISOString().split('T')[0]
+          loan_given_date: loanForm.loan_given_date || today,
+          start_date: loanForm.start_date || today
         })
       });
 
       if (response.ok) {
         setShowAddLoanModal(false);
-        setLoanForm({ customer_id: '', asked_amount: '', start_date: '' });
+        setLoanForm({ customer_id: '', asked_amount: '', loan_given_date: '', start_date: '' });
         mutateCustomers();
         mutateCollections();
         mutateSummary();
@@ -181,6 +183,56 @@ const DailyFinance = ({ navigateTo }) => {
       }
     } catch (error) {
       console.error('Delete payment error:', error);
+    }
+  };
+
+  // Delete customer
+  const handleDeleteCustomer = async (customerId, customerName) => {
+    if (!confirm(`Delete customer "${customerName}" and ALL their loans/payments? This cannot be undone!`)) return;
+
+    try {
+      const response = await fetch(`${API_URL}/daily-customers/${customerId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        mutateCustomers();
+        mutateSummary();
+        mutateCollections();
+        alert('Customer deleted successfully');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to delete customer');
+      }
+    } catch (error) {
+      console.error('Delete customer error:', error);
+      alert('Failed to delete customer');
+    }
+  };
+
+  // Delete loan
+  const handleDeleteLoan = async (loanId) => {
+    if (!confirm('Delete this loan and all its payments? This cannot be undone!')) return;
+
+    try {
+      const response = await fetch(`${API_URL}/daily-loans/${loanId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        setShowLoanDetailsModal(false);
+        setSelectedLoan(null);
+        mutateCustomers();
+        mutateSummary();
+        mutateCollections();
+        alert('Loan deleted successfully');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to delete loan');
+      }
+    } catch (error) {
+      console.error('Delete loan error:', error);
+      alert('Failed to delete loan');
     }
   };
 
@@ -538,7 +590,7 @@ const DailyFinance = ({ navigateTo }) => {
                   <button
                     onClick={() => {
                       setSelectedCustomer(customer);
-                      setLoanForm({ customer_id: customer.id, asked_amount: '', start_date: new Date().toISOString().split('T')[0] });
+                      setLoanForm({ customer_id: customer.id, asked_amount: '', loan_given_date: new Date().toISOString().split('T')[0], start_date: new Date().toISOString().split('T')[0] });
                       setShowAddLoanModal(true);
                     }}
                     style={{
@@ -554,6 +606,23 @@ const DailyFinance = ({ navigateTo }) => {
                     }}
                   >
                     + New Loan
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCustomer(customer.id, customer.name)}
+                    style={{
+                      marginTop: '8px',
+                      marginLeft: '8px',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: '#ef4444',
+                      color: 'white',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Delete
                   </button>
                 </div>
               </div>
@@ -818,8 +887,27 @@ const DailyFinance = ({ navigateTo }) => {
                   </div>
                 )}
               </div>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ color: '#94a3b8', fontSize: '14px', display: 'block', marginBottom: '8px' }}>Loan Given Date *</label>
+                <input
+                  type="date"
+                  value={loanForm.loan_given_date}
+                  onChange={(e) => setLoanForm({ ...loanForm, loan_given_date: e.target.value })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#334155',
+                    color: 'white',
+                    fontSize: '16px'
+                  }}
+                />
+                <small style={{ color: '#6b7280', fontSize: '11px' }}>When you gave the money</small>
+              </div>
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ color: '#94a3b8', fontSize: '14px', display: 'block', marginBottom: '8px' }}>Start Date</label>
+                <label style={{ color: '#94a3b8', fontSize: '14px', display: 'block', marginBottom: '8px' }}>Payment Start Date</label>
                 <input
                   type="date"
                   value={loanForm.start_date}
@@ -962,6 +1050,22 @@ const DailyFinance = ({ navigateTo }) => {
               <div style={{ marginTop: '12px', color: '#94a3b8', fontSize: '13px' }}>
                 Started: {selectedLoan.start_date}
               </div>
+              <button
+                onClick={() => handleDeleteLoan(selectedLoan.id)}
+                style={{
+                  marginTop: '16px',
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#ef4444',
+                  color: 'white',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Delete This Loan
+              </button>
             </div>
 
             {/* Payment History */}

@@ -33,6 +33,10 @@ function Dashboard({ navigateTo }) {
   const [undoPaymentConfirm, setUndoPaymentConfirm] = useState(null); // { loan, customer, paymentId }
   const [weeklyDiagnostic, setWeeklyDiagnostic] = useState(null); // Weekly loans overview
   const [showCharts, setShowCharts] = useState(false); // Toggle charts visibility
+  const [loansGivenDate, setLoansGivenDate] = useState(new Date().toISOString().split('T')[0]); // For loans given tracker
+  const [showLoansGivenModal, setShowLoansGivenModal] = useState(false); // For loans given modal
+  const [quickNote, setQuickNote] = useState(() => localStorage.getItem('dashboardQuickNote') || ''); // Quick Note
+  const [showQuickNote, setShowQuickNote] = useState(true); // Show/hide quick note
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -67,6 +71,17 @@ function Dashboard({ navigateTo }) {
     revalidateOnFocus: true,
     dedupingInterval: 2000,
   });
+
+  // Fetch Loans Given by date
+  const { data: loansGivenData = { loans: [], total: 0, count: 0 } } = useSWR(
+    `${API_URL}/loans-by-date?date=${loansGivenDate}`,
+    fetcher,
+    {
+      refreshInterval: 30000,
+      revalidateOnFocus: true,
+      dedupingInterval: 2000,
+    }
+  );
 
   // Fetch weekly payments data when selectedDate or customers change
   const customersLength = customers?.length || 0;
@@ -227,6 +242,12 @@ function Dashboard({ navigateTo }) {
   const handleLogout = () => {
     localStorage.removeItem('isLoggedIn');
     window.location.reload();
+  };
+
+  // Save Quick Note to localStorage
+  const saveQuickNote = (note) => {
+    setQuickNote(note);
+    localStorage.setItem('dashboardQuickNote', note);
   };
 
   // Toggle selection of unpaid customer for WhatsApp share
@@ -1094,6 +1115,77 @@ function Dashboard({ navigateTo }) {
           <span style={{ color: 'white', fontSize: '16px' }}>→</span>
         </div>
 
+        {/* Quick Note Section */}
+        <div style={{
+          background: isDarkMode
+            ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)'
+            : 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+          margin: '10px 10px 0 10px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          overflow: 'hidden'
+        }}>
+          <div
+            onClick={() => setShowQuickNote(!showQuickNote)}
+            style={{
+              padding: '10px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>📝</span>
+              <span style={{ fontWeight: 600, fontSize: '13px', color: '#92400e' }}>Quick Note</span>
+              {quickNote && !showQuickNote && (
+                <span style={{ fontSize: '11px', color: '#b45309', opacity: 0.8 }}>
+                  (has content)
+                </span>
+              )}
+            </div>
+            <span style={{ color: '#92400e', fontSize: '14px' }}>{showQuickNote ? '▼' : '▶'}</span>
+          </div>
+          {showQuickNote && (
+            <div style={{ padding: '0 14px 14px 14px' }}>
+              <textarea
+                value={quickNote}
+                onChange={(e) => saveQuickNote(e.target.value)}
+                placeholder="Type your notes here... (auto-saved)"
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  border: '1px solid #fbbf24',
+                  background: 'white',
+                  fontSize: '13px',
+                  resize: 'vertical',
+                  outline: 'none',
+                  fontFamily: 'inherit'
+                }}
+              />
+              {quickNote && (
+                <button
+                  onClick={() => saveQuickNote('')}
+                  style={{
+                    marginTop: '8px',
+                    padding: '6px 12px',
+                    background: '#fee2e2',
+                    color: '#dc2626',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  Clear Note
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Stats Grid */}
         <div style={{ padding: '10px' }}>
@@ -1243,6 +1335,50 @@ function Dashboard({ navigateTo }) {
                 Today: {formatCurrency(dailySummary.today_collected || 0)} / {formatCurrency(dailySummary.today_expected)} collected
               </div>
             )}
+          </div>
+
+          {/* Loans Given Tracker Card - Tap to view */}
+          <div
+            onClick={() => setShowLoansGivenModal(true)}
+            style={{
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
+              color: 'white',
+              cursor: 'pointer',
+              marginBottom: '10px',
+              transition: 'transform 0.15s, box-shadow 0.15s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(5, 150, 105, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(5, 150, 105, 0.3)';
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, opacity: 0.95 }}>
+                💸 Loans Given
+              </div>
+              <span style={{ fontSize: '10px', opacity: 0.8 }}>Tap to view →</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700 }}>
+                  {formatCurrency(loansGivenData.total || 0)}
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Today's Total</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#86efac' }}>
+                  {loansGivenData.count || 0}
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Loans</div>
+              </div>
+            </div>
           </div>
 
           {/* Weekly Loans Overview Card */}
@@ -2250,6 +2386,149 @@ function Dashboard({ navigateTo }) {
                   '↩️ Undo Payment'
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loans Given Modal */}
+      {showLoansGivenModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1001,
+            padding: '20px'
+          }}
+          onClick={() => setShowLoansGivenModal(false)}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '0',
+              maxWidth: '450px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflow: 'hidden',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+              padding: '16px 20px',
+              color: 'white',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div style={{ fontSize: '16px', fontWeight: 700 }}>💸 Loans Given</div>
+              <button
+                onClick={() => setShowLoansGivenModal(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  color: 'white',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >×</button>
+            </div>
+
+            {/* Date Picker */}
+            <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <input
+                type="date"
+                value={loansGivenDate}
+                onChange={(e) => setLoansGivenDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '2px solid #10b981',
+                  fontSize: '14px',
+                  fontWeight: 600
+                }}
+              />
+            </div>
+
+            {/* Summary */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '12px 20px',
+              background: '#ecfdf5',
+              borderBottom: '1px solid #d1fae5'
+            }}>
+              <div>
+                <div style={{ fontSize: '11px', color: '#065f46' }}>Total Given</div>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: '#047857' }}>{formatCurrency(loansGivenData.total || 0)}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '11px', color: '#065f46' }}>Loans</div>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: '#047857' }}>{loansGivenData.count || 0}</div>
+              </div>
+            </div>
+
+            {/* Loans List */}
+            <div style={{ maxHeight: '300px', overflowY: 'auto', padding: '10px 20px' }}>
+              {loansGivenData.loans && loansGivenData.loans.length > 0 ? (
+                loansGivenData.loans.map((loan, index) => (
+                  <div
+                    key={loan.id || index}
+                    onClick={() => {
+                      setShowLoansGivenModal(false);
+                      navigateTo('loan-details', loan.id);
+                    }}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px',
+                      background: '#f8fafc',
+                      borderRadius: '8px',
+                      marginBottom: '8px',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.background = '#e0f2fe'}
+                    onMouseOut={(e) => e.currentTarget.style.background = '#f8fafc'}
+                  >
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{loan.customer_name}</div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>
+                        {loan.loan_type} {loan.loan_name ? `• ${loan.loan_name}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#059669' }}>{formatCurrency(loan.loan_amount)}</div>
+                      <div style={{ fontSize: '10px', color: '#64748b' }}>
+                        {loan.loan_type === 'Weekly' ? `₹${loan.weekly_amount}/wk` : `₹${loan.monthly_amount}/mo`}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
+                  <div style={{ fontSize: '13px' }}>No loans given on this date</div>
+                </div>
+              )}
             </div>
           </div>
         </div>

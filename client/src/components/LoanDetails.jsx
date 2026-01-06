@@ -2,6 +2,7 @@ import { useState } from 'react';
 import useSWR, { mutate as globalMutate } from 'swr';
 import AddPaymentModal from './AddPaymentModal';
 import AddLoanModal from './AddLoanModal';
+import WhatsAppModal from './WhatsAppModal';
 import { API_URL } from '../config';
 
 // Fetcher function for SWR
@@ -13,6 +14,8 @@ function LoanDetails({ loanId, navigateTo }) {
   const [showEditLoanModal, setShowEditLoanModal] = useState(false);
   const [editFormData, setEditFormData] = useState({});
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [selectedPaymentForWhatsApp, setSelectedPaymentForWhatsApp] = useState(null);
 
   // Use SWR for automatic caching and re-fetching
   const { data: loan, error, isLoading, mutate } = useSWR(
@@ -108,24 +111,39 @@ function LoanDetails({ loanId, navigateTo }) {
     }
   };
 
-  const sendWhatsAppMessage = async (payment) => {
-    const loanType = loan.loan_type || 'Weekly';
-    const periodLabel = loanType === 'Weekly' ? 'Week' : 'Month';
-    const periodNumber = payment.period_number || payment.week_number;
-    const friendNameLine = loan.loan_name && loan.loan_name !== 'General Loan'
-      ? `Friend name: ${loan.loan_name}\n`
-      : '';
+  const recalculateBalance = async () => {
+    if (!confirm('This will recalculate the balance based on all payments. Continue?')) return;
 
-    const message = `Payment Receipt\n\nCustomer: ${loan.customer_name}\n${friendNameLine}Amount: ${formatCurrency(payment.amount)}\nDate: ${formatDate(payment.payment_date)}\n${periodLabel}: ${periodNumber}\nBalance Remaining: ${formatCurrency(payment.balance_after)}\n\nThank you for your payment!`;
+    try {
+      const response = await fetch(`${API_URL}/loans/${loan.id}/recalculate-balance`, {
+        method: 'POST'
+      });
 
-    const phoneNumber = loan.customer_phone.replace(/\D/g, '');
-    const whatsappUrl = `https://wa.me/91${phoneNumber}?text=${encodeURIComponent(message)}`;
+      if (response.ok) {
+        const result = await response.json();
+        alert(`Balance recalculated!\n\nLoan Amount: ₹${result.loan_amount.toLocaleString('en-IN')}\nTotal Paid: ₹${result.total_paid.toLocaleString('en-IN')}\nNew Balance: ₹${result.new_balance.toLocaleString('en-IN')}\nPayments: ${result.payments_count}`);
+        mutate();
+        globalMutate(`${API_URL}/customers`);
+      } else {
+        alert('Failed to recalculate balance');
+      }
+    } catch (error) {
+      console.error('Error recalculating balance:', error);
+      alert('Failed to recalculate balance');
+    }
+  };
 
-    window.open(whatsappUrl, '_blank');
+  const openWhatsAppModalForPayment = (payment) => {
+    setSelectedPaymentForWhatsApp(payment);
+    setShowWhatsAppModal(true);
+  };
+
+  const handleWhatsAppSent = async () => {
+    if (!selectedPaymentForWhatsApp) return;
 
     // Mark as sent in database
     try {
-      await fetch(`${API_URL}/payments/${payment.id}/whatsapp-sent`, {
+      await fetch(`${API_URL}/payments/${selectedPaymentForWhatsApp.id}/whatsapp-sent`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sent_by: localStorage.getItem('userName') || 'Unknown' })
@@ -135,6 +153,8 @@ function LoanDetails({ loanId, navigateTo }) {
     } catch (err) {
       console.error('Error marking WhatsApp sent:', err);
     }
+    setShowWhatsAppModal(false);
+    setSelectedPaymentForWhatsApp(null);
   };
 
   const deletePayment = async (paymentId) => {
@@ -397,6 +417,25 @@ function LoanDetails({ loanId, navigateTo }) {
           >
             ✏️ Edit Loan Details
           </button>
+          <button
+            onClick={recalculateBalance}
+            style={{
+              background: '#fef3c7',
+              color: '#92400e',
+              border: '1px solid #fbbf24',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            title="Fix balance if it's wrong"
+          >
+            🔄 Fix Balance
+          </button>
         </div>
 
         <div className="loan-amount-grid">
@@ -481,7 +520,7 @@ function LoanDetails({ loanId, navigateTo }) {
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 className={payment.whatsapp_sent ? "whatsapp-btn-sent" : "whatsapp-btn"}
-                onClick={() => sendWhatsAppMessage(payment)}
+                onClick={() => openWhatsAppModalForPayment(payment)}
                 title={payment.whatsapp_sent ? `Sent by ${payment.whatsapp_sent_by || 'Unknown'}` : 'Send WhatsApp'}
                 style={payment.whatsapp_sent ? {
                   background: '#9ca3af',
@@ -872,6 +911,28 @@ function LoanDetails({ loanId, navigateTo }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* WhatsApp Modal */}
+      {showWhatsAppModal && selectedPaymentForWhatsApp && loan && (
+        <WhatsAppModal
+          isOpen={showWhatsAppModal}
+          onClose={() => {
+            setShowWhatsAppModal(false);
+            setSelectedPaymentForWhatsApp(null);
+          }}
+          onSend={handleWhatsAppSent}
+          phone={loan.customer_phone}
+          messageType="loan"
+          messageData={{
+            customerName: loan.customer_name,
+            loanName: loan.loan_name,
+            amount: formatCurrency(selectedPaymentForWhatsApp.amount),
+            weekNumber: selectedPaymentForWhatsApp.period_number || selectedPaymentForWhatsApp.week_number,
+            balance: formatCurrency(selectedPaymentForWhatsApp.balance_after),
+            date: formatDate(selectedPaymentForWhatsApp.payment_date)
+          }}
+        />
       )}
     </div>
   );
