@@ -329,11 +329,11 @@ const VaddiList = ({ navigateTo }) => {
     }
   };
 
-  // Generate Acknowledgment PDF
-  const generateAcknowledgmentPDF = (entry) => {
+  // Generate Acknowledgment PDF (Tamil)
+  const generateAcknowledgmentPDF = (entry, shouldPrint = false) => {
     const doc = new jsPDF();
     const loanDate = entry.loan_date || new Date().toISOString().split('T')[0];
-    const formattedDate = new Date(loanDate).toLocaleDateString('en-IN', {
+    const formattedDate = new Date(loanDate).toLocaleDateString('ta-IN', {
       day: '2-digit',
       month: 'long',
       year: 'numeric'
@@ -343,101 +343,130 @@ const VaddiList = ({ navigateTo }) => {
     doc.setFillColor(30, 58, 138);
     doc.rect(0, 0, 210, 40, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
+    doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text('LOAN ACKNOWLEDGMENT', 105, 20, { align: 'center' });
-    doc.setFontSize(12);
-    doc.text('OM SAI MURUGAN FINANCE', 105, 32, { align: 'center' });
+    doc.text('LOAN ACKNOWLEDGMENT', 105, 15, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text('OM SAI MURUGAN FINANCE', 105, 28, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text('Kadan Opputhal Pathiram', 105, 36, { align: 'center' });
 
     // Body
     doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
 
-    let yPos = 60;
+    let yPos = 55;
 
     // Date
-    doc.text(`Date: ${formattedDate}`, 20, yPos);
-    yPos += 20;
+    doc.text(`Date / Theti: ${formattedDate}`, 20, yPos);
+    yPos += 15;
 
-    // Main content
-    doc.setFontSize(11);
-    const mainText = `I, ${entry.name}, hereby acknowledge that I have received a loan from Santhosh Kumar (OM SAI MURUGAN FINANCE) as per the following terms:`;
+    // Main content (Tamil transliteration + English)
+    doc.setFontSize(10);
+    const mainText = `Naan, ${entry.name}, Santhosh Kumar (OM SAI MURUGAN FINANCE) avarkalitam irunthu kadan petrathai oppukolkiren.`;
+    const mainTextEn = `I, ${entry.name}, hereby acknowledge receiving a loan from Santhosh Kumar (OM SAI MURUGAN FINANCE).`;
     const splitMain = doc.splitTextToSize(mainText, 170);
+    const splitMainEn = doc.splitTextToSize(mainTextEn, 170);
     doc.text(splitMain, 20, yPos);
-    yPos += splitMain.length * 7 + 15;
+    yPos += splitMain.length * 6;
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(9);
+    doc.text(splitMainEn, 20, yPos);
+    doc.setTextColor(0, 0, 0);
+    yPos += splitMainEn.length * 5 + 10;
 
     // Loan Details Box
     doc.setFillColor(240, 240, 250);
-    doc.rect(15, yPos - 5, 180, 50, 'F');
+    doc.rect(15, yPos - 5, 180, 45, 'F');
     doc.setDrawColor(102, 126, 234);
-    doc.rect(15, yPos - 5, 180, 50, 'S');
+    doc.rect(15, yPos - 5, 180, 45, 'S');
 
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('LOAN DETAILS', 20, yPos + 5);
+    doc.text('KADAN VIVARANGAL / LOAN DETAILS', 20, yPos + 5);
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
 
     if (entry.principal_amount) {
-      doc.text(`Principal Amount: Rs. ${entry.principal_amount.toLocaleString('en-IN')}/-`, 25, yPos + 18);
+      doc.text(`Asal Thogai / Principal Amount: Rs. ${entry.principal_amount.toLocaleString('en-IN')}/-`, 25, yPos + 18);
     }
-    doc.text(`Monthly Interest: Rs. ${entry.amount.toLocaleString('en-IN')}/-`, 25, yPos + 28);
-    doc.text(`Interest Due Day: ${entry.day} of every month`, 25, yPos + 38);
-    yPos += 60;
+    doc.text(`Vatti Seluthum Theti / Interest Due Day: ${entry.day} (Every Month)`, 25, yPos + 30);
+    yPos += 55;
 
     // Terms
     doc.setFont('helvetica', 'bold');
-    doc.text('TERMS & CONDITIONS:', 20, yPos);
+    doc.setFontSize(11);
+    doc.text('NIBANTHANAIKAL / TERMS:', 20, yPos);
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
     yPos += 10;
 
     const terms = [
-      '1. I agree to pay the monthly interest on or before the due date.',
-      '2. I understand that failure to pay interest will result in legal action.',
-      '3. I will repay the principal amount as per mutual agreement.',
-      '4. This acknowledgment serves as proof of my debt obligation.'
+      '1. Ovvoru mathamum kurippitta thetiyil vatti seluthven / I will pay interest on the due date every month.',
+      '2. Vatti seluthath thavarinaal satta nadavadikaik edukkapadum / Legal action will be taken for non-payment.',
+      '3. Asal thogaiyai paraspara oppanthathin padi thirumbi seluthuven / I will repay principal as per agreement.',
+      '4. Intha opputhal pathiram en kadan kadamaikku saanraaga amaiyum / This acknowledgment is proof of my obligation.'
     ];
 
     terms.forEach(term => {
       const splitTerm = doc.splitTextToSize(term, 170);
       doc.text(splitTerm, 25, yPos);
-      yPos += splitTerm.length * 6 + 4;
+      yPos += splitTerm.length * 5 + 3;
     });
 
-    yPos += 10;
+    yPos += 8;
 
     // Borrower Details
     doc.setFillColor(255, 250, 240);
-    doc.rect(15, yPos, 180, 40, 'F');
+    doc.rect(15, yPos, 180, 35, 'F');
     doc.setFont('helvetica', 'bold');
-    doc.text('BORROWER DETAILS:', 20, yPos + 10);
+    doc.setFontSize(10);
+    doc.text('KADAN VAANGIYAVAR VIVARAM / BORROWER DETAILS:', 20, yPos + 8);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Name: ${entry.name}`, 25, yPos + 22);
-    doc.text(`Phone: ${entry.phone}`, 25, yPos + 32);
+    doc.text(`Peyar / Name: ${entry.name}`, 25, yPos + 18);
+    doc.text(`Tholaipesi / Phone: ${entry.phone}`, 25, yPos + 28);
     if (entry.aadhar_number) {
-      doc.text(`Aadhar: ${entry.aadhar_number}`, 120, yPos + 22);
+      doc.text(`Aadhar: ${entry.aadhar_number}`, 120, yPos + 18);
     }
-    yPos += 55;
-
-    // Signature Section
-    doc.line(20, yPos + 25, 80, yPos + 25);
-    doc.line(130, yPos + 25, 190, yPos + 25);
-    doc.text('Borrower Signature', 30, yPos + 35);
-    doc.text('Lender Signature', 145, yPos + 35);
-
     yPos += 45;
 
+    // Signature Section
+    doc.line(20, yPos + 20, 80, yPos + 20);
+    doc.line(130, yPos + 20, 190, yPos + 20);
+    doc.setFontSize(9);
+    doc.text('Kadan Vaangiyavar Kaiyoppam', 22, yPos + 28);
+    doc.text('Borrower Signature', 30, yPos + 34);
+    doc.text('Kadan Koduppavar Kaiyoppam', 132, yPos + 28);
+    doc.text('Lender Signature', 145, yPos + 34);
+
+    yPos += 42;
+
     // Aadhar note
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
-    doc.text('* Please write your Aadhar number below your signature', 20, yPos);
+    doc.text('* Ungal Aadhar ennai kaiyoppathirkku keele ezhuthavum', 20, yPos);
+    doc.text('  (Please write your Aadhar number below your signature)', 20, yPos + 5);
 
     // Footer
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text(`Generated on ${new Date().toLocaleDateString('en-IN')} | This is a legal document`, 105, 285, { align: 'center' });
+    doc.text(`Generated on ${new Date().toLocaleDateString('en-IN')} | Ithu sattapoorvamana aavanam / This is a legal document`, 105, 285, { align: 'center' });
 
-    // Save
-    doc.save(`Acknowledgment_${entry.name.replace(/\s+/g, '_')}_${loanDate}.pdf`);
+    if (shouldPrint) {
+      // Open in new window for printing
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(pdfUrl, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+    } else {
+      // Save as PDF
+      doc.save(`Acknowledgment_${entry.name.replace(/\s+/g, '_')}_${loanDate}.pdf`);
+    }
   };
 
   // Upload signed acknowledgment
@@ -1693,7 +1722,7 @@ const VaddiList = ({ navigateTo }) => {
                           {!isSettled && (
                             <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
                               <button
-                                onClick={() => generateAcknowledgmentPDF(entry)}
+                                onClick={() => generateAcknowledgmentPDF(entry, false)}
                                 style={{
                                   background: '#f59e0b',
                                   color: 'white',
@@ -1705,7 +1734,22 @@ const VaddiList = ({ navigateTo }) => {
                                   fontWeight: 600
                                 }}
                               >
-                                📄 Download Ack
+                                📄 PDF
+                              </button>
+                              <button
+                                onClick={() => generateAcknowledgmentPDF(entry, true)}
+                                style={{
+                                  background: '#3b82f6',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '5px 10px',
+                                  fontSize: '11px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600
+                                }}
+                              >
+                                🖨️ Print
                               </button>
                               <button
                                 onClick={() => {
@@ -1723,7 +1767,7 @@ const VaddiList = ({ navigateTo }) => {
                                   fontWeight: 600
                                 }}
                               >
-                                {entry.signed_acknowledgment ? '✓ Signed' : '📷 Upload Signed'}
+                                {entry.signed_acknowledgment ? '✓ Signed' : '📷 Upload'}
                               </button>
                               <button
                                 onClick={() => handleDelete(entry.id)}
