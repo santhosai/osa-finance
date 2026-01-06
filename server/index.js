@@ -3914,11 +3914,12 @@ app.get('/api/chit-auctions/:groupId/:month', async (req, res) => {
   }
 });
 
-// Save auction for a group/month
+// Save auction for a group/month (or group/slot for multiple auctions in same month)
 app.put('/api/chit-auctions/:groupId/:month', async (req, res) => {
   try {
     const { groupId, month } = req.params;
     const {
+      slot_number,
       winner_member_id,
       winner_name,
       bid_amount,
@@ -3933,11 +3934,13 @@ app.put('/api/chit-auctions/:groupId/:month', async (req, res) => {
       notes
     } = req.body;
 
-    const docId = `${groupId}_${month}`;
+    // Use slot_number in docId if provided, otherwise use month
+    const docId = slot_number ? `${groupId}_slot_${slot_number}` : `${groupId}_${month}`;
 
     const auctionData = {
       chit_group_id: groupId,
       month,
+      slot_number: Number(slot_number) || null,
       winner_member_id: winner_member_id || '',
       winner_name: winner_name || '',
       bid_amount: Number(bid_amount) || 0,
@@ -3962,20 +3965,29 @@ app.put('/api/chit-auctions/:groupId/:month', async (req, res) => {
   }
 });
 
-// Get all auctions for a chit group (history)
+// Get all auctions for a chit group (history) - sorted by slot_number
 app.get('/api/chit-auctions/:groupId', async (req, res) => {
   try {
     const { groupId } = req.params;
 
     const auctionsSnapshot = await db.collection('chit_auctions')
       .where('chit_group_id', '==', groupId)
-      .orderBy('month', 'desc')
       .get();
 
-    const auctions = auctionsSnapshot.docs.map(doc => ({
+    let auctions = auctionsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+
+    // Sort by slot_number (ascending), then by month for those without slot_number
+    auctions = auctions.sort((a, b) => {
+      if (a.slot_number && b.slot_number) {
+        return a.slot_number - b.slot_number;
+      }
+      if (a.slot_number) return -1;
+      if (b.slot_number) return 1;
+      return (b.month || '').localeCompare(a.month || '');
+    });
 
     res.json(auctions);
   } catch (error) {

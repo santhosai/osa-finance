@@ -13,6 +13,7 @@ function ChitDashboard({ navigateTo }) {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAuctionModal, setShowAuctionModal] = useState(false);
   const [showAuctionHistoryModal, setShowAuctionHistoryModal] = useState(false);
+  const [showSlotsDashboard, setShowSlotsDashboard] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [pendingWhatsApp, setPendingWhatsApp] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -47,10 +48,11 @@ function ChitDashboard({ navigateTo }) {
     { refreshInterval: 5000, revalidateOnFocus: true }
   );
 
-  // Fetch auction history
-  const { data: auctionHistory = [] } = useSWR(
-    selectedChit && showAuctionHistoryModal ? `${API_URL}/chit-auctions/${selectedChit.id}` : null,
-    fetcher
+  // Fetch auction history (all slots) - always fetch for selected chit
+  const { data: auctionHistory = [], mutate: mutateAuctionHistory } = useSWR(
+    selectedChit ? `${API_URL}/chit-auctions/${selectedChit.id}` : null,
+    fetcher,
+    { refreshInterval: 5000, revalidateOnFocus: true }
   );
 
   const formatCurrency = (amount) => `₹${(amount || 0).toLocaleString('en-IN')}`;
@@ -207,6 +209,22 @@ function ChitDashboard({ navigateTo }) {
                 }}
               >
                 🏆 Monthly Auction
+              </button>
+              <button
+                onClick={() => { setShowSidebar(false); setShowSlotsDashboard(true); }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: 'transparent',
+                  color: '#10b981',
+                  border: 'none',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                🎰 Slots Dashboard
               </button>
               <button
                 onClick={() => { setShowSidebar(false); setShowAuctionHistoryModal(true); }}
@@ -734,8 +752,9 @@ function ChitDashboard({ navigateTo }) {
           memberCount={selectedChit.member_count}
           members={chitDetails?.members || []}
           currentAuction={auctionData}
+          auctionHistory={auctionHistory}
           onClose={() => setShowAuctionModal(false)}
-          onSuccess={() => { mutateAuction(); setShowAuctionModal(false); }}
+          onSuccess={() => { mutateAuction(); mutateAuctionHistory(); setShowAuctionModal(false); }}
         />
       )}
 
@@ -745,6 +764,17 @@ function ChitDashboard({ navigateTo }) {
           chitName={selectedChit.name}
           auctions={auctionHistory}
           onClose={() => setShowAuctionHistoryModal(false)}
+        />
+      )}
+
+      {/* Slots Dashboard Modal */}
+      {showSlotsDashboard && selectedChit && (
+        <SlotsDashboardModal
+          chitName={selectedChit.name}
+          memberCount={selectedChit.member_count}
+          chitAmount={selectedChit.chit_amount}
+          auctions={auctionHistory}
+          onClose={() => setShowSlotsDashboard(false)}
         />
       )}
     </div>
@@ -1267,8 +1297,13 @@ function ChitSettingsModal({ chitId, chitName, month, currentSettings, onClose, 
 }
 
 // Auction Modal Component
-function AuctionModal({ chitId, chitName, month, chitAmount, monthlyAmount, memberCount, members, currentAuction, onClose, onSuccess }) {
+function AuctionModal({ chitId, chitName, month, chitAmount, monthlyAmount, memberCount, members, currentAuction, auctionHistory, onClose, onSuccess }) {
+  // Calculate next available slot number
+  const completedSlots = auctionHistory.map(a => a.slot_number).filter(Boolean);
+  const nextSlot = completedSlots.length > 0 ? Math.max(...completedSlots) + 1 : 1;
+
   const [formData, setFormData] = useState({
+    slot_number: currentAuction.slot_number || nextSlot,
     winner_member_id: currentAuction.winner_member_id || '',
     winner_name: currentAuction.winner_name || '',
     bid_amount: currentAuction.bid_amount || '',
@@ -1377,27 +1412,51 @@ function AuctionModal({ chitId, chitName, month, chitAmount, monthlyAmount, memb
         </p>
 
         <form onSubmit={handleSubmit}>
-          {/* Winner Selection */}
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
-              Auction Winner *
-            </label>
-            <select
-              value={formData.winner_member_id}
-              onChange={(e) => handleMemberSelect(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '14px'
-              }}
-            >
-              <option value="">Select winner...</option>
-              {members.map(m => (
-                <option key={m.id} value={m.id}>{m.member_number || ''} - {m.name}</option>
-              ))}
-            </select>
+          {/* Slot Number & Winner Selection */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+            <div style={{ width: '80px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+                Slot #
+              </label>
+              <input
+                type="number"
+                min="1"
+                max={memberCount}
+                value={formData.slot_number}
+                onChange={(e) => setFormData({ ...formData, slot_number: parseInt(e.target.value) || '' })}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  textAlign: 'center',
+                  fontWeight: 700,
+                  color: '#7c3aed'
+                }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
+                Auction Winner *
+              </label>
+              <select
+                value={formData.winner_member_id}
+                onChange={(e) => handleMemberSelect(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px'
+                }}
+              >
+                <option value="">Select winner...</option>
+                {members.map(m => (
+                  <option key={m.id} value={m.id}>{m.member_number || ''} - {m.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Bid Amount & Commission */}
@@ -1901,7 +1960,21 @@ function AuctionHistoryModal({ chitName, auctions, onClose }) {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ fontWeight: 600, color: '#7c3aed' }}>{auction.month}</div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {auction.slot_number && (
+                      <span style={{
+                        background: '#7c3aed',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 700
+                      }}>
+                        #{auction.slot_number}
+                      </span>
+                    )}
+                    <span style={{ fontWeight: 600, color: '#7c3aed' }}>{auction.month}</span>
+                  </div>
                   <div style={{ fontSize: '12px', color: '#64748b' }}>{auction.auction_date}</div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1923,6 +1996,275 @@ function AuctionHistoryModal({ chitName, auctions, onClose }) {
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Slots Dashboard Modal Component
+function SlotsDashboardModal({ chitName, memberCount, chitAmount, auctions, onClose }) {
+  const formatCurrency = (amount) => `₹${(amount || 0).toLocaleString('en-IN')}`;
+
+  // Create a map of slot number to auction data
+  const slotMap = {};
+  auctions.forEach(auction => {
+    if (auction.slot_number) {
+      slotMap[auction.slot_number] = auction;
+    }
+  });
+
+  // Generate all slots (1 to memberCount)
+  const slots = [];
+  for (let i = 1; i <= memberCount; i++) {
+    slots.push({
+      slotNumber: i,
+      auction: slotMap[i] || null,
+      isCompleted: !!slotMap[i]
+    });
+  }
+
+  const completedCount = slots.filter(s => s.isCompleted).length;
+  const totalGiven = auctions.reduce((sum, a) => sum + (a.amount_to_winner || 0), 0);
+  const totalCommission = auctions.reduce((sum, a) => sum + (a.commission || 0), 0);
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.8)',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '20px',
+      overflow: 'auto'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '24px',
+        width: '100%',
+        maxWidth: '500px',
+        margin: '20px 0'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h2 style={{ margin: 0, fontSize: '18px', color: '#1e293b' }}>
+            🎰 Slots Dashboard
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: '#f1f5f9',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <p style={{ margin: '0 0 15px', fontSize: '12px', color: '#64748b' }}>
+          {chitName} • {formatCurrency(chitAmount)}
+        </p>
+
+        {/* Summary Stats */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '10px',
+          marginBottom: '20px'
+        }}>
+          <div style={{
+            background: '#f0fdf4',
+            padding: '12px',
+            borderRadius: '10px',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#059669' }}>
+              {completedCount}
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b' }}>Completed</div>
+          </div>
+          <div style={{
+            background: '#fef3c7',
+            padding: '12px',
+            borderRadius: '10px',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#d97706' }}>
+              {memberCount - completedCount}
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b' }}>Running</div>
+          </div>
+          <div style={{
+            background: '#f0f9ff',
+            padding: '12px',
+            borderRadius: '10px',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7' }}>
+              {formatCurrency(totalCommission)}
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b' }}>Commission</div>
+          </div>
+        </div>
+
+        {/* Slots Grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '8px',
+          maxHeight: '400px',
+          overflow: 'auto'
+        }}>
+          {slots.map(slot => (
+            <div
+              key={slot.slotNumber}
+              style={{
+                background: slot.isCompleted
+                  ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                  : '#f1f5f9',
+                borderRadius: '10px',
+                padding: '10px 8px',
+                textAlign: 'center',
+                minHeight: '70px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                position: 'relative'
+              }}
+            >
+              {/* Slot Number Badge */}
+              <div style={{
+                position: 'absolute',
+                top: '4px',
+                left: '4px',
+                background: slot.isCompleted ? 'rgba(255,255,255,0.3)' : '#7c3aed',
+                color: 'white',
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '2px 6px',
+                borderRadius: '8px'
+              }}>
+                #{slot.slotNumber}
+              </div>
+
+              {slot.isCompleted ? (
+                <>
+                  <div style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'white',
+                    marginTop: '8px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {slot.auction.winner_name?.split(' ')[0] || 'Winner'}
+                  </div>
+                  <div style={{
+                    fontSize: '10px',
+                    color: 'rgba(255,255,255,0.8)'
+                  }}>
+                    {slot.auction.month?.slice(5) || ''}
+                  </div>
+                </>
+              ) : (
+                <div style={{
+                  fontSize: '22px',
+                  marginTop: '4px'
+                }}>
+                  🎯
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Legend */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '20px',
+          marginTop: '15px',
+          fontSize: '12px',
+          color: '#64748b'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }} />
+            Completed
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#f1f5f9' }} />
+            Running
+          </div>
+        </div>
+
+        {/* Completed Slots List */}
+        {completedCount > 0 && (
+          <div style={{ marginTop: '20px' }}>
+            <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#1e293b' }}>
+              Completed Slots Details
+            </h4>
+            <div style={{ maxHeight: '200px', overflow: 'auto' }}>
+              {slots.filter(s => s.isCompleted).map(slot => (
+                <div
+                  key={slot.slotNumber}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '10px',
+                    background: '#f8fafc',
+                    borderRadius: '8px',
+                    marginBottom: '6px'
+                  }}
+                >
+                  <div style={{
+                    background: '#7c3aed',
+                    color: 'white',
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: 700
+                  }}>
+                    {slot.slotNumber}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: '#1e293b' }}>
+                      {slot.auction.winner_name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                      {slot.auction.month} • {formatCurrency(slot.auction.amount_to_winner)}
+                    </div>
+                  </div>
+                  {slot.auction.winner_photo && (
+                    <img
+                      src={slot.auction.winner_photo}
+                      alt=""
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '6px',
+                        objectFit: 'cover'
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
