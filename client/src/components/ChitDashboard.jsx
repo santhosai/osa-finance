@@ -16,6 +16,10 @@ function ChitDashboard({ navigateTo }) {
   const [showSlotsDashboard, setShowSlotsDashboard] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [pendingWhatsApp, setPendingWhatsApp] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pendingPayment, setPendingPayment] = useState(null);
+  const [showMasterDashboard, setShowMasterDashboard] = useState(false);
+  const [showMembersDashboard, setShowMembersDashboard] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -63,7 +67,18 @@ function ChitDashboard({ navigateTo }) {
     window.location.reload();
   };
 
-  const markAsPaid = async (memberId, memberName, phone) => {
+  // Show date picker before marking as paid
+  const handleMarkAsPaid = (memberId, memberName, phone) => {
+    setPendingPayment({ memberId, memberName, phone });
+    setShowDatePicker(true);
+  };
+
+  // Actually mark as paid with selected date
+  const markAsPaid = async (paymentDate) => {
+    if (!pendingPayment) return;
+
+    const { memberId, memberName, phone } = pendingPayment;
+
     try {
       const response = await fetch(`${API_URL}/chit-payments`, {
         method: 'POST',
@@ -73,13 +88,15 @@ function ChitDashboard({ navigateTo }) {
           member_id: memberId,
           month: selectedMonth,
           amount: selectedChit.monthly_amount,
-          payment_date: new Date().toISOString().split('T')[0]
+          payment_date: paymentDate
         })
       });
 
       if (response.ok) {
         mutateDetails();
         mutateChits();
+        setShowDatePicker(false);
+        setPendingPayment(null);
 
         // Show WhatsApp modal if phone exists
         if (phone) {
@@ -91,7 +108,7 @@ function ChitDashboard({ navigateTo }) {
               memberName,
               amount: formatCurrency(selectedChit.monthly_amount),
               month: selectedMonth,
-              date: new Date().toLocaleDateString('en-IN')
+              date: new Date(paymentDate).toLocaleDateString('en-IN')
             }
           });
           setShowWhatsAppModal(true);
@@ -176,6 +193,23 @@ function ChitDashboard({ navigateTo }) {
           </button>
 
           <button
+            onClick={() => { setShowSidebar(false); setShowMasterDashboard(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'transparent',
+              color: '#10b981',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600
+            }}
+          >
+            📊 All Customers Dashboard
+          </button>
+
+          <button
             onClick={() => { setShowSidebar(false); setShowAddChitModal(true); }}
             style={{
               width: '100%',
@@ -194,6 +228,22 @@ function ChitDashboard({ navigateTo }) {
 
           {selectedChit && (
             <>
+              <button
+                onClick={() => { setShowSidebar(false); setShowMembersDashboard(true); }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: 'transparent',
+                  color: '#3b82f6',
+                  border: 'none',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                👥 Members Dashboard
+              </button>
               <button
                 onClick={() => { setShowSidebar(false); setShowAuctionModal(true); }}
                 style={{
@@ -647,7 +697,7 @@ function ChitDashboard({ navigateTo }) {
                     ) : (
                       <>
                         <button
-                          onClick={() => markAsPaid(member.id, member.name, member.phone)}
+                          onClick={() => handleMarkAsPaid(member.id, member.name, member.phone)}
                           style={{
                             background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                             border: 'none',
@@ -775,6 +825,34 @@ function ChitDashboard({ navigateTo }) {
           chitAmount={selectedChit.chit_amount}
           auctions={auctionHistory}
           onClose={() => setShowSlotsDashboard(false)}
+        />
+      )}
+
+      {/* Date Picker Modal for Mark as Paid */}
+      {showDatePicker && (
+        <DatePickerModal
+          memberName={pendingPayment?.memberName}
+          onClose={() => { setShowDatePicker(false); setPendingPayment(null); }}
+          onConfirm={(date) => markAsPaid(date)}
+        />
+      )}
+
+      {/* Master Dashboard - All Customers across all Chits */}
+      {showMasterDashboard && (
+        <MasterDashboardModal
+          chitGroups={chitGroups}
+          onClose={() => setShowMasterDashboard(false)}
+        />
+      )}
+
+      {/* Members Dashboard - Per Chit */}
+      {showMembersDashboard && selectedChit && (
+        <MembersDashboardModal
+          chitName={selectedChit.name}
+          chitId={selectedChit.id}
+          members={chitDetails?.members || []}
+          auctions={auctionHistory}
+          onClose={() => setShowMembersDashboard(false)}
         />
       )}
     </div>
@@ -1326,20 +1404,18 @@ function AuctionModal({ chitId, chitName, month, chitAmount, monthlyAmount, memb
 
   // Auto-calculate amounts when inputs change
   useEffect(() => {
-    if (formData.bid_amount && formData.commission) {
-      const totalCollected = monthlyAmount * memberCount;
-      const bidAmount = Number(formData.bid_amount);
-      const commission = Number(formData.commission);
-      const amountToWinner = totalCollected - bidAmount - commission;
-      const carryForward = bidAmount; // Bid goes to pool/carry forward
+    const totalCollected = monthlyAmount * memberCount;
+    const bidAmount = Number(formData.bid_amount) || 0;
+    const commission = Number(formData.commission) || 0;
+    const amountToWinner = totalCollected - bidAmount - commission;
+    const carryForward = bidAmount; // Bid goes to pool/carry forward
 
-      setFormData(prev => ({
-        ...prev,
-        total_collected: totalCollected,
-        amount_to_winner: amountToWinner > 0 ? amountToWinner : 0,
-        carry_forward: carryForward
-      }));
-    }
+    setFormData(prev => ({
+      ...prev,
+      total_collected: totalCollected,
+      amount_to_winner: amountToWinner > 0 ? amountToWinner : 0,
+      carry_forward: carryForward
+    }));
   }, [formData.bid_amount, formData.commission, monthlyAmount, memberCount]);
 
   // Handle member selection
@@ -1356,10 +1432,7 @@ function AuctionModal({ chitId, chitName, month, chitAmount, monthlyAmount, memb
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.winner_name || !formData.bid_amount) {
-      alert('Please select winner and enter bid amount');
-      return;
-    }
+    // All fields are optional - save whatever is filled
 
     setLoading(true);
     try {
@@ -1438,7 +1511,7 @@ function AuctionModal({ chitId, chitName, month, chitAmount, monthlyAmount, memb
             </div>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
-                Auction Winner *
+                Auction Winner
               </label>
               <select
                 value={formData.winner_member_id}
@@ -1463,7 +1536,7 @@ function AuctionModal({ chitId, chitName, month, chitAmount, monthlyAmount, memb
           <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
-                Bid Amount *
+                Bid Amount
               </label>
               <input
                 type="number"
@@ -1481,7 +1554,7 @@ function AuctionModal({ chitId, chitName, month, chitAmount, monthlyAmount, memb
             </div>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: '#64748b' }}>
-                Commission *
+                Commission
               </label>
               <input
                 type="number"
@@ -2265,6 +2338,453 @@ function SlotsDashboardModal({ chitName, memberCount, chitAmount, auctions, onCl
                 </div>
               ))}
             </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Date Picker Modal for Mark as Paid
+function DatePickerModal({ memberName, onClose, onConfirm }) {
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.7)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '20px'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '24px',
+        width: '100%',
+        maxWidth: '350px'
+      }}>
+        <h2 style={{ margin: '0 0 5px', fontSize: '18px', color: '#1e293b' }}>
+          📅 Select Payment Date
+        </h2>
+        <p style={{ margin: '0 0 20px', fontSize: '13px', color: '#64748b' }}>
+          Mark payment for <strong>{memberName}</strong>
+        </p>
+
+        <div style={{ marginBottom: '20px' }}>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '14px',
+              borderRadius: '10px',
+              border: '2px solid #7c3aed',
+              fontSize: '16px',
+              textAlign: 'center',
+              fontWeight: 600
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              flex: 1,
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              background: 'white',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(selectedDate)}
+            style={{
+              flex: 1,
+              padding: '12px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: 'white',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            ✓ Mark Paid
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Master Dashboard - All Customers across all Chits
+function MasterDashboardModal({ chitGroups, onClose }) {
+  const [allMembers, setAllMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const formatCurrency = (amount) => `₹${(amount || 0).toLocaleString('en-IN')}`;
+
+  useEffect(() => {
+    const fetchAllMembers = async () => {
+      setLoading(true);
+      const membersData = [];
+
+      for (const chit of chitGroups) {
+        try {
+          // Fetch members
+          const membersRes = await fetch(`${API_URL}/chit-groups/${chit.id}`);
+          const membersJson = await membersRes.json();
+
+          // Fetch auctions for this chit
+          const auctionsRes = await fetch(`${API_URL}/chit-auctions/${chit.id}`);
+          const auctionsJson = await auctionsRes.json();
+
+          const auctionMap = {};
+          (auctionsJson || []).forEach(auction => {
+            if (auction.winner_member_id) {
+              auctionMap[auction.winner_member_id] = auction;
+            }
+          });
+
+          // Combine data
+          (membersJson?.members || []).forEach((member, idx) => {
+            const auction = auctionMap[member.id];
+            membersData.push({
+              sno: membersData.length + 1,
+              name: member.name,
+              phone: member.phone,
+              chitName: chit.name,
+              chitAmount: chit.chit_amount,
+              bidTaken: auction ? 'Yes' : 'No',
+              slotNumber: auction?.slot_number || '-',
+              bidMonth: auction?.month || '-',
+              amountReceived: auction?.amount_to_winner || 0,
+              memberNumber: member.member_number || idx + 1
+            });
+          });
+        } catch (error) {
+          console.error('Error fetching chit data:', error);
+        }
+      }
+
+      setAllMembers(membersData);
+      setLoading(false);
+    };
+
+    if (chitGroups.length > 0) {
+      fetchAllMembers();
+    } else {
+      setLoading(false);
+    }
+  }, [chitGroups]);
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.8)',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '10px',
+      overflow: 'auto'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '20px',
+        width: '100%',
+        maxWidth: '100%',
+        margin: '10px 0'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h2 style={{ margin: 0, fontSize: '18px', color: '#1e293b' }}>
+            📊 All Customers Dashboard
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: '#f1f5f9',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+            Loading all customers...
+          </div>
+        ) : allMembers.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+            No customers found
+          </div>
+        ) : (
+          <div style={{ overflow: 'auto', maxHeight: '70vh' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ background: '#7c3aed', color: 'white' }}>
+                  <th style={{ padding: '10px 6px', textAlign: 'left', position: 'sticky', top: 0, background: '#7c3aed' }}>S.No</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'left', position: 'sticky', top: 0, background: '#7c3aed' }}>Name</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'left', position: 'sticky', top: 0, background: '#7c3aed' }}>Chit</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'center', position: 'sticky', top: 0, background: '#7c3aed' }}>Bid Taken</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'center', position: 'sticky', top: 0, background: '#7c3aed' }}>Slot #</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'center', position: 'sticky', top: 0, background: '#7c3aed' }}>Month</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'right', position: 'sticky', top: 0, background: '#7c3aed' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allMembers.map((member, idx) => (
+                  <tr key={idx} style={{ background: idx % 2 === 0 ? '#f8fafc' : 'white', borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '10px 6px', fontWeight: 600 }}>{member.sno}</td>
+                    <td style={{ padding: '10px 6px' }}>
+                      <div style={{ fontWeight: 600 }}>{member.name}</div>
+                      {member.phone && <div style={{ fontSize: '10px', color: '#64748b' }}>{member.phone}</div>}
+                    </td>
+                    <td style={{ padding: '10px 6px' }}>
+                      <div style={{ fontSize: '11px' }}>{member.chitName}</div>
+                      <div style={{ fontSize: '10px', color: '#64748b' }}>{formatCurrency(member.chitAmount)}</div>
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'center' }}>
+                      <span style={{
+                        background: member.bidTaken === 'Yes' ? '#dcfce7' : '#fef3c7',
+                        color: member.bidTaken === 'Yes' ? '#059669' : '#d97706',
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 600
+                      }}>
+                        {member.bidTaken}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, color: '#7c3aed' }}>
+                      {member.slotNumber}
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'center', fontSize: '11px' }}>
+                      {member.bidMonth}
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 600, color: '#059669' }}>
+                      {member.amountReceived > 0 ? formatCurrency(member.amountReceived) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Summary */}
+        {!loading && allMembers.length > 0 && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-around',
+            marginTop: '15px',
+            padding: '12px',
+            background: '#f0fdf4',
+            borderRadius: '10px'
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>{allMembers.length}</div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>Total Members</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#059669' }}>
+                {allMembers.filter(m => m.bidTaken === 'Yes').length}
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>Bid Taken</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#d97706' }}>
+                {allMembers.filter(m => m.bidTaken === 'No').length}
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>Running</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Members Dashboard - Per Chit (showing which members took bid)
+function MembersDashboardModal({ chitName, chitId, members, auctions, onClose }) {
+  const formatCurrency = (amount) => `₹${(amount || 0).toLocaleString('en-IN')}`;
+
+  // Map auctions by member ID
+  const auctionByMember = {};
+  auctions.forEach(auction => {
+    if (auction.winner_member_id) {
+      auctionByMember[auction.winner_member_id] = auction;
+    }
+  });
+
+  // Create member list with bid info
+  const membersList = members.map((member, idx) => {
+    const auction = auctionByMember[member.id];
+    return {
+      sno: idx + 1,
+      memberNumber: member.member_number || idx + 1,
+      name: member.name,
+      phone: member.phone,
+      bidTaken: auction ? 'Yes' : 'No',
+      slotNumber: auction?.slot_number || '-',
+      bidMonth: auction?.month || '-',
+      amountReceived: auction?.amount_to_winner || 0
+    };
+  });
+
+  const bidTakenCount = membersList.filter(m => m.bidTaken === 'Yes').length;
+  const runningCount = membersList.filter(m => m.bidTaken === 'No').length;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.8)',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '10px',
+      overflow: 'auto'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '20px',
+        width: '100%',
+        maxWidth: '100%',
+        margin: '10px 0'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '18px', color: '#1e293b' }}>
+              👥 Members Dashboard
+            </h2>
+            <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>{chitName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: '#f1f5f9',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Summary Stats */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-around',
+          marginBottom: '15px',
+          padding: '12px',
+          background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+          borderRadius: '10px',
+          color: 'white'
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '20px', fontWeight: 700 }}>{membersList.length}</div>
+            <div style={{ fontSize: '11px', opacity: 0.8 }}>Total</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#86efac' }}>{bidTakenCount}</div>
+            <div style={{ fontSize: '11px', opacity: 0.8 }}>Bid Taken</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#fcd34d' }}>{runningCount}</div>
+            <div style={{ fontSize: '11px', opacity: 0.8 }}>Running</div>
+          </div>
+        </div>
+
+        {membersList.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+            No members in this chit
+          </div>
+        ) : (
+          <div style={{ overflow: 'auto', maxHeight: '60vh' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ background: '#1e293b', color: 'white' }}>
+                  <th style={{ padding: '10px 6px', textAlign: 'left', position: 'sticky', top: 0, background: '#1e293b' }}>S.No</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'left', position: 'sticky', top: 0, background: '#1e293b' }}>Name</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'center', position: 'sticky', top: 0, background: '#1e293b' }}>Bid Taken</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'center', position: 'sticky', top: 0, background: '#1e293b' }}>Slot #</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'center', position: 'sticky', top: 0, background: '#1e293b' }}>Month</th>
+                  <th style={{ padding: '10px 6px', textAlign: 'right', position: 'sticky', top: 0, background: '#1e293b' }}>Amount Received</th>
+                </tr>
+              </thead>
+              <tbody>
+                {membersList.map((member, idx) => (
+                  <tr
+                    key={idx}
+                    style={{
+                      background: member.bidTaken === 'Yes' ? '#f0fdf4' : (idx % 2 === 0 ? '#f8fafc' : 'white'),
+                      borderBottom: '1px solid #e2e8f0'
+                    }}
+                  >
+                    <td style={{ padding: '10px 6px', fontWeight: 600 }}>{member.sno}</td>
+                    <td style={{ padding: '10px 6px' }}>
+                      <div style={{ fontWeight: 600 }}>{member.name}</div>
+                      {member.phone && <div style={{ fontSize: '10px', color: '#64748b' }}>{member.phone}</div>}
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'center' }}>
+                      <span style={{
+                        background: member.bidTaken === 'Yes' ? '#dcfce7' : '#fef3c7',
+                        color: member.bidTaken === 'Yes' ? '#059669' : '#d97706',
+                        padding: '4px 10px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 600
+                      }}>
+                        {member.bidTaken}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 700, color: '#7c3aed', fontSize: '14px' }}>
+                      {member.slotNumber}
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'center', fontSize: '11px' }}>
+                      {member.bidMonth !== '-' ? member.bidMonth.slice(0, 7) : '-'}
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 600, color: '#059669' }}>
+                      {member.amountReceived > 0 ? formatCurrency(member.amountReceived) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
