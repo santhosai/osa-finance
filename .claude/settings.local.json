@@ -24,7 +24,11 @@
       "Bash(del \"c:\\Users\\SanthoshKumarShakkar\\Desktop\\Financeapplication\\check_week.js\")",
       "Bash(timeout /t 10 /nobreak)",
       "Bash(timeout /t 30 /nobreak)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(CHIT_ID=\"YPYxfr04dm8WnnkiUqF9\":*)",
+      "Bash(API=\"https://server-rho-cyan-11.vercel.app/api/chit-members\")",
+      "Bash(__NEW_LINE__ curl -s -X POST \"$API\" -H \"Content-Type: application/json\" -d \"{\"\"chit_group_id\"\":\"\"$CHIT_ID\"\",\"\"name\"\":\"\"Arasi\"\",\"\"member_number\"\":1}\")",
+      "Bash(__NEW_LINE__ curl -s -X POST \"$API\" -H \"Content-Type: application/json\" -d \"{\"\"chit_group_id\"\":\"\"$CHIT_ID\"\",\"\"name\"\":\"\"Revathi\"\",\"\"member_number\"\":11}\")"
     ],
     "deny": [],
     "ask": []

@@ -3998,6 +3998,29 @@ app.put('/api/chit-auctions/:groupId/:month', async (req, res) => {
   }
 });
 
+// Delete all auctions for a chit group
+app.delete('/api/chit-auctions/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    const auctionsSnapshot = await db.collection('chit_auctions')
+      .where('chit_group_id', '==', groupId)
+      .get();
+
+    const batch = db.batch();
+    auctionsSnapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    await batch.commit();
+
+    res.json({ message: `Deleted ${auctionsSnapshot.docs.length} auctions for group ${groupId}` });
+  } catch (error) {
+    console.error('Error deleting chit auctions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all auctions for a chit group (history) - sorted by slot_number
 app.get('/api/chit-auctions/:groupId', async (req, res) => {
   try {

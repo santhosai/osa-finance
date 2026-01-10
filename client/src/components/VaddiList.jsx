@@ -714,7 +714,7 @@ const VaddiList = ({ navigateTo }) => {
           yPos = 20;
         }
         doc.text(`${index + 1}. ${entry.name} (Day ${entry.day})`, 20, yPos);
-        doc.text(`Interest: ${formatCurrency(entry.amount)}`, 120, yPos);
+        doc.text(`${formatCurrency(entry.principal_amount || entry.amount)}`, 120, yPos);
         yPos += 8;
       });
     }
@@ -1661,8 +1661,7 @@ const VaddiList = ({ navigateTo }) => {
                                 {entry.name} {isSettled && '🔒'}
                               </div>
                               <div style={{ fontSize: '13px', color: isSettled ? '#9ca3af' : '#059669', fontWeight: 600, marginBottom: '2px' }}>
-                                Interest: {formatCurrency(entry.amount)}/month
-                                {entry.principal_amount && ` • Principal: ${formatCurrency(entry.principal_amount)}`}
+                                {entry.principal_amount ? `${formatCurrency(entry.principal_amount)}` : formatCurrency(entry.amount)}
                               </div>
                               <div style={{ fontSize: '12px', color: '#6b7280' }}>
                                 📱 {entry.phone}
