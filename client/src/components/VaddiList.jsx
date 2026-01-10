@@ -1477,58 +1477,31 @@ const VaddiList = ({ navigateTo }) => {
                   />
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
-                      💰 Interest/Month *
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={formData.amount}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9]/g, '');
-                        setFormData({ ...formData, amount: value });
-                      }}
-                      placeholder="₹ Interest"
-                      autoComplete="off"
-                      required
-                      disabled={loading}
-                      style={{
-                        width: '100%',
-                        padding: '10px',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
-                      🏦 Principal
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={formData.principal_amount}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9]/g, '');
-                        setFormData({ ...formData, principal_amount: value });
-                      }}
-                      placeholder="₹ Loan Amount"
-                      autoComplete="off"
-                      disabled={loading}
-                      style={{
-                        width: '100%',
-                        padding: '10px',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                    />
-                  </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                    🏦 Principal Amount *
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={formData.principal_amount}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setFormData({ ...formData, principal_amount: value, amount: value });
+                    }}
+                    placeholder="₹ Loan Amount"
+                    autoComplete="off"
+                    required
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
