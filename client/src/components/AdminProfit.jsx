@@ -154,8 +154,15 @@ function AdminProfit({ navigateTo }) {
     const dailyExpectedProfit = Math.round(dailyTotal * 0.10);
     const dailyEarnedProfit = Math.round(dailyCollected * 0.10);
 
-    // Vaddi
-    const vaddiProfit = vaddiSummary.myProfit || 0;
+    // Vaddi - Calculate total profit from ALL payments (not just selected month)
+    let vaddiProfit = 0;
+    if (allPayments && allPayments.length > 0) {
+      allPayments.forEach(payment => {
+        if (payment.my_profit) {
+          vaddiProfit += Number(payment.my_profit) || 0;
+        }
+      });
+    }
 
     // Monthly Finance (from separate monthly_finance_customers collection)
     let monthlyTotal = 0;
@@ -510,31 +517,8 @@ function AdminProfit({ navigateTo }) {
           marginBottom: '12px',
           color: 'white'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontSize: '13px', fontWeight: 700 }}>
-              📝 Vaddi Profit (This Month)
-            </div>
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: 'none',
-                fontSize: '12px',
-                fontWeight: 600,
-                background: 'rgba(255,255,255,0.2)',
-                color: 'white'
-              }}
-            >
-              {Array.from({ length: 12 }, (_, i) => {
-                const d = new Date();
-                d.setMonth(d.getMonth() - i);
-                const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                const label = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                return <option key={value} value={value} style={{ color: '#1e293b' }}>{label}</option>;
-              })}
-            </select>
+          <div style={{ fontSize: '13px', fontWeight: 700 }}>
+            📝 Vaddi Profit (Total All Time)
           </div>
           <div style={{
             textAlign: 'center',
