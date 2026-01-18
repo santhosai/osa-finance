@@ -616,6 +616,71 @@ app.get('/api/loans-by-date', async (req, res) => {
       });
     }
 
+    // Get Vaddi entries with this loan_date
+    const vaddiSnapshot = await db.collection('vaddi_entries')
+      .where('loan_date', '==', date)
+      .get();
+
+    for (const vaddiDoc of vaddiSnapshot.docs) {
+      const vaddiData = vaddiDoc.data();
+
+      loans.push({
+        id: vaddiDoc.id,
+        customer_name: vaddiData.name,
+        customer_phone: vaddiData.phone || '',
+        loan_name: `Vaddi - ${vaddiData.name}`,
+        loan_type: 'Vaddi',
+        loan_amount: vaddiData.principal_amount || vaddiData.amount,
+        loan_given_date: vaddiData.loan_date,
+        status: vaddiData.status || 'active'
+      });
+    }
+
+    // Get Monthly Finance customers with this loan_given_date
+    // First try loan_given_date field, then fallback to start_date for old records
+    const monthlyByGivenDate = await db.collection('monthly_finance_customers')
+      .where('loan_given_date', '==', date)
+      .get();
+
+    const monthlyByStartDate = await db.collection('monthly_finance_customers')
+      .where('start_date', '==', date)
+      .get();
+
+    // Combine and deduplicate
+    const monthlyIds = new Set();
+    const monthlyDocs = [];
+
+    monthlyByGivenDate.docs.forEach(doc => {
+      if (!monthlyIds.has(doc.id)) {
+        monthlyIds.add(doc.id);
+        monthlyDocs.push(doc);
+      }
+    });
+
+    // Add start_date matches only if they don't have a loan_given_date field
+    monthlyByStartDate.docs.forEach(doc => {
+      if (!monthlyIds.has(doc.id) && !doc.data().loan_given_date) {
+        monthlyIds.add(doc.id);
+        monthlyDocs.push(doc);
+      }
+    });
+
+    for (const monthlyDoc of monthlyDocs) {
+      const monthlyData = monthlyDoc.data();
+
+      loans.push({
+        id: monthlyDoc.id,
+        customer_name: monthlyData.name,
+        customer_phone: monthlyData.phone || '',
+        loan_name: `Monthly - ${monthlyData.name}`,
+        loan_type: 'Monthly Finance',
+        loan_amount: monthlyData.loan_amount,
+        monthly_amount: monthlyData.monthly_amount,
+        loan_given_date: monthlyData.loan_given_date || monthlyData.start_date,
+        status: monthlyData.status || 'active'
+      });
+    }
+
     // Calculate total
     const totalAmount = loans.reduce((sum, loan) => sum + (loan.loan_amount || 0), 0);
 
@@ -925,12 +990,13 @@ app.get('/api/monthly-finance/customers', async (req, res) => {
 app.post('/api/monthly-finance/customers', async (req, res) => {
   try {
     console.log('🎯 CREATE MONTHLY FINANCE CUSTOMER:', req.body);
-    const { name, phone, loan_amount, monthly_amount, total_months, start_date } = req.body;
+    const { name, phone, loan_amount, monthly_amount, total_months, start_date, loan_given_date } = req.body;
 
     if (!name || !phone || !loan_amount || !monthly_amount || !total_months || !start_date) {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
+    const today = new Date().toISOString().split('T')[0];
     const customerData = {
       name,
       phone,
@@ -939,6 +1005,7 @@ app.post('/api/monthly-finance/customers', async (req, res) => {
       monthly_amount: parseFloat(monthly_amount),
       total_months: parseInt(total_months),
       start_date,
+      loan_given_date: loan_given_date || today, // When money was given (different from start_date)
       status: 'active',
       created_at: new Date().toISOString()
     };

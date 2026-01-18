@@ -13,7 +13,8 @@ function MonthlyFinanceView({ navigateTo }) {
     phone: '',
     loanAmount: '',
     totalMonths: 5,
-    startDate: new Date().toISOString().split('T')[0]
+    startDate: new Date().toISOString().split('T')[0],
+    loanGivenDate: new Date().toISOString().split('T')[0]
   });
 
   // Fetch Monthly Finance customers from separate collection
@@ -359,7 +360,8 @@ function AddMonthlyCustomerModal({ formData, setFormData, onClose, onSuccess }) 
           loan_amount: parseFloat(formData.loanAmount),
           monthly_amount: monthlyInstallment,
           total_months: formData.totalMonths,
-          start_date: formData.startDate
+          start_date: formData.startDate,
+          loan_given_date: formData.loanGivenDate
         })
       });
 
@@ -621,7 +623,32 @@ Thank you for choosing us!
               color: '#374151',
               marginBottom: '6px'
             }}>
-              Start Date *
+              Loan Given Date * (When money was given)
+            </label>
+            <input
+              type="date"
+              value={formData.loanGivenDate}
+              onChange={(e) => setFormData({ ...formData, loanGivenDate: e.target.value })}
+              required
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Payment Start Date * (When EMI starts)
             </label>
             <input
               type="date"

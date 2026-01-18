@@ -18,3 +18,38 @@ html, body {
   width: 100%;
   overflow-x: hidden;
 }
+
+/* Responsive Container */
+.responsive-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* Tablet and Desktop */
+@media (min-width: 768px) {
+  body {
+    background: #d1d5db;
+  }
+
+  #root {
+    display: flex;
+    justify-content: center;
+  }
+
+  .responsive-container {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .responsive-container {
+    max-width: 1024px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .responsive-container {
+    max-width: 1200px;
+  }
+}

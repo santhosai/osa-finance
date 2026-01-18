@@ -4,6 +4,11 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import AddCustomerModal from './AddCustomerModal';
 import PaymentsThisWeekModal from './PaymentsThisWeekModal';
 import DatabaseMonitorModal from './DatabaseMonitorModal';
+import SendWishes from './SendWishes';
+import PrintReceipt from './PrintReceipt';
+import PrintReports from './PrintReports';
+import BackupData from './BackupData';
+import { jsPDF } from 'jspdf';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -20,6 +25,9 @@ function Dashboard({ navigateTo }) {
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showDatabaseMonitorModal, setShowDatabaseMonitorModal] = useState(false);
   const [showQuickRefModal, setShowQuickRefModal] = useState(false);
+  const [showSendWishes, setShowSendWishes] = useState(false);
+  const [showPrintReports, setShowPrintReports] = useState(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [weeklyPaymentsData, setWeeklyPaymentsData] = useState({ paidLoans: [], unpaidLoans: [], loading: true });
@@ -35,6 +43,7 @@ function Dashboard({ navigateTo }) {
   const [showCharts, setShowCharts] = useState(false); // Toggle charts visibility
   const [loansGivenDate, setLoansGivenDate] = useState(new Date().toISOString().split('T')[0]); // For loans given tracker
   const [showLoansGivenModal, setShowLoansGivenModal] = useState(false); // For loans given modal
+  const [printData, setPrintData] = useState(null); // For print receipt
   const [quickNote, setQuickNote] = useState(() => localStorage.getItem('dashboardQuickNote') || ''); // Quick Note
   const [showQuickNote, setShowQuickNote] = useState(true); // Show/hide quick note
 
@@ -851,6 +860,116 @@ function Dashboard({ navigateTo }) {
             onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)'}
           >
             🔐 {t('adminProfit')}
+          </button>
+
+          {/* Send Wishes */}
+          <button
+            onClick={() => { setShowSidebar(false); setShowSendWishes(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #6d28d9 0%, #4c1d95 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)'}
+          >
+            🎉 Send Wishes
+          </button>
+
+          {/* Print Reports */}
+          <button
+            onClick={() => { setShowSidebar(false); setShowPrintReports(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #0e7490 0%, #155e75 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)'}
+          >
+            🖨️ Print Reports
+          </button>
+
+          {/* Dark Mode Toggle */}
+          <button
+            onClick={() => toggleDarkMode()}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: isDarkMode
+                ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)'
+                : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            <span>{isDarkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}</span>
+            <span style={{
+              width: '36px',
+              height: '20px',
+              background: isDarkMode ? '#059669' : '#4b5563',
+              borderRadius: '10px',
+              position: 'relative',
+              transition: 'background 0.3s'
+            }}>
+              <span style={{
+                position: 'absolute',
+                top: '2px',
+                left: isDarkMode ? '18px' : '2px',
+                width: '16px',
+                height: '16px',
+                background: 'white',
+                borderRadius: '50%',
+                transition: 'left 0.3s'
+              }}></span>
+            </span>
+          </button>
+
+          {/* Backup to Excel */}
+          <button
+            onClick={() => { setShowSidebar(false); setShowBackupModal(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #047857 0%, #065f46 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)'}
+          >
+            💾 Backup to Excel
           </button>
 
 
@@ -2124,6 +2243,18 @@ function Dashboard({ navigateTo }) {
         />
       )}
 
+      {showSendWishes && (
+        <SendWishes onClose={() => setShowSendWishes(false)} />
+      )}
+
+      {showPrintReports && (
+        <PrintReports onClose={() => setShowPrintReports(false)} />
+      )}
+
+      {showBackupModal && (
+        <BackupData onClose={() => setShowBackupModal(false)} />
+      )}
+
       {/* Quick Pay Confirmation Modal */}
       {quickPayConfirm && (
         <div
@@ -2471,6 +2602,7 @@ function Dashboard({ navigateTo }) {
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
+              alignItems: 'center',
               padding: '12px 20px',
               background: '#ecfdf5',
               borderBottom: '1px solid #d1fae5'
@@ -2478,6 +2610,172 @@ function Dashboard({ navigateTo }) {
               <div>
                 <div style={{ fontSize: '11px', color: '#065f46' }}>Total Given</div>
                 <div style={{ fontSize: '20px', fontWeight: 700, color: '#047857' }}>{formatCurrency(loansGivenData.total || 0)}</div>
+              </div>
+              <div style={{ textAlign: 'center', display: 'flex', gap: '8px' }}>
+                {loansGivenData.loans && loansGivenData.loans.length > 0 && (
+                  <>
+                    <button
+                      onClick={() => {
+                        // Download PDF
+                        const doc = new jsPDF({
+                          orientation: 'portrait',
+                          unit: 'mm',
+                          format: 'a4'
+                        });
+
+                        const margin = 15;
+                        const pageWidth = 210;
+
+                        // Title
+                        doc.setFontSize(16);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('OM SAI MURUGAN FINANCE', pageWidth / 2, margin + 5, { align: 'center' });
+
+                        // Subtitle
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'normal');
+                        doc.text(`Loans Given on ${new Date(loansGivenDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, pageWidth / 2, margin + 12, { align: 'center' });
+
+                        // Table header
+                        let y = margin + 20;
+                        doc.setFillColor(30, 41, 59);
+                        doc.rect(margin, y, pageWidth - (margin * 2), 8, 'F');
+                        doc.setTextColor(255, 255, 255);
+                        doc.setFontSize(9);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('#', margin + 8, y + 5.5);
+                        doc.text('Customer', margin + 20, y + 5.5);
+                        doc.text('Type', margin + 95, y + 5.5);
+                        doc.text('Amount', margin + 160, y + 5.5, { align: 'right' });
+
+                        y += 8;
+                        doc.setTextColor(0, 0, 0);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(8);
+
+                        // Table rows
+                        loansGivenData.loans.forEach((loan, idx) => {
+                          if (y > 270) {
+                            doc.addPage();
+                            y = margin;
+                          }
+
+                          if (idx % 2 === 0) {
+                            doc.setFillColor(248, 250, 252);
+                            doc.rect(margin, y, pageWidth - (margin * 2), 7, 'F');
+                          }
+
+                          doc.text(String(idx + 1), margin + 8, y + 5);
+                          doc.text((loan.customer_name || '').substring(0, 35), margin + 20, y + 5);
+                          doc.text(loan.loan_type || '', margin + 95, y + 5);
+                          doc.text(`Rs.${(loan.loan_amount || 0).toLocaleString('en-IN')}`, margin + 160, y + 5, { align: 'right' });
+
+                          y += 7;
+                        });
+
+                        // Total
+                        y += 5;
+                        doc.setFillColor(236, 253, 245);
+                        doc.rect(margin, y, pageWidth - (margin * 2), 10, 'F');
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text(`Total: Rs.${(loansGivenData.total || 0).toLocaleString('en-IN')} | Count: ${loansGivenData.count || 0}`, pageWidth / 2, y + 7, { align: 'center' });
+
+                        // Footer
+                        y += 15;
+                        doc.setFontSize(8);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(100, 100, 100);
+                        doc.text('Ph: 8667510724', pageWidth / 2, y, { align: 'center' });
+
+                        // Download
+                        doc.save(`LoansGiven_${loansGivenDate}.pdf`);
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      📥 PDF
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Print all loans summary
+                        const printWindow = window.open('', '_blank');
+                        const loansHtml = loansGivenData.loans.map((loan, idx) => `
+                          <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${idx + 1}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${loan.customer_name}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${loan.loan_type}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">₹${(loan.loan_amount || 0).toLocaleString('en-IN')}</td>
+                          </tr>
+                        `).join('');
+
+                        printWindow.document.write(`
+                          <!DOCTYPE html>
+                          <html>
+                          <head>
+                            <title>Loans Given - ${loansGivenDate}</title>
+                            <style>
+                              body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; }
+                              h2 { text-align: center; margin-bottom: 5px; }
+                              h3 { text-align: center; color: #666; margin-top: 0; font-weight: normal; }
+                              table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                              th { background: #1e293b; color: white; padding: 10px 8px; text-align: left; }
+                              th:last-child { text-align: right; }
+                              .total { font-size: 18px; font-weight: bold; text-align: center; margin: 20px 0; padding: 15px; background: #ecfdf5; border-radius: 8px; }
+                              .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+                            </style>
+                          </head>
+                          <body>
+                            <h2>OM SAI MURUGAN FINANCE</h2>
+                            <h3>Loans Given on ${new Date(loansGivenDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</h3>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>Customer</th>
+                                  <th>Type</th>
+                                  <th>Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                ${loansHtml}
+                              </tbody>
+                            </table>
+                            <div class="total">
+                              Total: ₹${(loansGivenData.total || 0).toLocaleString('en-IN')} | Count: ${loansGivenData.count || 0}
+                            </div>
+                            <div class="footer">
+                              📞 8667510724
+                            </div>
+                            <script>window.onload = function() { window.print(); window.onafterprint = function() { window.close(); } }</script>
+                          </body>
+                          </html>
+                        `);
+                        printWindow.document.close();
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🖨️ Print
+                    </button>
+                  </>
+                )}
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '11px', color: '#065f46' }}>Loans</div>
@@ -2491,10 +2789,6 @@ function Dashboard({ navigateTo }) {
                 loansGivenData.loans.map((loan, index) => (
                   <div
                     key={loan.id || index}
-                    onClick={() => {
-                      setShowLoansGivenModal(false);
-                      navigateTo('loan-details', loan.id);
-                    }}
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
@@ -2503,24 +2797,69 @@ function Dashboard({ navigateTo }) {
                       background: '#f8fafc',
                       borderRadius: '8px',
                       marginBottom: '8px',
-                      cursor: 'pointer',
                       transition: 'background 0.15s'
                     }}
-                    onMouseOver={(e) => e.currentTarget.style.background = '#e0f2fe'}
-                    onMouseOut={(e) => e.currentTarget.style.background = '#f8fafc'}
                   >
-                    <div>
+                    <div
+                      onClick={() => {
+                        setShowLoansGivenModal(false);
+                        if (loan.loan_type !== 'Vaddi') {
+                          navigateTo('loan-details', loan.id);
+                        }
+                      }}
+                      style={{ flex: 1, cursor: loan.loan_type !== 'Vaddi' ? 'pointer' : 'default' }}
+                    >
                       <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{loan.customer_name}</div>
                       <div style={{ fontSize: '11px', color: '#64748b' }}>
                         {loan.loan_type} {loan.loan_name ? `• ${loan.loan_name}` : ''}
                       </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'right', marginRight: '10px' }}>
                       <div style={{ fontSize: '14px', fontWeight: 700, color: '#059669' }}>{formatCurrency(loan.loan_amount)}</div>
                       <div style={{ fontSize: '10px', color: '#64748b' }}>
-                        {loan.loan_type === 'Weekly' ? `₹${loan.weekly_amount}/wk` : `₹${loan.monthly_amount}/mo`}
+                        {loan.loan_type === 'Weekly' ? `₹${loan.weekly_amount}/wk` :
+                         loan.loan_type === 'Monthly' ? `₹${loan.monthly_amount}/mo` :
+                         loan.loan_type === 'Monthly Finance' ? `₹${loan.monthly_amount}/mo` :
+                         loan.loan_type === 'Daily' ? `₹${loan.daily_amount}/day` :
+                         loan.loan_type === 'Vaddi' ? 'Interest Loan' : ''}
                       </div>
                     </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPrintData({
+                          type: 'loan_given',
+                          data: {
+                            date: loan.loan_given_date,
+                            loanId: loan.id,
+                            customerName: loan.customer_name,
+                            phone: loan.customer_phone,
+                            loanType: loan.loan_type,
+                            loanAmount: loan.loan_amount,
+                            weeklyAmount: loan.weekly_amount,
+                            monthlyAmount: loan.monthly_amount,
+                            dailyAmount: loan.daily_amount,
+                            askedAmount: loan.asked_amount
+                          }
+                        });
+                      }}
+                      style={{
+                        padding: '8px 14px',
+                        background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      🖨️ Print
+                    </button>
                   </div>
                 ))
               ) : (
@@ -2532,6 +2871,15 @@ function Dashboard({ navigateTo }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Print Receipt Modal */}
+      {printData && (
+        <PrintReceipt
+          type={printData.type}
+          data={printData.data}
+          onClose={() => setPrintData(null)}
+        />
       )}
     </div>
   );

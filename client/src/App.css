@@ -474,3 +474,99 @@
   font-size: 14px;
   color: #6b7280;
 }
+
+/* ============================================
+   TABLET & DESKTOP RESPONSIVE STYLES
+   ============================================ */
+
+/* Tablet (768px and above) */
+@media (min-width: 768px) {
+  .app {
+    max-width: 100%;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .stat-card {
+    padding: 20px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+  }
+
+  .customer-card {
+    margin: 0 20px 12px;
+    padding: 16px;
+  }
+
+  .payment-item {
+    margin: 0 20px 16px;
+    padding: 20px;
+  }
+
+  .modal {
+    max-width: 500px;
+  }
+
+  .progress-section {
+    margin: 20px;
+    padding: 24px;
+  }
+
+  .payment-table {
+    margin: 0 20px;
+  }
+
+  .table-row {
+    padding: 16px 20px;
+  }
+}
+
+/* Desktop (1024px and above) */
+@media (min-width: 1024px) {
+  .app {
+    max-width: 1200px;
+    margin: 0 auto;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
+    min-height: 100vh;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    padding: 24px;
+  }
+
+  .stat-card {
+    padding: 24px;
+    border-radius: 16px;
+  }
+
+  .stat-value {
+    font-size: 32px;
+  }
+
+  .modal {
+    max-width: 600px;
+  }
+
+  .customer-card {
+    margin: 0 24px 14px;
+  }
+
+  .search-bar {
+    padding: 20px 24px;
+  }
+}
+
+/* Large Desktop (1440px and above) */
+@media (min-width: 1440px) {
+  .app {
+    max-width: 1400px;
+  }
+}

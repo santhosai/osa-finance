@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { API_URL } from '../config';
 import WhatsAppModal from './WhatsAppModal';
+import SendWishes from './SendWishes';
 
 const fetcher = (url) => fetch(url).then(res => res.json());
 
@@ -20,6 +21,7 @@ function ChitDashboard({ navigateTo }) {
   const [pendingPayment, setPendingPayment] = useState(null);
   const [showMasterDashboard, setShowMasterDashboard] = useState(false);
   const [showMembersDashboard, setShowMembersDashboard] = useState(false);
+  const [showSendWishes, setShowSendWishes] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -312,6 +314,26 @@ function ChitDashboard({ navigateTo }) {
           )}
 
           <div style={{ borderTop: '1px solid #334155', margin: '10px 0' }} />
+
+          {/* Send Wishes */}
+          <button
+            onClick={() => { setShowSidebar(false); setShowSendWishes(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              marginBottom: '8px'
+            }}
+          >
+            🎉 Send Wishes
+          </button>
 
           <button
             onClick={handleLogout}
@@ -855,6 +877,12 @@ function ChitDashboard({ navigateTo }) {
           onClose={() => setShowMembersDashboard(false)}
         />
       )}
+
+      {/* Send Wishes Modal */}
+      {showSendWishes && (
+        <SendWishes onClose={() => setShowSendWishes(false)} />
+      )}
+
     </div>
   );
 }
