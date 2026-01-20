@@ -452,6 +452,94 @@ function MonthlyFinanceView({ navigateTo }) {
                   Has Customers
                 </div>
               </div>
+
+              {/* Customer List with Scrolling */}
+              <div style={{
+                marginTop: '20px',
+                background: 'white',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                {/* List Header */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                  padding: '12px 16px',
+                  color: 'white',
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1fr 1fr',
+                  gap: '8px',
+                  fontSize: '12px',
+                  fontWeight: 600
+                }}>
+                  <div>Customer</div>
+                  <div style={{ textAlign: 'right' }}>Paid</div>
+                  <div style={{ textAlign: 'right' }}>Balance</div>
+                </div>
+
+                {/* Scrollable Customer List */}
+                <div style={{
+                  maxHeight: '300px',
+                  overflowY: 'auto'
+                }}>
+                  {activeCustomers.map((customer, idx) => {
+                    const paid = customer.loan_amount - customer.balance;
+                    return (
+                      <div
+                        key={customer.id}
+                        onClick={() => setSelectedCustomer(customer)}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '2fr 1fr 1fr',
+                          gap: '8px',
+                          padding: '12px 16px',
+                          borderBottom: '1px solid #e5e7eb',
+                          cursor: 'pointer',
+                          background: idx % 2 === 0 ? 'white' : '#f8fafc',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#f0f4ff'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = idx % 2 === 0 ? 'white' : '#f8fafc'}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b' }}>
+                            {customer.name}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>
+                            Day {getPaymentDay(customer.start_date)} | {formatCurrency(customer.monthly_amount)}/mo
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', fontWeight: 600, color: '#059669', fontSize: '14px', alignSelf: 'center' }}>
+                          {formatCurrency(paid)}
+                        </div>
+                        <div style={{ textAlign: 'right', fontWeight: 600, color: '#dc2626', fontSize: '14px', alignSelf: 'center' }}>
+                          {formatCurrency(customer.balance)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* List Footer */}
+                <div style={{
+                  background: '#f1f5f9',
+                  padding: '12px 16px',
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1fr 1fr',
+                  gap: '8px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  borderTop: '2px solid #e5e7eb'
+                }}>
+                  <div style={{ color: '#1e293b' }}>Total ({activeCustomers.length})</div>
+                  <div style={{ textAlign: 'right', color: '#059669' }}>
+                    {formatCurrency(activeCustomers.reduce((sum, c) => sum + (c.loan_amount - c.balance), 0))}
+                  </div>
+                  <div style={{ textAlign: 'right', color: '#dc2626' }}>
+                    {formatCurrency(activeCustomers.reduce((sum, c) => sum + c.balance, 0))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
