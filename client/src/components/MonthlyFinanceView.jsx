@@ -8,6 +8,8 @@ const fetcher = (url) => fetch(url).then(res => res.json());
 function MonthlyFinanceView({ navigateTo }) {
   const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [activeTab, setActiveTab] = useState('list'); // 'list' or 'calendar'
+  const [selectedDay, setSelectedDay] = useState(null); // For calendar day modal
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -39,6 +41,36 @@ function MonthlyFinanceView({ navigateTo }) {
 
   const handleRefresh = () => {
     mutate();
+  };
+
+  // Get payment day from start_date (day of month when payment is due)
+  const getPaymentDay = (startDate) => {
+    if (!startDate) return 1;
+    return new Date(startDate).getDate();
+  };
+
+  // Group active customers by their payment day
+  const activeCustomers = monthlyCustomers.filter(c => c.status === 'active');
+  const customersByDay = {};
+  for (let day = 1; day <= 31; day++) {
+    customersByDay[day] = activeCustomers.filter(c => getPaymentDay(c.start_date) === day);
+  }
+
+  // Get total balance for a day
+  const getDayTotal = (day) => {
+    return customersByDay[day].reduce((sum, c) => sum + (c.monthly_amount || 0), 0);
+  };
+
+  // Get customer count for a day
+  const getDayCount = (day) => {
+    return customersByDay[day].length;
+  };
+
+  // Handle day click in calendar
+  const handleDayClick = (day) => {
+    if (customersByDay[day].length > 0) {
+      setSelectedDay(day);
+    }
   };
 
   if (isLoading) {
@@ -161,6 +193,49 @@ function MonthlyFinanceView({ navigateTo }) {
             </button>
           </div>
 
+          {/* Tab Buttons */}
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '16px',
+            background: '#f1f5f9',
+            padding: '4px',
+            borderRadius: '8px'
+          }}>
+            <button
+              onClick={() => setActiveTab('list')}
+              style={{
+                flex: 1,
+                padding: '10px',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '14px',
+                background: activeTab === 'list' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+                color: activeTab === 'list' ? 'white' : '#64748b'
+              }}
+            >
+              📋 List View
+            </button>
+            <button
+              onClick={() => setActiveTab('calendar')}
+              style={{
+                flex: 1,
+                padding: '10px',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '14px',
+                background: activeTab === 'calendar' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+                color: activeTab === 'calendar' ? 'white' : '#64748b'
+              }}
+            >
+              📅 Calendar View
+            </button>
+          </div>
+
           {monthlyCustomers.length === 0 ? (
             <div style={{
               textAlign: 'center',
@@ -175,7 +250,8 @@ function MonthlyFinanceView({ navigateTo }) {
                 Click "+ Add Monthly Customer" to create your first one
               </div>
             </div>
-          ) : (
+          ) : activeTab === 'list' ? (
+            /* LIST VIEW */
             <div style={{ display: 'grid', gap: '10px' }}>
               {monthlyCustomers.map(customer => {
                 const progress = ((customer.loan_amount - customer.balance) / customer.loan_amount) * 100;
@@ -253,9 +329,260 @@ function MonthlyFinanceView({ navigateTo }) {
                 );
               })}
             </div>
+          ) : (
+            /* CALENDAR VIEW */
+            <div>
+              {/* Summary Header */}
+              <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '16px',
+                color: 'white'
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', textAlign: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '24px', fontWeight: 700 }}>{activeCustomers.length}</div>
+                    <div style={{ fontSize: '11px', opacity: 0.9 }}>Active Customers</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '24px', fontWeight: 700 }}>
+                      {formatCurrency(activeCustomers.reduce((sum, c) => sum + (c.monthly_amount || 0), 0))}
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.9 }}>Monthly Collection</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '24px', fontWeight: 700 }}>
+                      {formatCurrency(activeCustomers.reduce((sum, c) => sum + (c.balance || 0), 0))}
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.9 }}>Total Balance</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 31-Day Calendar Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '8px'
+              }}>
+                {[...Array(31)].map((_, index) => {
+                  const day = index + 1;
+                  const dayTotal = getDayTotal(day);
+                  const dayCount = getDayCount(day);
+                  const hasData = customersByDay[day].length > 0;
+                  const today = new Date().getDate();
+
+                  return (
+                    <div
+                      key={day}
+                      onClick={() => handleDayClick(day)}
+                      style={{
+                        border: day === today ? '2px solid #667eea' : '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '10px 6px',
+                        textAlign: 'center',
+                        cursor: hasData ? 'pointer' : 'default',
+                        background: hasData
+                          ? 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)'
+                          : day === today ? '#fef3c7' : 'white',
+                        transition: 'all 0.2s',
+                        minHeight: '70px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (hasData) {
+                          e.currentTarget.style.transform = 'scale(1.05)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                    >
+                      <div style={{
+                        fontSize: '16px',
+                        fontWeight: 700,
+                        color: hasData ? '#667eea' : day === today ? '#d97706' : '#9ca3af',
+                        marginBottom: '4px'
+                      }}>
+                        {day}
+                      </div>
+                      {hasData && (
+                        <>
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#059669',
+                            marginBottom: '2px'
+                          }}>
+                            {formatCurrency(dayTotal)}
+                          </div>
+                          <div style={{
+                            fontSize: '10px',
+                            color: '#6b7280'
+                          }}>
+                            👥 {dayCount}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Legend */}
+              <div style={{
+                marginTop: '12px',
+                display: 'flex',
+                gap: '16px',
+                justifyContent: 'center',
+                fontSize: '11px',
+                color: '#6b7280'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '12px', height: '12px', background: '#fef3c7', border: '1px solid #d97706', borderRadius: '2px' }}></div>
+                  Today
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '12px', height: '12px', background: 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)', border: '1px solid #667eea', borderRadius: '2px' }}></div>
+                  Has Customers
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
+
+      {/* Day Detail Modal */}
+      {selectedDay && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            width: '100%',
+            maxWidth: '500px',
+            maxHeight: '80vh',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              padding: '16px 20px',
+              color: 'white',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 700 }}>
+                  Day {selectedDay} - Payment Due
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.9 }}>
+                  {customersByDay[selectedDay]?.length || 0} customers | {formatCurrency(getDayTotal(selectedDay))} expected
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedDay(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '20px',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Customer List */}
+            <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+              {customersByDay[selectedDay]?.map(customer => {
+                const progress = ((customer.loan_amount - customer.balance) / customer.loan_amount) * 100;
+                const monthsPaid = Math.floor((customer.loan_amount - customer.balance) / customer.monthly_amount);
+
+                return (
+                  <div
+                    key={customer.id}
+                    style={{
+                      padding: '14px',
+                      background: 'linear-gradient(135deg, #f0f4ff 0%, #e6ecff 100%)',
+                      borderRadius: '8px',
+                      marginBottom: '10px',
+                      borderLeft: '4px solid #667eea',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => {
+                      setSelectedDay(null);
+                      setSelectedCustomer(customer);
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b' }}>
+                          {customer.name}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                          📱 {customer.phone}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#667eea' }}>
+                          {formatCurrency(customer.monthly_amount)}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                          Monthly
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b', marginBottom: '6px' }}>
+                      <span>Balance: {formatCurrency(customer.balance)}</span>
+                      <span>{monthsPaid}/{customer.total_months} paid ({Math.round(progress)}%)</span>
+                    </div>
+                    <div style={{
+                      width: '100%',
+                      height: '6px',
+                      background: '#e2e8f0',
+                      borderRadius: '3px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${progress}%`,
+                        height: '100%',
+                        background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)'
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAddCustomerForm && (
         <AddMonthlyCustomerModal
