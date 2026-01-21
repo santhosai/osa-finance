@@ -2,10 +2,16 @@ import { useState } from 'react';
 import ExcelJS from 'exceljs';
 import { API_URL } from '../config';
 
+// Month names for file naming
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
 function BackupData({ onClose }) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState('');
   const [stats, setStats] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // Current month by default
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -314,13 +320,15 @@ function BackupData({ onClose }) {
 
       setProgress('Downloading...');
 
-      // Generate and download
+      // Generate and download with month-based filename
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `OmSaiMuruganFinance_Backup_${new Date().toISOString().split('T')[0]}.xlsx`;
+      // Filename format: Jan_2026_OmSaiMurugan_Backup.xlsx (easy to organize in Google Drive by month)
+      const monthName = MONTHS[selectedMonth];
+      a.download = `${monthName}_${selectedYear}_OmSaiMurugan_Backup.xlsx`;
       a.click();
       window.URL.revokeObjectURL(url);
 
@@ -390,6 +398,66 @@ function BackupData({ onClose }) {
         <div style={{ padding: '20px' }}>
           {!stats ? (
             <>
+              {/* Month/Year Selector */}
+              <div style={{
+                background: 'linear-gradient(135deg, #1e40af 0%, #3730a3 100%)',
+                borderRadius: '12px',
+                padding: '16px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginBottom: '10px' }}>
+                  Select Backup Month (for Google Drive organization):
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      background: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {FULL_MONTHS.map((month, idx) => (
+                      <option key={idx} value={idx}>{month}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(Number(e.target.value))}
+                    style={{
+                      width: '100px',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      background: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {[2024, 2025, 2026, 2027, 2028].map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{
+                  marginTop: '10px',
+                  padding: '8px 12px',
+                  background: 'rgba(255,255,255,0.1)',
+                  borderRadius: '6px',
+                  color: 'white',
+                  fontSize: '12px'
+                }}>
+                  File: <strong>{MONTHS[selectedMonth]}_{selectedYear}_OmSaiMurugan_Backup.xlsx</strong>
+                </div>
+              </div>
+
               <div style={{
                 background: '#374151',
                 borderRadius: '12px',
@@ -406,6 +474,28 @@ function BackupData({ onClose }) {
                   <li>Vaddi (Interest) entries</li>
                   <li>Chit Fund groups & members</li>
                 </ul>
+              </div>
+
+              {/* Google Drive Tip */}
+              <div style={{
+                background: 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
+                borderRadius: '12px',
+                padding: '14px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '20px' }}>☁️</span>
+                <div>
+                  <div style={{ color: 'white', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
+                    Google Drive Tip (FREE)
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '11px', lineHeight: '1.5' }}>
+                    Create folders: <strong>Jan_2026</strong>, <strong>Feb_2026</strong>...
+                    Upload each month's backup to its folder for organized backups!
+                  </div>
+                </div>
               </div>
 
               {progress && (
@@ -458,6 +548,30 @@ function BackupData({ onClose }) {
                 <div style={{ fontSize: '40px', marginBottom: '8px' }}>✅</div>
                 <div style={{ color: 'white', fontSize: '16px', fontWeight: 700 }}>
                   Backup Downloaded!
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginTop: '6px' }}>
+                  {MONTHS[selectedMonth]}_{selectedYear}_OmSaiMurugan_Backup.xlsx
+                </div>
+              </div>
+
+              {/* Google Drive Upload Reminder */}
+              <div style={{
+                background: 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
+                borderRadius: '12px',
+                padding: '14px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '24px' }}>☁️</span>
+                <div>
+                  <div style={{ color: 'white', fontSize: '13px', fontWeight: 600 }}>
+                    Upload to Google Drive
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '11px' }}>
+                    Folder: <strong>{FULL_MONTHS[selectedMonth]}_{selectedYear}</strong>
+                  </div>
                 </div>
               </div>
 
