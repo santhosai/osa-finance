@@ -1,5 +1,5 @@
 // Service Worker for Om Sai Murugan Finance PWA
-const CACHE_NAME = 'osm-finance-v1';
+const CACHE_NAME = 'osm-finance-v2';
 
 // Files to cache for offline use
 const STATIC_ASSETS = [
