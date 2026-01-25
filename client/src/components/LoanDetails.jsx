@@ -3,6 +3,7 @@ import useSWR, { mutate as globalMutate } from 'swr';
 import AddPaymentModal from './AddPaymentModal';
 import AddLoanModal from './AddLoanModal';
 import WhatsAppModal from './WhatsAppModal';
+import PrintReceipt from './PrintReceipt';
 import { API_URL } from '../config';
 
 // Fetcher function for SWR
@@ -16,6 +17,7 @@ function LoanDetails({ loanId, navigateTo }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [selectedPaymentForWhatsApp, setSelectedPaymentForWhatsApp] = useState(null);
+  const [printData, setPrintData] = useState(null);
 
   // Use SWR for automatic caching and re-fetching
   const { data: loan, error, isLoading, mutate } = useSWR(
@@ -543,6 +545,39 @@ function LoanDetails({ loanId, navigateTo }) {
                 )}
               </button>
               <button
+                onClick={() => setPrintData({
+                  type: 'payment',
+                  data: {
+                    customerName: loan.customer_name,
+                    phone: loan.customer_phone,
+                    loanName: loan.loan_name,
+                    loanAmount: loan.loan_amount,
+                    amountPaid: payment.amount,
+                    totalPaid: loan.loan_amount - payment.balance_after,
+                    balance: payment.balance_after,
+                    weekNumber: payment.week_number || payment.period_number,
+                    date: payment.payment_date,
+                    loanType: loan.loan_type || 'Weekly'
+                  }
+                })}
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Print Receipt"
+              >
+                🖨️ Print
+              </button>
+              <button
                 onClick={() => deletePayment(payment.id)}
                 style={{
                   background: '#dc2626',
@@ -932,6 +967,15 @@ function LoanDetails({ loanId, navigateTo }) {
             balance: formatCurrency(selectedPaymentForWhatsApp.balance_after),
             date: formatDate(selectedPaymentForWhatsApp.payment_date)
           }}
+        />
+      )}
+
+      {/* Print Receipt Modal */}
+      {printData && (
+        <PrintReceipt
+          type={printData.type}
+          data={printData.data}
+          onClose={() => setPrintData(null)}
         />
       )}
     </div>
