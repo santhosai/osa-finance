@@ -812,6 +812,126 @@ Thank you for your payment!
     }
   };
 
+  // Print Single Day entries via Thermal Printer
+  const printDayEntriesThermal = async (day) => {
+    const dayEntries = entriesByDay[day] || [];
+    if (dayEntries.length === 0) {
+      alert('No entries to print for this day');
+      return;
+    }
+
+    try {
+      if (!navigator.bluetooth) {
+        alert('Bluetooth not supported. Use a Bluetooth-enabled browser.');
+        return;
+      }
+
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [
+          '000018f0-0000-1000-8000-00805f9b34fb',
+          '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+          'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+        ]
+      });
+
+      const server = await device.gatt.connect();
+      const services = await server.getPrimaryServices();
+      let characteristic = null;
+
+      for (const service of services) {
+        const characteristics = await service.getCharacteristics();
+        for (const char of characteristics) {
+          if (char.properties.write || char.properties.writeWithoutResponse) {
+            characteristic = char;
+            break;
+          }
+        }
+        if (characteristic) break;
+      }
+
+      if (!characteristic) {
+        alert('Printer not compatible');
+        return;
+      }
+
+      // Calculate totals for this day
+      const totalPrincipal = dayEntries.reduce((sum, e) => sum + (e.principal_amount || e.amount || 0), 0);
+      const totalInterest = dayEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+      // Generate Day Report
+      let receipt = THERMAL_COMMANDS.INIT;
+      receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += THERMAL_COMMANDS.DOUBLE_HEIGHT;
+      receipt += 'INTEREST LOANS\n';
+      receipt += `DAY ${day}\n`;
+      receipt += THERMAL_COMMANDS.NORMAL_SIZE;
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      receipt += `Date: ${new Date().toLocaleDateString('en-IN')}\n`;
+      receipt += THERMAL_COMMANDS.LINE;
+
+      // Summary
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += 'SUMMARY\n';
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      receipt += THERMAL_COMMANDS.ALIGN_LEFT;
+      receipt += `Entries: ${dayEntries.length}\n`;
+      receipt += `Principal: Rs.${totalPrincipal.toLocaleString('en-IN')}\n`;
+      receipt += `Monthly Int: Rs.${totalInterest.toLocaleString('en-IN')}\n`;
+      receipt += THERMAL_COMMANDS.LINE;
+
+      // Customer List
+      receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += 'CUSTOMER LIST\n';
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      receipt += THERMAL_COMMANDS.ALIGN_LEFT;
+
+      dayEntries.forEach((entry, idx) => {
+        const loanDate = entry.loan_date ? new Date(entry.loan_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '-';
+        receipt += `${idx + 1}. ${entry.name}\n`;
+        receipt += `   Ph: ${entry.phone || '-'}\n`;
+        receipt += `   Date: ${loanDate}\n`;
+        receipt += `   Principal: Rs.${(entry.principal_amount || entry.amount || 0).toLocaleString('en-IN')}\n`;
+        receipt += `   Interest: Rs.${(entry.amount || 0).toLocaleString('en-IN')}/mo\n`;
+        receipt += '- - - - - - - - - - - - - -\n';
+      });
+
+      receipt += THERMAL_COMMANDS.LINE;
+      receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += `TOTAL: Rs.${totalInterest.toLocaleString('en-IN')}/mo\n`;
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      receipt += 'Om Sai Murugan Finance\n';
+      receipt += 'Ph: 8667510724\n';
+      receipt += THERMAL_COMMANDS.FEED;
+      receipt += THERMAL_COMMANDS.PARTIAL_CUT;
+
+      // Send to printer
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(receipt);
+      const chunkSize = 100;
+
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.slice(i, i + chunkSize);
+        if (characteristic.properties.writeWithoutResponse) {
+          await characteristic.writeValueWithoutResponse(chunk);
+        } else {
+          await characteristic.writeValue(chunk);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      alert(`Day ${day} entries printed!`);
+    } catch (error) {
+      if (error.name !== 'NotFoundError') {
+        console.error('Print error:', error);
+        alert('Print failed: ' + error.message);
+      }
+    }
+  };
+
   // Generate PDF report
   const generatePDF = () => {
     const doc = new jsPDF();
@@ -1743,21 +1863,43 @@ Thank you for your payment!
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
                 📅 Day {selectedDay}
               </h3>
-              <button
-                onClick={closeModal}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'white',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  padding: '0',
-                  width: '30px',
-                  height: '30px'
-                }}
-              >
-                ×
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {entriesByDay[selectedDay]?.length > 0 && (
+                  <button
+                    onClick={() => printDayEntriesThermal(selectedDay)}
+                    style={{
+                      background: 'rgba(255,255,255,0.2)',
+                      border: '2px solid rgba(255,255,255,0.4)',
+                      color: 'white',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    🖨️ Print
+                  </button>
+                )}
+                <button
+                  onClick={closeModal}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'white',
+                    fontSize: '24px',
+                    cursor: 'pointer',
+                    padding: '0',
+                    width: '30px',
+                    height: '30px'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             {/* Modal Content */}

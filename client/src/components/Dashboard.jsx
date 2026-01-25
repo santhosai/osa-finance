@@ -91,6 +91,17 @@ function Dashboard({ navigateTo }) {
     dedupingInterval: 2000,
   });
 
+  // Fetch Monthly Finance customers
+  const { data: monthlyCustomers = [], mutate: mutateMonthly } = useSWR(
+    `${API_URL}/monthly-finance/customers`,
+    fetcher,
+    {
+      refreshInterval: 30000,
+      revalidateOnFocus: true,
+      dedupingInterval: 2000,
+    }
+  );
+
   // Fetch Loans Given by date
   const { data: loansGivenData = { loans: [], total: 0, count: 0 } } = useSWR(
     `${API_URL}/loans-by-date?date=${loansGivenDate}`,
@@ -609,6 +620,127 @@ function Dashboard({ navigateTo }) {
     receipt += THERMAL_COMMANDS.BOLD_ON;
     receipt += `TOTAL: Rs.${totalGiven.toLocaleString('en-IN')}\n`;
     receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += 'Ph: 8667510724\n';
+    receipt += THERMAL_COMMANDS.FEED;
+    receipt += THERMAL_COMMANDS.PARTIAL_CUT;
+
+    // Try to print via Bluetooth
+    try {
+      if (!navigator.bluetooth) {
+        alert('Bluetooth not supported. Use the Normal Print option or RawBT app.');
+        return;
+      }
+
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2']
+      });
+
+      const server = await device.gatt.connect();
+      const services = await server.getPrimaryServices();
+      let characteristic = null;
+
+      for (const service of services) {
+        try {
+          const characteristics = await service.getCharacteristics();
+          for (const char of characteristics) {
+            if (char.properties.write || char.properties.writeWithoutResponse) {
+              characteristic = char;
+              break;
+            }
+          }
+          if (characteristic) break;
+        } catch (e) {}
+      }
+
+      if (!characteristic) {
+        alert('Printer not compatible');
+        return;
+      }
+
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(receipt);
+      const chunkSize = 100;
+
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.slice(i, i + chunkSize);
+        if (characteristic.properties.writeWithoutResponse) {
+          await characteristic.writeValueWithoutResponse(chunk);
+        } else {
+          await characteristic.writeValue(chunk);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      alert('Printed successfully!');
+    } catch (error) {
+      console.error('Print error:', error);
+      alert('Print failed: ' + error.message);
+    }
+  };
+
+  // Print Monthly Finance Audit via Thermal Printer
+  const printMonthlyFinanceAuditThermal = async (paidList, unpaidList) => {
+    if (paidList.length === 0 && unpaidList.length === 0) {
+      alert('No data to print');
+      return;
+    }
+
+    const paidTotal = paidList.reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+    const unpaidTotal = unpaidList.reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+    const now = new Date();
+    const monthName = now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+    let receipt = THERMAL_COMMANDS.INIT;
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += THERMAL_COMMANDS.DOUBLE_HEIGHT;
+    receipt += 'OM SAI MURUGAN\n';
+    receipt += 'FINANCE\n';
+    receipt += THERMAL_COMMANDS.NORMAL_SIZE;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += '** MONTHLY COLLECTION **\n';
+    receipt += `** ${monthName} **\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+
+    // Summary
+    receipt += THERMAL_COMMANDS.ALIGN_LEFT;
+    receipt += `Paid: ${paidList.length} | Rs.${paidTotal.toLocaleString('en-IN')}\n`;
+    receipt += `Unpaid: ${unpaidList.length} | Rs.${unpaidTotal.toLocaleString('en-IN')}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += `TOTAL: Rs.${(paidTotal + unpaidTotal).toLocaleString('en-IN')}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+
+    // Paid List
+    if (paidList.length > 0) {
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += `PAID (${paidList.length}):\n`;
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      paidList.forEach((item, i) => {
+        receipt += `${i + 1}.${(item.customer_name || item.name || '').substring(0, 15)}\n`;
+        receipt += `  Day:${item.payment_day} Rs.${(item.monthly_amount || 0).toLocaleString('en-IN')}\n`;
+      });
+      receipt += THERMAL_COMMANDS.DASHED;
+    }
+
+    // Unpaid List
+    if (unpaidList.length > 0) {
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += `NOT PAID (${unpaidList.length}):\n`;
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      unpaidList.forEach((item, i) => {
+        receipt += `${i + 1}.${(item.customer_name || item.name || '').substring(0, 15)}\n`;
+        receipt += `  Day:${item.payment_day} Rs.${(item.monthly_amount || 0).toLocaleString('en-IN')} Bal:${(item.balance || 0).toLocaleString('en-IN')}\n`;
+      });
+      receipt += THERMAL_COMMANDS.DASHED;
+    }
+
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += `Collected: Rs.${paidTotal.toLocaleString('en-IN')}\n`;
     receipt += 'Ph: 8667510724\n';
     receipt += THERMAL_COMMANDS.FEED;
     receipt += THERMAL_COMMANDS.PARTIAL_CUT;
@@ -2650,6 +2782,271 @@ function Dashboard({ navigateTo }) {
                     </div>
                   </div>
                 </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Monthly Finance Payments Section */}
+          <div style={{
+            background: 'white',
+            borderRadius: '8px',
+            padding: '12px',
+            marginBottom: '10px',
+            marginTop: '10px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '10px',
+              flexWrap: 'wrap',
+              gap: '8px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '14px',
+                fontWeight: 700,
+                color: '#1e293b'
+              }}>
+                📅 {t('monthlyFinance')} - {new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+              </h3>
+            </div>
+
+            {(() => {
+              // Calculate which customers have paid/not paid for the current month
+              const now = new Date();
+              const currentMonth = now.getMonth();
+              const currentYear = now.getFullYear();
+              const currentDay = now.getDate();
+
+              // Filter active monthly customers
+              const activeMonthlyCustomers = (monthlyCustomers || []).filter(c =>
+                c.status === 'active' && c.balance > 0
+              );
+
+              if (activeMonthlyCustomers.length === 0) {
+                return (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '20px',
+                    color: '#6b7280',
+                    fontSize: '13px'
+                  }}>
+                    No active monthly customers
+                  </div>
+                );
+              }
+
+              // Check payment status for each customer
+              const paidMonthlyCustomers = [];
+              const unpaidMonthlyCustomers = [];
+
+              activeMonthlyCustomers.forEach(customer => {
+                // Check if payment was made this month
+                const lastPaymentDate = customer.last_payment_date ? new Date(customer.last_payment_date) : null;
+                const hasPaidThisMonth = lastPaymentDate &&
+                  lastPaymentDate.getMonth() === currentMonth &&
+                  lastPaymentDate.getFullYear() === currentYear;
+
+                if (hasPaidThisMonth) {
+                  paidMonthlyCustomers.push(customer);
+                } else {
+                  unpaidMonthlyCustomers.push(customer);
+                }
+              });
+
+              // Sort by payment_day
+              paidMonthlyCustomers.sort((a, b) => (a.payment_day || 1) - (b.payment_day || 1));
+              unpaidMonthlyCustomers.sort((a, b) => (a.payment_day || 1) - (b.payment_day || 1));
+
+              // Calculate totals
+              const paidTotal = paidMonthlyCustomers.reduce((sum, c) => sum + (c.monthly_amount || 0), 0);
+              const unpaidTotal = unpaidMonthlyCustomers.reduce((sum, c) => sum + (c.monthly_amount || 0), 0);
+              const grandTotal = paidTotal + unpaidTotal;
+
+              return (
+                <div>
+                  {/* Total Summary */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    marginBottom: '10px',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    gap: '10px',
+                    color: 'white'
+                  }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#86efac' }}>
+                        {formatCurrency(paidTotal)}
+                      </div>
+                      <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('collected')} ({paidMonthlyCustomers.length})</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#fca5a5' }}>
+                        {formatCurrency(unpaidTotal)}
+                      </div>
+                      <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('pending')} ({unpaidMonthlyCustomers.length})</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700 }}>
+                        {formatCurrency(grandTotal)}
+                      </div>
+                      <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('totalDue')}</div>
+                    </div>
+                  </div>
+
+                  {/* Print Monthly Summary Button */}
+                  <button
+                    onClick={() => printMonthlyFinanceAuditThermal(paidMonthlyCustomers, unpaidMonthlyCustomers)}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      marginBottom: '10px',
+                      background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)'
+                    }}
+                  >
+                    🖨️ Print Monthly Audit (Thermal)
+                  </button>
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '10px',
+                    overflowX: 'auto'
+                  }}>
+                    {/* PAID Column */}
+                    <div style={{
+                      background: '#f0fdf4',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      minWidth: '200px'
+                    }}>
+                      <h4 style={{
+                        margin: '0 0 8px 0',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#065f46'
+                      }}>
+                        ✓ {t('paid').toUpperCase()} ({paidMonthlyCustomers.length})
+                      </h4>
+                      <div style={{ display: 'grid', gap: '4px', maxHeight: '300px', overflowY: 'auto' }}>
+                        {paidMonthlyCustomers.map((customer) => (
+                          <div
+                            key={customer.id}
+                            onClick={() => navigateTo('monthly-finance')}
+                            style={{
+                              background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
+                              padding: '6px 8px',
+                              borderRadius: '6px',
+                              border: '1px solid #6ee7b7',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.02)';
+                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
+                              {customer.customer_name || customer.name}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
+                              Day {customer.payment_day || '-'} • {formatCurrency(customer.monthly_amount || 0)}
+                            </div>
+                            <div style={{ fontSize: '9px', color: '#059669', fontWeight: 500 }}>
+                              Bal: {formatCurrency(customer.balance || 0)} • M{customer.current_month || '-'}
+                            </div>
+                          </div>
+                        ))}
+                        {paidMonthlyCustomers.length === 0 && (
+                          <div style={{ fontSize: '11px', color: '#6b7280', textAlign: 'center', padding: '10px' }}>
+                            No payments yet
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* UNPAID Column */}
+                    <div style={{
+                      background: '#fef2f2',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      minWidth: '200px'
+                    }}>
+                      <h4 style={{
+                        margin: '0 0 8px 0',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#991b1b'
+                      }}>
+                        ✗ {t('unpaid').toUpperCase()} ({unpaidMonthlyCustomers.length})
+                      </h4>
+                      <div style={{ display: 'grid', gap: '4px', maxHeight: '300px', overflowY: 'auto' }}>
+                        {unpaidMonthlyCustomers.map((customer) => {
+                          const isDuePassed = customer.payment_day && customer.payment_day < currentDay;
+                          return (
+                            <div
+                              key={customer.id}
+                              onClick={() => navigateTo('monthly-finance')}
+                              style={{
+                                background: isDuePassed
+                                  ? 'linear-gradient(135deg, #fecaca 0%, #fca5a5 100%)'
+                                  : 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+                                padding: '6px 8px',
+                                borderRadius: '6px',
+                                border: isDuePassed ? '2px solid #ef4444' : '1px solid #fca5a5',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseOver={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.02)';
+                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
+                              }}
+                              onMouseOut={(e) => {
+                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            >
+                              <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
+                                {customer.customer_name || customer.name}
+                                {isDuePassed && <span style={{ marginLeft: '4px', color: '#dc2626' }}>⚠️</span>}
+                              </div>
+                              <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
+                                Day {customer.payment_day || '-'} • {formatCurrency(customer.monthly_amount || 0)}
+                              </div>
+                              <div style={{ fontSize: '9px', color: '#dc2626', fontWeight: 500 }}>
+                                Bal: {formatCurrency(customer.balance || 0)} • M{customer.current_month || '-'}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {unpaidMonthlyCustomers.length === 0 && (
+                          <div style={{ fontSize: '11px', color: '#6b7280', textAlign: 'center', padding: '10px' }}>
+                            All payments collected!
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               );
             })()}
