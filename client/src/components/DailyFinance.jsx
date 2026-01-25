@@ -28,6 +28,8 @@ const DailyFinance = ({ navigateTo }) => {
   const [gpsEnabled, setGpsEnabled] = useState(true); // GPS tracking toggle
   const [bluetoothDevice, setBluetoothDevice] = useState(null);
   const [printerConnected, setPrinterConnected] = useState(false);
+  const [showSendChoice, setShowSendChoice] = useState(false); // Show WhatsApp/Print choice modal
+  const [pendingPaymentData, setPendingPaymentData] = useState(null); // Store payment data for choice modal
 
   // Bluetooth Printer Functions
   const connectPrinter = async () => {
@@ -279,6 +281,53 @@ const DailyFinance = ({ navigateTo }) => {
     }).format(amount || 0);
   };
 
+  // Handle WhatsApp send for Daily Finance
+  const sendWhatsAppDaily = () => {
+    if (!pendingPaymentData || !pendingPaymentData.phone) return;
+
+    const message = `Payment Receipt - Daily Finance
+
+Customer: ${pendingPaymentData.customerName}
+Day ${pendingPaymentData.dayNumber} Payment: Rs.${pendingPaymentData.amountPaid.toLocaleString('en-IN')}
+Date: ${new Date().toLocaleDateString('en-IN')}
+Remaining Balance: Rs.${pendingPaymentData.balance.toLocaleString('en-IN')}
+
+Thank you for your payment!
+
+- Om Sai Murugan Finance`;
+
+    const cleanPhone = pendingPaymentData.phone.replace(/\D/g, '');
+    const phoneWithCountryCode = `91${cleanPhone}`;
+    const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Handle choice selection for Daily Finance
+  const handleDailyChoiceSelect = (choice) => {
+    if (choice === 'whatsapp' || choice === 'both') {
+      sendWhatsAppDaily();
+    }
+    if (choice === 'print' || choice === 'both') {
+      if (pendingPaymentData) {
+        printReceipt(
+          pendingPaymentData.customerName,
+          {
+            customer_phone: pendingPaymentData.phone,
+            asked_amount: pendingPaymentData.askedAmount,
+            daily_amount: pendingPaymentData.dailyAmount,
+            balance: pendingPaymentData.balance
+          },
+          {
+            day_number: pendingPaymentData.dayNumber,
+            amount: pendingPaymentData.amountPaid
+          }
+        );
+      }
+    }
+    setShowSendChoice(false);
+    setPendingPaymentData(null);
+  };
+
   // Handle mark payment with GPS tracking
   const handleMarkPayment = async (loanId, dailyAmount) => {
     if (isSubmitting) return;
@@ -309,9 +358,29 @@ const DailyFinance = ({ navigateTo }) => {
       });
 
       if (response.ok) {
+        const paymentResult = await response.json();
+
         mutateCollections();
         mutateSummary();
         mutateCustomers();
+
+        // Find the collection info for choice modal
+        const collection = collections.find(c => c.loan_id === loanId);
+
+        if (collection) {
+          // Store payment data and show choice modal
+          setPendingPaymentData({
+            customerName: collection.customer_name,
+            phone: collection.customer_phone,
+            askedAmount: collection.asked_amount || collection.loan_amount,
+            dailyAmount: collection.daily_amount,
+            balance: collection.balance - dailyAmount,
+            dayNumber: collection.day_number,
+            amountPaid: dailyAmount,
+            loanId: loanId
+          });
+          setShowSendChoice(true);
+        }
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to record payment');
@@ -503,6 +572,128 @@ const DailyFinance = ({ navigateTo }) => {
 
   return (
     <div style={{ minHeight: '100vh', background: '#1e293b' }}>
+      {/* WhatsApp/Print Choice Modal */}
+      {showSendChoice && pendingPaymentData && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '320px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              padding: '20px',
+              textAlign: 'center',
+              color: 'white'
+            }}>
+              <div style={{ fontSize: '40px', marginBottom: '8px' }}>✅</div>
+              <div style={{ fontSize: '18px', fontWeight: 700 }}>Payment Recorded!</div>
+              <div style={{ fontSize: '14px', opacity: 0.9, marginTop: '4px' }}>
+                {formatCurrency(pendingPaymentData.amountPaid)} received
+              </div>
+            </div>
+
+            <div style={{ padding: '20px' }}>
+              <div style={{ fontSize: '14px', color: '#6b7280', textAlign: 'center', marginBottom: '16px' }}>
+                How would you like to send receipt?
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <button
+                  onClick={() => handleDailyChoiceSelect('whatsapp')}
+                  style={{
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  📱 WhatsApp Only
+                </button>
+
+                <button
+                  onClick={() => handleDailyChoiceSelect('print')}
+                  style={{
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  🖨️ Thermal Print Only
+                </button>
+
+                <button
+                  onClick={() => handleDailyChoiceSelect('both')}
+                  style={{
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  📱🖨️ Both WhatsApp + Print
+                </button>
+
+                <button
+                  onClick={() => handleDailyChoiceSelect('skip')}
+                  style={{
+                    padding: '12px',
+                    background: '#f3f4f6',
+                    color: '#6b7280',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{
         background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',

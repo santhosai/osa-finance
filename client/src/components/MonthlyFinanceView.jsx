@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import useSWR from 'swr';
 import { API_URL } from '../config';
+import PrintReceipt from './PrintReceipt';
 
 // Fetcher function for SWR
 const fetcher = (url) => fetch(url).then(res => res.json());
@@ -70,6 +71,138 @@ function MonthlyFinanceView({ navigateTo }) {
   const handleDayClick = (day) => {
     if (customersByDay[day].length > 0) {
       setSelectedDay(day);
+    }
+  };
+
+  // ESC/POS Commands for Thermal Printer
+  const ESC = '\x1B';
+  const GS = '\x1D';
+  const THERMAL_COMMANDS = {
+    INIT: ESC + '@',
+    ALIGN_CENTER: ESC + 'a' + '\x01',
+    ALIGN_LEFT: ESC + 'a' + '\x00',
+    BOLD_ON: ESC + 'E' + '\x01',
+    BOLD_OFF: ESC + 'E' + '\x00',
+    DOUBLE_HEIGHT: GS + '!' + '\x10',
+    NORMAL_SIZE: GS + '!' + '\x00',
+    FEED: ESC + 'd' + '\x03',
+    PARTIAL_CUT: GS + 'V' + '\x01',
+    LINE: '--------------------------------\n'
+  };
+
+  // Print Monthly Finance Audit Report (Thermal)
+  const printMonthlyAuditThermal = async () => {
+    try {
+      if (!navigator.bluetooth) {
+        alert('Bluetooth not supported. Use a Bluetooth-enabled browser.');
+        return;
+      }
+
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [
+          '000018f0-0000-1000-8000-00805f9b34fb',
+          '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+          'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+        ]
+      });
+
+      const server = await device.gatt.connect();
+      const services = await server.getPrimaryServices();
+      let characteristic = null;
+
+      for (const service of services) {
+        const characteristics = await service.getCharacteristics();
+        for (const char of characteristics) {
+          if (char.properties.write || char.properties.writeWithoutResponse) {
+            characteristic = char;
+            break;
+          }
+        }
+        if (characteristic) break;
+      }
+
+      if (!characteristic) {
+        alert('Printer not compatible');
+        return;
+      }
+
+      // Generate Audit Report
+      let receipt = THERMAL_COMMANDS.INIT;
+      receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += THERMAL_COMMANDS.DOUBLE_HEIGHT;
+      receipt += 'MONTHLY FINANCE\n';
+      receipt += 'AUDIT REPORT\n';
+      receipt += THERMAL_COMMANDS.NORMAL_SIZE;
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      receipt += `Date: ${new Date().toLocaleDateString('en-IN')}\n`;
+      receipt += THERMAL_COMMANDS.LINE;
+
+      // Summary
+      const totalCustomers = activeCustomers.length;
+      const totalLoanAmount = activeCustomers.reduce((sum, c) => sum + (c.loan_amount || 0), 0);
+      const totalPaid = activeCustomers.reduce((sum, c) => sum + (c.loan_amount - c.balance), 0);
+      const totalBalance = activeCustomers.reduce((sum, c) => sum + (c.balance || 0), 0);
+      const monthlyCollection = activeCustomers.reduce((sum, c) => sum + (c.monthly_amount || 0), 0);
+
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += 'SUMMARY\n';
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      receipt += THERMAL_COMMANDS.ALIGN_LEFT;
+      receipt += `Customers: ${totalCustomers}\n`;
+      receipt += `Total Loan: Rs.${totalLoanAmount.toLocaleString('en-IN')}\n`;
+      receipt += `Total Paid: Rs.${totalPaid.toLocaleString('en-IN')}\n`;
+      receipt += `Total Balance: Rs.${totalBalance.toLocaleString('en-IN')}\n`;
+      receipt += `Monthly EMI: Rs.${monthlyCollection.toLocaleString('en-IN')}\n`;
+      receipt += THERMAL_COMMANDS.LINE;
+
+      // Customer List
+      receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += 'CUSTOMER LIST\n';
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      receipt += THERMAL_COMMANDS.ALIGN_LEFT;
+
+      activeCustomers.forEach((customer, idx) => {
+        const paid = customer.loan_amount - customer.balance;
+        receipt += `${idx + 1}. ${customer.name}\n`;
+        receipt += `   Ph: ${customer.phone || '-'}\n`;
+        receipt += `   Day: ${getPaymentDay(customer.start_date)} | EMI: Rs.${(customer.monthly_amount || 0).toLocaleString('en-IN')}\n`;
+        receipt += `   Loan: Rs.${(customer.loan_amount || 0).toLocaleString('en-IN')}\n`;
+        receipt += `   Paid: Rs.${paid.toLocaleString('en-IN')}\n`;
+        receipt += `   Balance: Rs.${(customer.balance || 0).toLocaleString('en-IN')}\n`;
+        receipt += '- - - - - - - - - - - - - -\n';
+      });
+
+      receipt += THERMAL_COMMANDS.LINE;
+      receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+      receipt += 'Om Sai Murugan Finance\n';
+      receipt += 'Ph: 8667510724\n';
+      receipt += THERMAL_COMMANDS.FEED;
+      receipt += THERMAL_COMMANDS.PARTIAL_CUT;
+
+      // Send to printer
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(receipt);
+      const chunkSize = 100;
+
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.slice(i, i + chunkSize);
+        if (characteristic.properties.writeWithoutResponse) {
+          await characteristic.writeValueWithoutResponse(chunk);
+        } else {
+          await characteristic.writeValue(chunk);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      alert('Audit report printed!');
+    } catch (error) {
+      if (error.name !== 'NotFoundError') {
+        console.error('Print error:', error);
+        alert('Print failed: ' + error.message);
+      }
     }
   };
 
@@ -358,6 +491,28 @@ function MonthlyFinanceView({ navigateTo }) {
                     <div style={{ fontSize: '11px', opacity: 0.9 }}>Total Balance</div>
                   </div>
                 </div>
+                {/* Audit Print Button */}
+                <button
+                  onClick={printMonthlyAuditThermal}
+                  style={{
+                    marginTop: '12px',
+                    width: '100%',
+                    padding: '10px',
+                    background: 'rgba(255,255,255,0.2)',
+                    border: '2px solid rgba(255,255,255,0.4)',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  🖨️ Print Audit Report (All Customers)
+                </button>
               </div>
 
               {/* 31-Day Calendar Grid */}
@@ -1128,6 +1283,9 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
   const [loading, setLoading] = useState(false);
   const [processingMonth, setProcessingMonth] = useState(null); // Track which month is being processed
   const isProcessingRef = useRef(false); // Ref for immediate check (faster than state)
+  const [printReceiptData, setPrintReceiptData] = useState(null); // For thermal print receipt
+  const [showSendChoice, setShowSendChoice] = useState(false); // Show WhatsApp/Print choice modal
+  const [pendingPaymentData, setPendingPaymentData] = useState(null); // Store payment data for choice modal
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -1208,28 +1366,26 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
         throw new Error('Failed to record payment');
       }
 
-      // Send WhatsApp receipt if phone number exists
-      if (customer.phone) {
-        const newBalance = customer.balance - customer.monthly_amount;
-        const message = `Payment Receipt - Monthly Finance
-
-Customer: ${customer.name}
-Month ${payment.month} Payment: ₹${customer.monthly_amount.toLocaleString('en-IN')}
-Date: ${new Date().toLocaleDateString('en-IN')}
-Remaining Balance: ₹${newBalance.toLocaleString('en-IN')}
-
-Thank you for your payment!
-
-- Om Sai Murugan Finance`;
-
-        const cleanPhone = customer.phone.replace(/\D/g, '');
-        const phoneWithCountryCode = `91${cleanPhone}`;
-        const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
-      }
+      // Calculate new balance
+      const newBalance = customer.balance - customer.monthly_amount;
 
       // Refresh data
       await onUpdate();
+
+      // Store payment data and show choice modal
+      setPendingPaymentData({
+        customerName: customer.name,
+        phone: customer.phone,
+        loanType: 'Monthly Finance',
+        amountPaid: customer.monthly_amount,
+        loanAmount: customer.loan_amount,
+        totalPaid: customer.loan_amount - newBalance,
+        balance: newBalance,
+        monthlyAmount: customer.monthly_amount,
+        monthNumber: payment.month,
+        date: new Date().toISOString()
+      });
+      setShowSendChoice(true);
 
     } catch (error) {
       console.error('Error recording payment:', error);
@@ -1311,6 +1467,39 @@ Thank you for your payment!
     }
   };
 
+  // Handle WhatsApp send
+  const sendWhatsApp = () => {
+    if (!pendingPaymentData || !pendingPaymentData.phone) return;
+
+    const message = `Payment Receipt - Monthly Finance
+
+Customer: ${pendingPaymentData.customerName}
+Month ${pendingPaymentData.monthNumber} Payment: Rs.${pendingPaymentData.amountPaid.toLocaleString('en-IN')}
+Date: ${new Date().toLocaleDateString('en-IN')}
+Remaining Balance: Rs.${pendingPaymentData.balance.toLocaleString('en-IN')}
+
+Thank you for your payment!
+
+- Om Sai Murugan Finance`;
+
+    const cleanPhone = pendingPaymentData.phone.replace(/\D/g, '');
+    const phoneWithCountryCode = `91${cleanPhone}`;
+    const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Handle choice selection
+  const handleChoiceSelect = (choice) => {
+    if (choice === 'whatsapp' || choice === 'both') {
+      sendWhatsApp();
+    }
+    if (choice === 'print' || choice === 'both') {
+      setPrintReceiptData(pendingPaymentData);
+    }
+    setShowSendChoice(false);
+    setPendingPaymentData(null);
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
       <style>{`
@@ -1319,6 +1508,129 @@ Thank you for your payment!
           100% { transform: rotate(360deg); }
         }
       `}</style>
+
+      {/* WhatsApp/Print Choice Modal */}
+      {showSendChoice && pendingPaymentData && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '320px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              padding: '20px',
+              textAlign: 'center',
+              color: 'white'
+            }}>
+              <div style={{ fontSize: '40px', marginBottom: '8px' }}>✅</div>
+              <div style={{ fontSize: '18px', fontWeight: 700 }}>Payment Recorded!</div>
+              <div style={{ fontSize: '14px', opacity: 0.9, marginTop: '4px' }}>
+                {formatCurrency(pendingPaymentData.amountPaid)} received
+              </div>
+            </div>
+
+            <div style={{ padding: '20px' }}>
+              <div style={{ fontSize: '14px', color: '#6b7280', textAlign: 'center', marginBottom: '16px' }}>
+                How would you like to send receipt?
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <button
+                  onClick={() => handleChoiceSelect('whatsapp')}
+                  style={{
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  📱 WhatsApp Only
+                </button>
+
+                <button
+                  onClick={() => handleChoiceSelect('print')}
+                  style={{
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  🖨️ Thermal Print Only
+                </button>
+
+                <button
+                  onClick={() => handleChoiceSelect('both')}
+                  style={{
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  📱🖨️ Both WhatsApp + Print
+                </button>
+
+                <button
+                  onClick={() => handleChoiceSelect('skip')}
+                  style={{
+                    padding: '12px',
+                    background: '#f3f4f6',
+                    color: '#6b7280',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="navbar" style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' }}>
         <svg
@@ -1538,6 +1850,14 @@ Thank you for your payment!
           </div>
         </div>
       </div>
+
+      {/* Thermal Print Receipt Modal */}
+      {printReceiptData && (
+        <PrintReceipt
+          data={printReceiptData}
+          onClose={() => setPrintReceiptData(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ExcelJS from 'exceljs';
 import { API_URL } from '../config';
 
@@ -6,16 +6,124 @@ import { API_URL } from '../config';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+// Google OAuth Client ID
+const GOOGLE_CLIENT_ID = '169670892813-9dnhci0al56t9sb5qb8e3vcauho8j1oh.apps.googleusercontent.com';
+
 function BackupData({ onClose }) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState('');
   const [stats, setStats] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // Current month by default
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [backupMode, setBackupMode] = useState('select'); // 'select', 'local', 'drive'
+  const [googleUser, setGoogleUser] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
+  const [driveUploadSuccess, setDriveUploadSuccess] = useState(false);
+  const [driveFileLink, setDriveFileLink] = useState(null);
 
-  const fetchAllData = async () => {
+  // Check for saved Google user on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('googleUser');
+    if (savedUser) {
+      setGoogleUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  // Google Sign In
+  const handleGoogleSignIn = () => {
+    if (!window.google) {
+      setProgress('Error: Google API not loaded. Please refresh.');
+      return;
+    }
+
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: (response) => {
+        if (response.access_token) {
+          setAccessToken(response.access_token);
+          // Get user info
+          fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { Authorization: `Bearer ${response.access_token}` }
+          })
+            .then(res => res.json())
+            .then(user => {
+              setGoogleUser(user);
+              localStorage.setItem('googleUser', JSON.stringify(user));
+            });
+        }
+      },
+    });
+    client.requestAccessToken();
+  };
+
+  // Sign out from Google
+  const handleGoogleSignOut = () => {
+    setGoogleUser(null);
+    setAccessToken(null);
+    localStorage.removeItem('googleUser');
+  };
+
+  // Find or create folder in Google Drive
+  const findOrCreateFolder = async (folderName, token) => {
+    // Search for existing folder
+    const searchRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const searchData = await searchRes.json();
+
+    if (searchData.files && searchData.files.length > 0) {
+      return searchData.files[0].id;
+    }
+
+    // Create new folder
+    const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder'
+      })
+    });
+    const folder = await createRes.json();
+    return folder.id;
+  };
+
+  // Upload file to Google Drive
+  const uploadToGoogleDrive = async (fileBlob, fileName, folderId, token) => {
+    const metadata = {
+      name: fileName,
+      parents: [folderId]
+    };
+
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', fileBlob);
+
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form
+    });
+
+    return await res.json();
+  };
+
+  const fetchAllData = async (uploadToDrive = false) => {
     setLoading(true);
     setProgress('Fetching Weekly Finance...');
+
+    // For Google Drive, we need a fresh access token
+    let token = accessToken;
+    if (uploadToDrive && !token) {
+      setProgress('Error: Please connect Google account first');
+      setLoading(false);
+      return;
+    }
 
     try {
       const safeFetch = async (url) => {
@@ -318,21 +426,55 @@ function BackupData({ onClose }) {
         chit: chitCount
       });
 
-      setProgress('Downloading...');
+      const monthName = MONTHS[selectedMonth];
+      const fileName = `${monthName}_${selectedYear}_OmSaiMurugan_Backup.xlsx`;
+      const folderName = `${FULL_MONTHS[selectedMonth]}_${selectedYear}`;
 
-      // Generate and download with month-based filename
+      // Generate Excel buffer
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      // Filename format: Jan_2026_OmSaiMurugan_Backup.xlsx (easy to organize in Google Drive by month)
-      const monthName = MONTHS[selectedMonth];
-      a.download = `${monthName}_${selectedYear}_OmSaiMurugan_Backup.xlsx`;
-      a.click();
-      window.URL.revokeObjectURL(url);
 
-      setProgress('Backup completed!');
+      if (uploadToDrive && token) {
+        // Upload to Google Drive
+        setProgress('Creating folder in Google Drive...');
+
+        try {
+          // First, find or create the month folder
+          const folderId = await findOrCreateFolder(folderName, token);
+
+          setProgress('Uploading backup to Google Drive...');
+          const uploadResult = await uploadToGoogleDrive(blob, fileName, folderId, token);
+
+          if (uploadResult.id) {
+            setDriveFileLink(uploadResult.webViewLink);
+            setDriveUploadSuccess(true);
+            setProgress('Backup uploaded to Google Drive!');
+          } else {
+            throw new Error(uploadResult.error?.message || 'Upload failed');
+          }
+        } catch (driveError) {
+          console.error('Drive upload error:', driveError);
+          setProgress('Drive upload failed: ' + driveError.message);
+          // Fall back to local download
+          setProgress('Falling back to local download...');
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          a.click();
+          window.URL.revokeObjectURL(url);
+        }
+      } else {
+        // Local download
+        setProgress('Downloading...');
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        setProgress('Backup completed!');
+      }
     } catch (error) {
       console.error('Backup error:', error);
       setProgress('Error: ' + error.message);
@@ -396,7 +538,89 @@ function BackupData({ onClose }) {
 
         {/* Content */}
         <div style={{ padding: '20px' }}>
-          {!stats ? (
+          {driveUploadSuccess ? (
+            <>
+              {/* Google Drive Success */}
+              <div style={{
+                background: 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '16px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '50px', marginBottom: '8px' }}>☁️</div>
+                <div style={{ color: 'white', fontSize: '18px', fontWeight: 700 }}>
+                  Uploaded to Google Drive!
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '13px', marginTop: '8px' }}>
+                  Folder: <strong>{FULL_MONTHS[selectedMonth]}_{selectedYear}</strong>
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginTop: '4px' }}>
+                  {MONTHS[selectedMonth]}_{selectedYear}_OmSaiMurugan_Backup.xlsx
+                </div>
+              </div>
+
+              {driveFileLink && (
+                <a
+                  href={driveFileLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #4285f4 0%, #1d4ed8 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    textDecoration: 'none',
+                    marginBottom: '12px'
+                  }}
+                >
+                  📂 Open in Google Drive
+                </a>
+              )}
+
+              <div style={{
+                background: '#374151',
+                borderRadius: '12px',
+                padding: '16px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ color: '#9ca3af', fontSize: '12px', marginBottom: '10px' }}>
+                  Records Exported:
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div style={{ color: 'white', fontSize: '13px' }}>Weekly: <strong>{stats?.weekly || 0}</strong></div>
+                  <div style={{ color: 'white', fontSize: '13px' }}>Monthly: <strong>{stats?.monthly || 0}</strong></div>
+                  <div style={{ color: 'white', fontSize: '13px' }}>Daily: <strong>{stats?.daily || 0}</strong></div>
+                  <div style={{ color: 'white', fontSize: '13px' }}>Vaddi: <strong>{stats?.vaddi || 0}</strong></div>
+                  <div style={{ color: 'white', fontSize: '13px' }}>Chit: <strong>{stats?.chit || 0}</strong></div>
+                </div>
+              </div>
+
+              <button
+                onClick={onClose}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: '#374151',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontSize: '15px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Done
+              </button>
+            </>
+          ) : !stats ? (
             <>
               {/* Month/Year Selector */}
               <div style={{
@@ -406,7 +630,7 @@ function BackupData({ onClose }) {
                 marginBottom: '16px'
               }}>
                 <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginBottom: '10px' }}>
-                  Select Backup Month (for Google Drive organization):
+                  Select Backup Month:
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <select
@@ -458,44 +682,83 @@ function BackupData({ onClose }) {
                 </div>
               </div>
 
+              {/* Google Account Connection */}
               <div style={{
-                background: '#374151',
-                borderRadius: '12px',
-                padding: '16px',
-                marginBottom: '16px'
-              }}>
-                <div style={{ color: '#9ca3af', fontSize: '13px', marginBottom: '12px' }}>
-                  This will export all your data to an Excel file:
-                </div>
-                <ul style={{ color: 'white', fontSize: '13px', margin: 0, paddingLeft: '20px', lineHeight: '1.8' }}>
-                  <li>Weekly Finance customers & loans</li>
-                  <li>Monthly Finance customers</li>
-                  <li>Daily Finance customers & loans</li>
-                  <li>Vaddi (Interest) entries</li>
-                  <li>Chit Fund groups & members</li>
-                </ul>
-              </div>
-
-              {/* Google Drive Tip */}
-              <div style={{
-                background: 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
+                background: accessToken ? 'linear-gradient(135deg, #34a853 0%, #059669 100%)' : 'linear-gradient(135deg, #4285f4 0%, #1d4ed8 100%)',
                 borderRadius: '12px',
                 padding: '14px',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '10px'
+                marginBottom: '16px'
               }}>
-                <span style={{ fontSize: '20px' }}>☁️</span>
-                <div>
-                  <div style={{ color: 'white', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
-                    Google Drive Tip (FREE)
+                {accessToken ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '16px',
+                        fontWeight: 700,
+                        color: '#4285f4'
+                      }}>
+                        {googleUser?.name?.charAt(0) || 'G'}
+                      </div>
+                      <div>
+                        <div style={{ color: 'white', fontSize: '13px', fontWeight: 600 }}>
+                          {googleUser?.name || 'Google Connected'}
+                        </div>
+                        <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px' }}>
+                          {googleUser?.email || 'Ready to backup'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleGoogleSignOut}
+                      style={{
+                        background: 'rgba(255,255,255,0.2)',
+                        border: 'none',
+                        color: 'white',
+                        fontSize: '11px',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Disconnect
+                    </button>
                   </div>
-                  <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '11px', lineHeight: '1.5' }}>
-                    Create folders: <strong>Jan_2026</strong>, <strong>Feb_2026</strong>...
-                    Upload each month's backup to its folder for organized backups!
-                  </div>
-                </div>
+                ) : (
+                  <button
+                    onClick={handleGoogleSignIn}
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: '#4285f4',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px'
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Connect Google Account
+                  </button>
+                )}
               </div>
 
               {progress && (
@@ -513,31 +776,157 @@ function BackupData({ onClose }) {
                 </div>
               )}
 
-              <button
-                onClick={fetchAllData}
-                disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  background: loading ? '#4b5563' : 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: 'white',
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px'
-                }}
-              >
-                {loading ? '⏳ Exporting...' : '📥 Download Backup'}
-              </button>
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {accessToken && (
+                  <button
+                    onClick={() => fetchAllData(true)}
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      background: loading ? '#4b5563' : 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: 'white',
+                      fontSize: '15px',
+                      fontWeight: 700,
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {loading ? '⏳ Uploading...' : '☁️ Backup to Google Drive'}
+                  </button>
+                )}
+
+                <button
+                  onClick={() => fetchAllData(false)}
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    background: loading ? '#4b5563' : 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {loading ? '⏳ Exporting...' : '📥 Download Excel'}
+                </button>
+
+                <button
+                  onClick={async () => {
+                    setLoading(true);
+                    setProgress('Creating JSON backup...');
+                    try {
+                      const safeFetch = async (url) => {
+                        try {
+                          const res = await fetch(url);
+                          if (!res.ok) return [];
+                          return await res.json();
+                        } catch (e) {
+                          console.error(`Failed to fetch ${url}:`, e);
+                          return [];
+                        }
+                      };
+
+                      const weeklyCustomers = await safeFetch(`${API_URL}/customers`);
+                      const monthlyCustomers = await safeFetch(`${API_URL}/monthly-finance/customers`);
+                      const dailyCustomers = await safeFetch(`${API_URL}/daily-customers`);
+                      const vaddiEntries = await safeFetch(`${API_URL}/vaddi-entries`);
+                      const chitGroups = await safeFetch(`${API_URL}/chit-groups`);
+
+                      let allChitMembers = [];
+                      for (const group of chitGroups) {
+                        const members = await safeFetch(`${API_URL}/chit-groups/${group.id}/members`);
+                        allChitMembers.push(...members.map(m => ({ ...m, groupName: group.name })));
+                      }
+
+                      const fullBackup = {
+                        exportDate: new Date().toISOString(),
+                        exportMonth: FULL_MONTHS[selectedMonth],
+                        exportYear: selectedYear,
+                        data: {
+                          weeklyFinance: weeklyCustomers,
+                          monthlyFinance: monthlyCustomers,
+                          dailyFinance: dailyCustomers,
+                          vaddiEntries: vaddiEntries,
+                          chitGroups: chitGroups,
+                          chitMembers: allChitMembers
+                        },
+                        counts: {
+                          weekly: weeklyCustomers.reduce((sum, c) => sum + (c.loans?.length || 0), 0),
+                          monthly: monthlyCustomers.length,
+                          daily: dailyCustomers.reduce((sum, c) => sum + (c.loans?.length || 0), 0),
+                          vaddi: vaddiEntries.length,
+                          chit: allChitMembers.length
+                        }
+                      };
+
+                      const jsonStr = JSON.stringify(fullBackup, null, 2);
+                      const blob = new Blob([jsonStr], { type: 'application/json' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${MONTHS[selectedMonth]}_${selectedYear}_OmSaiMurugan_FULL_Backup.json`;
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                      setProgress('JSON backup downloaded!');
+                    } catch (error) {
+                      console.error('JSON backup error:', error);
+                      setProgress('Error: ' + error.message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    background: loading ? '#4b5563' : 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {loading ? '⏳ Exporting...' : '📋 Download JSON (Full Data)'}
+                </button>
+              </div>
+
+              <div style={{
+                marginTop: '12px',
+                padding: '10px',
+                background: '#374151',
+                borderRadius: '8px',
+                color: '#9ca3af',
+                fontSize: '11px',
+                textAlign: 'center'
+              }}>
+                {accessToken
+                  ? `Drive folder: ${FULL_MONTHS[selectedMonth]}_${selectedYear}`
+                  : 'JSON backup = Complete data for recovery. Excel = Readable reports.'}
+              </div>
             </>
           ) : (
             <>
-              {/* Success Stats */}
+              {/* Local Download Success Stats */}
               <div style={{
                 background: '#065f46',
                 borderRadius: '12px',
@@ -551,27 +940,6 @@ function BackupData({ onClose }) {
                 </div>
                 <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginTop: '6px' }}>
                   {MONTHS[selectedMonth]}_{selectedYear}_OmSaiMurugan_Backup.xlsx
-                </div>
-              </div>
-
-              {/* Google Drive Upload Reminder */}
-              <div style={{
-                background: 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
-                borderRadius: '12px',
-                padding: '14px',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px'
-              }}>
-                <span style={{ fontSize: '24px' }}>☁️</span>
-                <div>
-                  <div style={{ color: 'white', fontSize: '13px', fontWeight: 600 }}>
-                    Upload to Google Drive
-                  </div>
-                  <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '11px' }}>
-                    Folder: <strong>{FULL_MONTHS[selectedMonth]}_{selectedYear}</strong>
-                  </div>
                 </div>
               </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import useSWR from 'swr';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import AddCustomerModal from './AddCustomerModal';
@@ -8,6 +8,7 @@ import SendWishes from './SendWishes';
 import PrintReceipt from './PrintReceipt';
 import PrintReports from './PrintReports';
 import BackupData from './BackupData';
+import GlobalSearch from './GlobalSearch';
 import { jsPDF } from 'jspdf';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
@@ -28,6 +29,7 @@ function Dashboard({ navigateTo }) {
   const [showSendWishes, setShowSendWishes] = useState(false);
   const [showPrintReports, setShowPrintReports] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [weeklyPaymentsData, setWeeklyPaymentsData] = useState({ paidLoans: [], unpaidLoans: [], loading: true });
@@ -46,6 +48,12 @@ function Dashboard({ navigateTo }) {
   const [printData, setPrintData] = useState(null); // For print receipt
   const [quickNote, setQuickNote] = useState(() => localStorage.getItem('dashboardQuickNote') || ''); // Quick Note
   const [showQuickNote, setShowQuickNote] = useState(true); // Show/hide quick note
+  const [noteMode, setNoteMode] = useState('text'); // 'text' or 'draw' for stylus
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [penColor, setPenColor] = useState('#000000');
+  const [penSize, setPenSize] = useState(2);
+  const canvasRef = useRef(null);
+  const contextRef = useRef(null);
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -259,6 +267,104 @@ function Dashboard({ navigateTo }) {
     localStorage.setItem('dashboardQuickNote', note);
   };
 
+  // Canvas drawing functions for stylus support
+  const initializeCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Set canvas size
+    const container = canvas.parentElement;
+    canvas.width = container.offsetWidth - 20;
+    canvas.height = 200;
+
+    const context = canvas.getContext('2d');
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.strokeStyle = penColor;
+    context.lineWidth = penSize;
+    contextRef.current = context;
+
+    // Load saved drawing if exists
+    const savedDrawing = localStorage.getItem('dashboardQuickDrawing');
+    if (savedDrawing) {
+      const img = new Image();
+      img.onload = () => {
+        context.drawImage(img, 0, 0);
+      };
+      img.src = savedDrawing;
+    }
+  }, [penColor, penSize]);
+
+  useEffect(() => {
+    if (noteMode === 'draw' && showQuickNote) {
+      setTimeout(initializeCanvas, 100);
+    }
+  }, [noteMode, showQuickNote, initializeCanvas]);
+
+  const getCanvasCoordinates = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+
+    // Handle both touch and mouse events
+    if (e.touches && e.touches[0]) {
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
+      };
+    }
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  };
+
+  const startDrawing = (e) => {
+    e.preventDefault();
+    const { x, y } = getCanvasCoordinates(e);
+    contextRef.current.beginPath();
+    contextRef.current.moveTo(x, y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const { x, y } = getCanvasCoordinates(e);
+    contextRef.current.lineTo(x, y);
+    contextRef.current.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (isDrawing) {
+      contextRef.current.closePath();
+      setIsDrawing(false);
+      // Save drawing to localStorage
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const dataUrl = canvas.toDataURL();
+        localStorage.setItem('dashboardQuickDrawing', dataUrl);
+      }
+    }
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    localStorage.removeItem('dashboardQuickDrawing');
+  };
+
+  const updatePenSettings = () => {
+    if (contextRef.current) {
+      contextRef.current.strokeStyle = penColor;
+      contextRef.current.lineWidth = penSize;
+    }
+  };
+
+  useEffect(() => {
+    updatePenSettings();
+  }, [penColor, penSize]);
+
   // Toggle selection of unpaid customer for WhatsApp share
   const toggleUnpaidSelection = (loanId) => {
     setSelectedUnpaid(prev => {
@@ -318,6 +424,246 @@ function Dashboard({ navigateTo }) {
 
     const encodedMessage = encodeURIComponent(message);
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
+
+  // ESC/POS Commands for Thermal Printer
+  const ESC = '\x1B';
+  const GS = '\x1D';
+  const THERMAL_COMMANDS = {
+    INIT: ESC + '@',
+    ALIGN_CENTER: ESC + 'a' + '\x01',
+    ALIGN_LEFT: ESC + 'a' + '\x00',
+    BOLD_ON: ESC + 'E' + '\x01',
+    BOLD_OFF: ESC + 'E' + '\x00',
+    DOUBLE_HEIGHT: GS + '!' + '\x10',
+    NORMAL_SIZE: GS + '!' + '\x00',
+    FEED: ESC + 'd' + '\x03',
+    PARTIAL_CUT: GS + 'V' + '\x01',
+    LINE: '--------------------------------\n',
+    DASHED: '- - - - - - - - - - - - - - - -\n'
+  };
+
+  // Print Daily Summary via Thermal Printer
+  const printDailySummaryThermal = async () => {
+    const { paidLoans, unpaidLoans } = weeklyPaymentsData;
+    if (paidLoans.length === 0 && unpaidLoans.length === 0) {
+      alert('No data to print');
+      return;
+    }
+
+    const paidTotal = paidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
+    const unpaidTotal = unpaidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
+    const dateStr = new Date(selectedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    let receipt = THERMAL_COMMANDS.INIT;
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += THERMAL_COMMANDS.DOUBLE_HEIGHT;
+    receipt += 'OM SAI MURUGAN\n';
+    receipt += 'FINANCE\n';
+    receipt += THERMAL_COMMANDS.NORMAL_SIZE;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += '** DAILY COLLECTION **\n';
+    receipt += `** ${dateStr} **\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+
+    // Summary
+    receipt += THERMAL_COMMANDS.ALIGN_LEFT;
+    receipt += `Paid: ${paidLoans.length} | Rs.${paidTotal.toLocaleString('en-IN')}\n`;
+    receipt += `Unpaid: ${unpaidLoans.length} | Rs.${unpaidTotal.toLocaleString('en-IN')}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += `TOTAL: Rs.${(paidTotal + unpaidTotal).toLocaleString('en-IN')}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+
+    // Paid List
+    if (paidLoans.length > 0) {
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += `PAID (${paidLoans.length}):\n`;
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      paidLoans.forEach((item, i) => {
+        receipt += `${i + 1}.${item.customer.name.substring(0, 15)}\n`;
+        receipt += `  Rs.${item.paymentAmount.toLocaleString('en-IN')} Wk${item.weekNumber}\n`;
+      });
+      receipt += THERMAL_COMMANDS.DASHED;
+    }
+
+    // Unpaid List
+    if (unpaidLoans.length > 0) {
+      receipt += THERMAL_COMMANDS.BOLD_ON;
+      receipt += `NOT PAID (${unpaidLoans.length}):\n`;
+      receipt += THERMAL_COMMANDS.BOLD_OFF;
+      unpaidLoans.forEach((item, i) => {
+        receipt += `${i + 1}.${item.customer.name.substring(0, 15)}\n`;
+        receipt += `  Rs.${item.paymentAmount.toLocaleString('en-IN')} Bal:${item.balance.toLocaleString('en-IN')}\n`;
+      });
+      receipt += THERMAL_COMMANDS.DASHED;
+    }
+
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += `Collected: Rs.${paidTotal.toLocaleString('en-IN')}\n`;
+    receipt += 'Ph: 8667510724\n';
+    receipt += THERMAL_COMMANDS.FEED;
+    receipt += THERMAL_COMMANDS.PARTIAL_CUT;
+
+    // Try to print via Bluetooth
+    try {
+      if (!navigator.bluetooth) {
+        alert('Bluetooth not supported. Use the Normal Print option or RawBT app.');
+        return;
+      }
+
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2']
+      });
+
+      const server = await device.gatt.connect();
+      const services = await server.getPrimaryServices();
+      let characteristic = null;
+
+      for (const service of services) {
+        try {
+          const characteristics = await service.getCharacteristics();
+          for (const char of characteristics) {
+            if (char.properties.write || char.properties.writeWithoutResponse) {
+              characteristic = char;
+              break;
+            }
+          }
+          if (characteristic) break;
+        } catch (e) {}
+      }
+
+      if (!characteristic) {
+        alert('Printer not compatible');
+        return;
+      }
+
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(receipt);
+      const chunkSize = 100;
+
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.slice(i, i + chunkSize);
+        if (characteristic.properties.writeWithoutResponse) {
+          await characteristic.writeValueWithoutResponse(chunk);
+        } else {
+          await characteristic.writeValue(chunk);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      alert('Printed successfully!');
+    } catch (error) {
+      console.error('Print error:', error);
+      alert('Print failed: ' + error.message);
+    }
+  };
+
+  // Print Loans Given via Thermal Printer
+  const printLoansGivenThermal = async (loansData, dateStr) => {
+    if (!loansData || loansData.length === 0) {
+      alert('No loans to print');
+      return;
+    }
+
+    const totalGiven = loansData.reduce((sum, loan) => sum + (loan.loan_amount || loan.loanAmount || 0), 0);
+
+    let receipt = THERMAL_COMMANDS.INIT;
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += THERMAL_COMMANDS.DOUBLE_HEIGHT;
+    receipt += 'OM SAI MURUGAN\n';
+    receipt += 'FINANCE\n';
+    receipt += THERMAL_COMMANDS.NORMAL_SIZE;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += '** LOANS GIVEN **\n';
+    receipt += `** ${dateStr} **\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+
+    receipt += THERMAL_COMMANDS.ALIGN_LEFT;
+    receipt += `Total Loans: ${loansData.length}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += `TOTAL: Rs.${totalGiven.toLocaleString('en-IN')}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.DASHED;
+
+    loansData.forEach((item, i) => {
+      const name = item.customerName || item.customer?.name || 'Customer';
+      const amount = item.loan_amount || item.loanAmount || 0;
+      receipt += `${i + 1}.${name.substring(0, 18)}\n`;
+      receipt += `  Rs.${amount.toLocaleString('en-IN')}\n`;
+    });
+
+    receipt += THERMAL_COMMANDS.LINE;
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += `TOTAL: Rs.${totalGiven.toLocaleString('en-IN')}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += 'Ph: 8667510724\n';
+    receipt += THERMAL_COMMANDS.FEED;
+    receipt += THERMAL_COMMANDS.PARTIAL_CUT;
+
+    // Try to print via Bluetooth
+    try {
+      if (!navigator.bluetooth) {
+        alert('Bluetooth not supported. Use the Normal Print option or RawBT app.');
+        return;
+      }
+
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2']
+      });
+
+      const server = await device.gatt.connect();
+      const services = await server.getPrimaryServices();
+      let characteristic = null;
+
+      for (const service of services) {
+        try {
+          const characteristics = await service.getCharacteristics();
+          for (const char of characteristics) {
+            if (char.properties.write || char.properties.writeWithoutResponse) {
+              characteristic = char;
+              break;
+            }
+          }
+          if (characteristic) break;
+        } catch (e) {}
+      }
+
+      if (!characteristic) {
+        alert('Printer not compatible');
+        return;
+      }
+
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(receipt);
+      const chunkSize = 100;
+
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.slice(i, i + chunkSize);
+        if (characteristic.properties.writeWithoutResponse) {
+          await characteristic.writeValueWithoutResponse(chunk);
+        } else {
+          await characteristic.writeValue(chunk);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      alert('Printed successfully!');
+    } catch (error) {
+      console.error('Print error:', error);
+      alert('Print failed: ' + error.message);
+    }
   };
 
   // Quick Pay - record payment with one click
@@ -1203,6 +1549,44 @@ function Dashboard({ navigateTo }) {
         </div>
 
 
+        {/* Global Search Button */}
+        <div
+          onClick={() => setShowGlobalSearch(true)}
+          style={{
+            background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+            padding: '14px 16px',
+            margin: '10px 10px 0 10px',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+            cursor: 'pointer'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '22px' }}>🔍</span>
+            <div>
+              <div style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}>
+                Search All Customers
+              </div>
+              <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px' }}>
+                Weekly • Monthly • Daily • Vaddi • Chit
+              </div>
+            </div>
+          </div>
+          <div style={{
+            background: 'rgba(255,255,255,0.2)',
+            padding: '6px 12px',
+            borderRadius: '6px',
+            color: 'white',
+            fontSize: '11px',
+            fontWeight: 600
+          }}>
+            TAP
+          </div>
+        </div>
+
         {/* Firebase Usage Monitor Quick Link */}
         <div
           onClick={() => window.open('https://console.firebase.google.com/project/financetracker-ba33d/usage', '_blank')}
@@ -1234,7 +1618,7 @@ function Dashboard({ navigateTo }) {
           <span style={{ color: 'white', fontSize: '16px' }}>→</span>
         </div>
 
-        {/* Quick Note Section */}
+        {/* Quick Note Section with Stylus Support */}
         <div style={{
           background: isDarkMode
             ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)'
@@ -1257,7 +1641,7 @@ function Dashboard({ navigateTo }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '16px' }}>📝</span>
               <span style={{ fontWeight: 600, fontSize: '13px', color: '#92400e' }}>Quick Note</span>
-              {quickNote && !showQuickNote && (
+              {(quickNote || localStorage.getItem('dashboardQuickDrawing')) && !showQuickNote && (
                 <span style={{ fontSize: '11px', color: '#b45309', opacity: 0.8 }}>
                   (has content)
                 </span>
@@ -1267,40 +1651,163 @@ function Dashboard({ navigateTo }) {
           </div>
           {showQuickNote && (
             <div style={{ padding: '0 14px 14px 14px' }}>
-              <textarea
-                value={quickNote}
-                onChange={(e) => saveQuickNote(e.target.value)}
-                placeholder="Type your notes here... (auto-saved)"
-                style={{
-                  width: '100%',
-                  minHeight: '80px',
-                  padding: '10px',
-                  borderRadius: '6px',
-                  border: '1px solid #fbbf24',
-                  background: 'white',
-                  fontSize: '13px',
-                  resize: 'vertical',
-                  outline: 'none',
-                  fontFamily: 'inherit'
-                }}
-              />
-              {quickNote && (
+              {/* Mode Toggle - Text or Draw */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
                 <button
-                  onClick={() => saveQuickNote('')}
+                  onClick={() => setNoteMode('text')}
                   style={{
-                    marginTop: '8px',
-                    padding: '6px 12px',
-                    background: '#fee2e2',
-                    color: '#dc2626',
-                    border: 'none',
-                    borderRadius: '4px',
-                    fontSize: '11px',
+                    flex: 1,
+                    padding: '8px',
+                    background: noteMode === 'text' ? '#92400e' : 'white',
+                    color: noteMode === 'text' ? 'white' : '#92400e',
+                    border: '1px solid #92400e',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
                     cursor: 'pointer',
-                    fontWeight: 600
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px'
                   }}
                 >
-                  Clear Note
+                  ⌨️ Type
                 </button>
+                <button
+                  onClick={() => setNoteMode('draw')}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    background: noteMode === 'draw' ? '#92400e' : 'white',
+                    color: noteMode === 'draw' ? 'white' : '#92400e',
+                    border: '1px solid #92400e',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  ✏️ Draw (Stylus)
+                </button>
+              </div>
+
+              {/* Text Mode */}
+              {noteMode === 'text' && (
+                <>
+                  <textarea
+                    value={quickNote}
+                    onChange={(e) => saveQuickNote(e.target.value)}
+                    placeholder="Type your notes here... (auto-saved)"
+                    style={{
+                      width: '100%',
+                      minHeight: '80px',
+                      padding: '10px',
+                      borderRadius: '6px',
+                      border: '1px solid #fbbf24',
+                      background: 'white',
+                      fontSize: '13px',
+                      resize: 'vertical',
+                      outline: 'none',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                  {quickNote && (
+                    <button
+                      onClick={() => saveQuickNote('')}
+                      style={{
+                        marginTop: '8px',
+                        padding: '6px 12px',
+                        background: '#fee2e2',
+                        color: '#dc2626',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                    >
+                      Clear Note
+                    </button>
+                  )}
+                </>
+              )}
+
+              {/* Draw Mode - Canvas for Stylus */}
+              {noteMode === 'draw' && (
+                <>
+                  {/* Pen Settings */}
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '11px', color: '#92400e' }}>Color:</span>
+                      <input
+                        type="color"
+                        value={penColor}
+                        onChange={(e) => setPenColor(e.target.value)}
+                        style={{ width: '30px', height: '24px', border: 'none', cursor: 'pointer' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '11px', color: '#92400e' }}>Size:</span>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={penSize}
+                        onChange={(e) => setPenSize(parseInt(e.target.value))}
+                        style={{ width: '60px' }}
+                      />
+                      <span style={{ fontSize: '10px', color: '#92400e' }}>{penSize}px</span>
+                    </div>
+                    <button
+                      onClick={clearCanvas}
+                      style={{
+                        padding: '4px 10px',
+                        background: '#fee2e2',
+                        color: '#dc2626',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                    >
+                      Clear Drawing
+                    </button>
+                  </div>
+                  {/* Canvas */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '6px',
+                    border: '1px solid #fbbf24',
+                    padding: '10px',
+                    touchAction: 'none'
+                  }}>
+                    <canvas
+                      ref={canvasRef}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        background: '#fffef0',
+                        borderRadius: '4px',
+                        cursor: 'crosshair'
+                      }}
+                    />
+                  </div>
+                  <p style={{ fontSize: '10px', color: '#92400e', marginTop: '6px', textAlign: 'center' }}>
+                    Use your stylus or finger to draw. Auto-saved!
+                  </p>
+                </>
               )}
             </div>
           )}
@@ -1689,6 +2196,31 @@ function Dashboard({ navigateTo }) {
                       <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('totalDue')}</div>
                     </div>
                   </div>
+
+                  {/* Print Daily Summary Button */}
+                  <button
+                    onClick={printDailySummaryThermal}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      marginBottom: '10px',
+                      background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)'
+                    }}
+                  >
+                    🖨️ Print Daily Summary (Thermal)
+                  </button>
+
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
@@ -2255,6 +2787,14 @@ function Dashboard({ navigateTo }) {
         <BackupData onClose={() => setShowBackupModal(false)} />
       )}
 
+      {showGlobalSearch && (
+        <GlobalSearch
+          onClose={() => setShowGlobalSearch(false)}
+          navigateTo={navigateTo}
+          isDarkMode={isDarkMode}
+        />
+      )}
+
       {/* Quick Pay Confirmation Modal */}
       {quickPayConfirm && (
         <div
@@ -2773,6 +3313,21 @@ function Dashboard({ navigateTo }) {
                       }}
                     >
                       🖨️ Print
+                    </button>
+                    <button
+                      onClick={() => printLoansGivenThermal(loansGivenData.loans, new Date(loansGivenDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }))}
+                      style={{
+                        padding: '8px 12px',
+                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      📱 Thermal
                     </button>
                   </>
                 )}
