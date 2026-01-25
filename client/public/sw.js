@@ -1,11 +1,13 @@
 // Service Worker for Om Sai Murugan Finance PWA
-const CACHE_NAME = 'osm-finance-v5';
+const CACHE_NAME = 'osm-finance-v6';
 
 // Files to cache for offline use
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/sai-baba.png',
+  '/murugan.png'
 ];
 
 // Install event - cache static assets

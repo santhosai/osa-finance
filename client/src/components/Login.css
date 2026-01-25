@@ -9,55 +9,12 @@
   overflow: hidden;
 }
 
-/* Flying Butterflies Animation */
-.butterfly {
-  position: absolute;
-  animation: fly 15s infinite ease-in-out;
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-.butterfly1 {
-  left: 10%;
-  top: 20%;
-  animation-delay: 0s;
-  animation-duration: 12s;
-}
-
-.butterfly2 {
-  left: 80%;
-  top: 30%;
-  animation-delay: 3s;
-  animation-duration: 15s;
-}
-
-.butterfly3 {
-  left: 50%;
-  top: 60%;
-  animation-delay: 6s;
-  animation-duration: 18s;
-}
-
-.butterfly4 {
-  left: 20%;
-  top: 70%;
-  animation-delay: 9s;
-  animation-duration: 14s;
-}
-
-@keyframes fly {
-  0%, 100% {
-    transform: translate(0, 0) rotate(0deg) scale(1);
-  }
-  25% {
-    transform: translate(100px, -80px) rotate(15deg) scale(1.1);
-  }
-  50% {
-    transform: translate(-50px, -150px) rotate(-15deg) scale(0.9);
-  }
-  75% {
-    transform: translate(150px, -100px) rotate(20deg) scale(1.05);
-  }
+/* Deity Images Row */
+.deity-images-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
 }
 
 /* Confetti Animation */

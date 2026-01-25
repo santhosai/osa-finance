@@ -153,17 +153,19 @@ function Login({ onLoginSuccess }) {
 
   return (
     <div className="login-container">
-      {/* Flying Butterflies */}
-      <div className="butterfly butterfly1" style={{ fontSize: '40px' }}>🦋</div>
-      <div className="butterfly butterfly2" style={{ fontSize: '35px' }}>🦋</div>
-      <div className="butterfly butterfly3" style={{ fontSize: '45px' }}>🦋</div>
-      <div className="butterfly butterfly4" style={{ fontSize: '38px' }}>🦋</div>
-
       <div className="login-box">
         <div className="company-header">
-          <div className="company-name-container">
-            <div className="company-name">OM SAI MURUGAN</div>
-            <div className="company-type">FINANCE</div>
+          <div className="deity-images-row">
+            <div className="deity-image">
+              <img src="/sai-baba.png" alt="Sai Baba" className="god-image" />
+            </div>
+            <div className="company-name-container">
+              <div className="company-name">OM SAI MURUGAN</div>
+              <div className="company-type">FINANCE</div>
+            </div>
+            <div className="deity-image">
+              <img src="/murugan.png" alt="Lord Murugan" className="god-image" />
+            </div>
           </div>
         </div>
 
