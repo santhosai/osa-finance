@@ -598,7 +598,7 @@ function Dashboard({ navigateTo }) {
     receipt += THERMAL_COMMANDS.DASHED;
 
     loansData.forEach((item, i) => {
-      const name = item.customerName || item.customer?.name || 'Customer';
+      const name = item.customerName || item.customer_name || item.customer?.name || 'Customer';
       const amount = item.loan_amount || item.loanAmount || 0;
       receipt += `${i + 1}.${name.substring(0, 18)}\n`;
       receipt += `  Rs.${amount.toLocaleString('en-IN')}\n`;
