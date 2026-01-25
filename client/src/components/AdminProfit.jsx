@@ -509,7 +509,7 @@ function AdminProfit({ navigateTo }) {
           </div>
         </div>
 
-        {/* Vaddi Profit */}
+        {/* Interest Profit */}
         <div style={{
           background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
           borderRadius: '12px',
@@ -518,7 +518,7 @@ function AdminProfit({ navigateTo }) {
           color: 'white'
         }}>
           <div style={{ fontSize: '13px', fontWeight: 700 }}>
-            📝 Vaddi Profit (Total All Time)
+            💵 Interest Profit (Total All Time)
           </div>
           <div style={{
             textAlign: 'center',
@@ -531,7 +531,7 @@ function AdminProfit({ navigateTo }) {
               {formatCurrency(totals.vaddi.profit)}
             </div>
             <div style={{ fontSize: '11px', opacity: 0.9, marginTop: '4px' }}>
-              My Profit from Vaddi
+              My Profit from Interest Loans
             </div>
           </div>
         </div>
@@ -554,7 +554,7 @@ function AdminProfit({ navigateTo }) {
                   <th style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>Weekly</th>
                   <th style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>Daily</th>
                   <th style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>Monthly</th>
-                  <th style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>Vaddi</th>
+                  <th style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>Interest</th>
                   <th style={{ padding: '10px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>Total</th>
                 </tr>
               </thead>
@@ -595,7 +595,7 @@ function AdminProfit({ navigateTo }) {
           textAlign: 'center',
           opacity: 0.8
         }}>
-          💡 Weekly & Daily: 10% profit margin | Monthly: 20% profit margin | Vaddi: Your manual "My Profit" entries
+          💡 Weekly & Daily: 10% profit margin | Monthly: 20% profit margin | Interest: Your manual "My Profit" entries
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import PrintReceipt from './PrintReceipt';
 import PrintReports from './PrintReports';
 import BackupData from './BackupData';
 import GlobalSearch from './GlobalSearch';
+import AllPaymentsDueModal from './AllPaymentsDueModal';
 import { jsPDF } from 'jspdf';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
@@ -30,6 +31,7 @@ function Dashboard({ navigateTo }) {
   const [showPrintReports, setShowPrintReports] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [showAllPaymentsDue, setShowAllPaymentsDue] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [weeklyPaymentsData, setWeeklyPaymentsData] = useState({ paidLoans: [], unpaidLoans: [], loading: true });
@@ -917,6 +919,24 @@ function Dashboard({ navigateTo }) {
           </button>
 
           <button
+            onClick={() => { setShowSidebar(false); setShowAllPaymentsDue(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s'
+            }}
+          >
+            📋 {t('allPaymentsDue')}
+          </button>
+
+          <button
             onClick={() => { setShowSidebar(false); navigateTo('sunday-collections'); }}
             style={{
               width: '100%',
@@ -1013,7 +1033,7 @@ function Dashboard({ navigateTo }) {
             onMouseOver={(e) => e.target.style.background = '#334155'}
             onMouseOut={(e) => e.target.style.background = 'transparent'}
           >
-            📝 {t('vaddiList')}
+            💵 {t('interestLoans')}
           </button>
 
           <button
@@ -1571,7 +1591,7 @@ function Dashboard({ navigateTo }) {
                 Search All Customers
               </div>
               <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px' }}>
-                Weekly • Monthly • Daily • Vaddi • Chit
+                Weekly • Monthly • Daily • Interest • Chit
               </div>
             </div>
           </div>
@@ -1877,7 +1897,7 @@ function Dashboard({ navigateTo }) {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <div style={{ fontSize: '13px', fontWeight: 700, opacity: 0.95 }}>
-                💰 Vaddi - {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                💰 Interest - {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
               </div>
               <span style={{ fontSize: '10px', opacity: 0.8 }}>Tap to view →</span>
             </div>
@@ -2671,7 +2691,7 @@ function Dashboard({ navigateTo }) {
                         data={[
                           { name: language === 'ta' ? 'வாராந்திர' : 'Weekly', value: stats?.total_loan_amount || 0 },
                           { name: language === 'ta' ? 'தினசரி' : 'Daily', value: dailySummary?.total_given || 0 },
-                          { name: language === 'ta' ? 'வட்டி' : 'Vaddi', value: vaddiSummary?.totalAmount || 0 }
+                          { name: language === 'ta' ? 'வட்டி' : 'Interest', value: vaddiSummary?.totalAmount || 0 }
                         ]}
                         cx="50%"
                         cy="50%"
@@ -3474,6 +3494,14 @@ function Dashboard({ navigateTo }) {
           type={printData.type}
           data={printData.data}
           onClose={() => setPrintData(null)}
+        />
+      )}
+
+      {/* All Payments Due Modal */}
+      {showAllPaymentsDue && (
+        <AllPaymentsDueModal
+          onClose={() => setShowAllPaymentsDue(false)}
+          navigateTo={navigateTo}
         />
       )}
     </div>

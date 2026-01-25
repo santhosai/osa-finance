@@ -649,7 +649,7 @@ const VaddiList = ({ navigateTo }) => {
   const sendWhatsAppVaddi = () => {
     if (!pendingPaymentData || !pendingPaymentData.phone) return;
 
-    const message = `Payment Receipt - Vaddi Interest
+    const message = `Payment Receipt - Interest Loan
 
 Customer: ${pendingPaymentData.customerName}
 Month: ${pendingPaymentData.interestMonth}
@@ -803,7 +803,7 @@ Thank you for your payment!
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      alert('Vaddi audit report printed!');
+      alert('Interest audit report printed!');
     } catch (error) {
       if (error.name !== 'NotFoundError') {
         console.error('Print error:', error);
@@ -825,7 +825,7 @@ Thank you for your payment!
     doc.setFont('helvetica', 'bold');
     doc.text('OM SAI MURUGAN FINANCE', 105, 15, { align: 'center' });
     doc.setFontSize(14);
-    doc.text(`Vaddi Report - ${monthName}`, 105, 27, { align: 'center' });
+    doc.text(`Interest Report - ${monthName}`, 105, 27, { align: 'center' });
 
     // Summary Box
     doc.setTextColor(0, 0, 0);
@@ -916,7 +916,7 @@ Thank you for your payment!
     }
 
     // Save the PDF
-    doc.save(`Vaddi_Report_${selectedMonth}.pdf`);
+    doc.save(`Interest_Report_${selectedMonth}.pdf`);
   };
 
   if (isLoading) {
@@ -1092,7 +1092,7 @@ Thank you for your payment!
             ←
           </button>
           <h2 style={{ margin: 0, color: 'white', fontSize: '20px', fontWeight: 700 }}>
-            Vaddi List
+            Interest Loans
           </h2>
         </div>
       </div>
@@ -1566,7 +1566,7 @@ Thank you for your payment!
             color: 'white'
           }}>
             <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>
-              📜 Vaddi Payment History
+              📜 Interest Payment History
             </div>
             <div style={{ fontSize: '13px', opacity: 0.9 }}>
               View all past months' collections and profit sharing
