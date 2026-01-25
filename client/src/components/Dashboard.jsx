@@ -2397,6 +2397,46 @@ function Dashboard({ navigateTo }) {
                               </button>
                             )}
 
+                            {/* Print Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPrintData({
+                                  type: 'payment',
+                                  data: {
+                                    customerName: customer.name,
+                                    phone: customer.phone,
+                                    loanName: loan.loan_name,
+                                    loanAmount: loan.loan_amount,
+                                    amountPaid: paymentAmount,
+                                    totalPaid: loan.loan_amount - balance,
+                                    balance: balance,
+                                    weekNumber: weekNumber,
+                                    date: selectedDate,
+                                    loanType: 'Weekly'
+                                  }
+                                });
+                              }}
+                              style={{
+                                background: '#ede9fe',
+                                border: '1px solid #c4b5fd',
+                                borderRadius: '4px',
+                                padding: '4px 6px',
+                                cursor: 'pointer',
+                                fontSize: '9px',
+                                color: '#7c3aed',
+                                fontWeight: 600,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '1px'
+                              }}
+                              title="Print receipt"
+                            >
+                              🖨️
+                              <span>Print</span>
+                            </button>
+
                             {/* Undo Button */}
                             <button
                               onClick={(e) => {
