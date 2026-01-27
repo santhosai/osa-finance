@@ -2844,16 +2844,31 @@ function Dashboard({ navigateTo }) {
               const unpaidMonthlyCustomers = [];
 
               activeMonthlyCustomers.forEach(customer => {
-                // Check if payment was made this month
-                const lastPaymentDate = customer.last_payment_date ? new Date(customer.last_payment_date) : null;
-                const hasPaidThisMonth = lastPaymentDate &&
-                  lastPaymentDate.getMonth() === currentMonth &&
-                  lastPaymentDate.getFullYear() === currentYear;
+                // Calculate how many months have been paid
+                const totalPaid = customer.loan_amount - customer.balance;
+                const monthsPaid = Math.floor(totalPaid / customer.monthly_amount);
 
-                if (hasPaidThisMonth) {
-                  paidMonthlyCustomers.push(customer);
-                } else {
-                  unpaidMonthlyCustomers.push(customer);
+                // Calculate next payment due date (first payment is 1 month after start_date)
+                const startDate = new Date(customer.start_date);
+                const nextPaymentDue = new Date(startDate);
+                nextPaymentDue.setMonth(startDate.getMonth() + monthsPaid + 1);
+
+                const paymentDueMonth = nextPaymentDue.getMonth();
+                const paymentDueYear = nextPaymentDue.getFullYear();
+
+                // Only include if payment is due in current month
+                if (paymentDueMonth === currentMonth && paymentDueYear === currentYear) {
+                  // Check if payment was made this month
+                  const lastPaymentDate = customer.last_payment_date ? new Date(customer.last_payment_date) : null;
+                  const hasPaidThisMonth = lastPaymentDate &&
+                    lastPaymentDate.getMonth() === currentMonth &&
+                    lastPaymentDate.getFullYear() === currentYear;
+
+                  if (hasPaidThisMonth) {
+                    paidMonthlyCustomers.push(customer);
+                  } else {
+                    unpaidMonthlyCustomers.push(customer);
+                  }
                 }
               });
 

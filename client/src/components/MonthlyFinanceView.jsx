@@ -1297,6 +1297,7 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
   };
 
   // Generate payment schedule based on start date and total months
+  // First payment is 1 month after start_date
   const generatePaymentSchedule = () => {
     const schedule = [];
     const startDate = new Date(customer.start_date);
@@ -1304,7 +1305,7 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
 
     for (let i = 0; i < customer.total_months; i++) {
       const paymentDate = new Date(startDate);
-      paymentDate.setMonth(startDate.getMonth() + i);
+      paymentDate.setMonth(startDate.getMonth() + i + 1); // +1 so first payment is 1 month after start_date
 
       // Check if this month's payment has been made based on balance
       const totalPaid = customer.loan_amount - customer.balance;
