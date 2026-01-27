@@ -5,11 +5,11 @@ import db from './firestore.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ⚡ DEPLOYMENT v4.0.0 - Jan 20, 2025 - UNIFIED LOAN SYSTEM (Weekly + Monthly)
+// ⚡ DEPLOYMENT v4.0.1 - Jan 27, 2025 - UNIFIED LOAN SYSTEM (Weekly + Monthly + Edit)
 // CONFIRMED: NO phone uniqueness check - Duplicate phones ARE ALLOWED
 // Using Firestore (NOT SQLite) - NO UNIQUE constraint on phone field
 // NEW: Supports both Weekly (10 weeks) and Monthly (5 months) loan types
-const VERSION = '4.0.0';
+const VERSION = '4.0.1';
 console.log(`🚀 Backend v${VERSION} - UNIFIED LOAN SYSTEM (Weekly + Monthly)`);
 
 // CORS configuration for production
