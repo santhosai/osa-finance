@@ -34,6 +34,7 @@ function Dashboard({ navigateTo }) {
   const [showAllPaymentsDue, setShowAllPaymentsDue] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMonthlyFinanceMonth, setSelectedMonthlyFinanceMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
   const [weeklyPaymentsData, setWeeklyPaymentsData] = useState({ paidLoans: [], unpaidLoans: [], loading: true });
   const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0); // To trigger re-fetch
   const [searchTerm, setSearchTerm] = useState('');
@@ -2810,16 +2811,31 @@ function Dashboard({ navigateTo }) {
                 fontWeight: 700,
                 color: '#1e293b'
               }}>
-                📅 {t('monthlyFinance')} - {new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                📅 {t('monthlyFinance')}
               </h3>
+              <input
+                type="month"
+                value={selectedMonthlyFinanceMonth}
+                onChange={(e) => setSelectedMonthlyFinanceMonth(e.target.value)}
+                style={{
+                  padding: '6px 10px',
+                  border: '2px solid #7c3aed',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#1e293b',
+                  background: 'white',
+                  cursor: 'pointer'
+                }}
+              />
             </div>
 
             {(() => {
-              // Calculate which customers have paid/not paid for the current month
-              const now = new Date();
-              const currentMonth = now.getMonth();
-              const currentYear = now.getFullYear();
-              const currentDay = now.getDate();
+              // Calculate which customers have paid/not paid for the selected month
+              const selectedDate = new Date(selectedMonthlyFinanceMonth + '-01');
+              const currentMonth = selectedDate.getMonth();
+              const currentYear = selectedDate.getFullYear();
+              const currentDay = new Date().getDate();
 
               // Filter active monthly customers
               const activeMonthlyCustomers = (monthlyCustomers || []).filter(c =>
