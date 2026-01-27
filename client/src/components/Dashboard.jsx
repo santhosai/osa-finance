@@ -2864,23 +2864,31 @@ function Dashboard({ navigateTo }) {
                 const totalPaid = customer.loan_amount - customer.balance;
                 const monthsPaid = Math.floor(totalPaid / customer.monthly_amount);
 
-                // Calculate next payment due date (first payment is 1 month after start_date)
+                // Generate payment schedule to find which payment number is due in the selected month
                 const startDate = new Date(customer.start_date);
-                const nextPaymentDue = new Date(startDate);
-                nextPaymentDue.setMonth(startDate.getMonth() + monthsPaid + 1);
+                let foundPaymentInMonth = false;
+                let isPaidForThisMonth = false;
 
-                const paymentDueMonth = nextPaymentDue.getMonth();
-                const paymentDueYear = nextPaymentDue.getFullYear();
+                // Check all possible payment numbers (1 to total_months)
+                for (let paymentNum = 0; paymentNum < customer.total_months; paymentNum++) {
+                  const paymentDueDate = new Date(startDate);
+                  paymentDueDate.setMonth(startDate.getMonth() + paymentNum + 1); // +1 for first payment 1 month after start
 
-                // Only include if payment is due in current month
-                if (paymentDueMonth === currentMonth && paymentDueYear === currentYear) {
-                  // Check if payment was made this month
-                  const lastPaymentDate = customer.last_payment_date ? new Date(customer.last_payment_date) : null;
-                  const hasPaidThisMonth = lastPaymentDate &&
-                    lastPaymentDate.getMonth() === currentMonth &&
-                    lastPaymentDate.getFullYear() === currentYear;
+                  const paymentMonth = paymentDueDate.getMonth();
+                  const paymentYear = paymentDueDate.getFullYear();
 
-                  if (hasPaidThisMonth) {
+                  // Check if this payment is due in the selected viewing month
+                  if (paymentMonth === currentMonth && paymentYear === currentYear) {
+                    foundPaymentInMonth = true;
+                    // Check if this payment has been made (paymentNum is 0-indexed, so payment 1 = index 0)
+                    isPaidForThisMonth = monthsPaid > paymentNum;
+                    break;
+                  }
+                }
+
+                // Only include customers who have a payment due in the selected month
+                if (foundPaymentInMonth) {
+                  if (isPaidForThisMonth) {
                     paidMonthlyCustomers.push(customer);
                   } else {
                     unpaidMonthlyCustomers.push(customer);
