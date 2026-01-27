@@ -1286,6 +1286,7 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
   const [printReceiptData, setPrintReceiptData] = useState(null); // For thermal print receipt
   const [showSendChoice, setShowSendChoice] = useState(false); // Show WhatsApp/Print choice modal
   const [pendingPaymentData, setPendingPaymentData] = useState(null); // Store payment data for choice modal
+  const [showEditModal, setShowEditModal] = useState(false); // Show edit modal
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -1656,12 +1657,54 @@ Thank you for your payment!
           marginBottom: '20px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
         }}>
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ fontSize: '24px', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
-              {customer.name}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
+            <div>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
+                {customer.name}
+              </div>
+              <div style={{ fontSize: '16px', color: '#64748b' }}>
+                📱 {customer.phone}
+              </div>
             </div>
-            <div style={{ fontSize: '16px', color: '#64748b' }}>
-              📱 {customer.phone}
+            <button
+              onClick={() => setShowEditModal(true)}
+              disabled={loading}
+              style={{
+                padding: '8px 16px',
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              ✏️ Edit
+            </button>
+          </div>
+
+          {/* Loan Dates Info */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '12px',
+            marginBottom: '16px',
+            padding: '12px',
+            background: '#f0f9ff',
+            borderRadius: '8px',
+            border: '1px solid #bfdbfe'
+          }}>
+            <div>
+              <div style={{ fontSize: '11px', color: '#0369a1', fontWeight: 600, marginBottom: '4px' }}>💰 Loan Given Date</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{formatDate(customer.loan_given_date)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '11px', color: '#0369a1', fontWeight: 600, marginBottom: '4px' }}>📅 Payment Start Date</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{formatDate(customer.start_date)}</div>
             </div>
           </div>
 
@@ -1859,6 +1902,360 @@ Thank you for your payment!
           onClose={() => setPrintReceiptData(null)}
         />
       )}
+
+      {/* Edit Customer Modal */}
+      {showEditModal && (
+        <EditMonthlyCustomerModal
+          customer={customer}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            setShowEditModal(false);
+            onUpdate();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Modal component for editing Monthly Finance customers
+function EditMonthlyCustomerModal({ customer, onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [formData, setFormData] = useState({
+    name: customer.name || '',
+    phone: customer.phone || '',
+    loanAmount: customer.loan_amount?.toString() || '',
+    totalMonths: customer.total_months || 5,
+    startDate: customer.start_date || new Date().toISOString().split('T')[0],
+    loanGivenDate: customer.loan_given_date || customer.start_date || new Date().toISOString().split('T')[0]
+  });
+
+  const monthlyInstallment = formData.loanAmount && formData.totalMonths > 0
+    ? Math.round(parseFloat(formData.loanAmount) / formData.totalMonths)
+    : 0;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (loading) return;
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/monthly-finance/customers/${customer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone,
+          loan_amount: parseFloat(formData.loanAmount),
+          monthly_amount: monthlyInstallment,
+          total_months: formData.totalMonths,
+          start_date: formData.startDate,
+          loan_given_date: formData.loanGivenDate
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update customer');
+      }
+
+      onSuccess();
+    } catch (err) {
+      console.error('Error updating customer:', err);
+      setError(err.message || 'Failed to update customer');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '20px'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        padding: '24px',
+        maxWidth: '500px',
+        width: '100%',
+        maxHeight: '90vh',
+        overflowY: 'auto'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px'
+        }}>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>
+            ✏️ Edit Monthly Finance Customer
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              color: '#6b7280'
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        {error && (
+          <div style={{
+            background: '#fef2f2',
+            border: '1px solid #fca5a5',
+            color: '#991b1b',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            fontSize: '14px'
+          }}>
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Customer Name *
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Phone Number *
+            </label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              required
+              pattern="[0-9]{10}"
+              maxLength="10"
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Loan Amount (₹) *
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={formData.loanAmount}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setFormData({ ...formData, loanAmount: value });
+              }}
+              autoComplete="off"
+              required
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Total Months *
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={formData.totalMonths}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setFormData({ ...formData, totalMonths: parseInt(value) || 5 });
+              }}
+              autoComplete="off"
+              required
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{
+            background: '#f0f9ff',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            border: '1px solid #bfdbfe'
+          }}>
+            <div style={{ fontSize: '12px', color: '#1e40af', marginBottom: '4px' }}>
+              Monthly Installment (Auto-calculated)
+            </div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#1e3a8a' }}>
+              ₹{monthlyInstallment.toLocaleString('en-IN')}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Loan Given Date * (When money was given)
+            </label>
+            <input
+              type="date"
+              value={formData.loanGivenDate}
+              onChange={(e) => setFormData({ ...formData, loanGivenDate: e.target.value })}
+              required
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Payment Start Date * (When EMI starts)
+            </label>
+            <input
+              type="date"
+              value={formData.startDate}
+              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              required
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                flex: 1,
+                padding: '12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                background: 'white',
+                color: '#374151',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                flex: 1,
+                padding: '12px',
+                border: 'none',
+                borderRadius: '8px',
+                background: loading ? '#9ca3af' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {loading ? 'Updating...' : 'Update Customer'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

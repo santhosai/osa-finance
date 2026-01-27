@@ -1021,6 +1021,50 @@ app.post('/api/monthly-finance/customers', async (req, res) => {
   }
 });
 
+// Update Monthly Finance customer
+app.put('/api/monthly-finance/customers/:id', async (req, res) => {
+  try {
+    console.log('🎯 UPDATE MONTHLY FINANCE CUSTOMER:', req.params.id, req.body);
+    const { name, phone, loan_amount, monthly_amount, total_months, start_date, loan_given_date } = req.body;
+
+    if (!name || !phone || !loan_amount || !monthly_amount || !total_months || !start_date) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    const customerDoc = await db.collection('monthly_finance_customers').doc(req.params.id).get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const oldData = customerDoc.data();
+
+    // Calculate new balance based on payments made
+    const totalPaid = oldData.loan_amount - oldData.balance;
+    const newBalance = loan_amount - totalPaid;
+
+    const updatedData = {
+      name,
+      phone,
+      loan_amount: parseFloat(loan_amount),
+      monthly_amount: parseFloat(monthly_amount),
+      total_months: parseInt(total_months),
+      start_date,
+      loan_given_date: loan_given_date || start_date,
+      balance: newBalance >= 0 ? newBalance : 0,
+      updated_at: new Date().toISOString()
+    };
+
+    await db.collection('monthly_finance_customers').doc(req.params.id).update(updatedData);
+
+    const updatedDoc = await db.collection('monthly_finance_customers').doc(req.params.id).get();
+    console.log('✅ Monthly Finance customer updated successfully:', req.params.id);
+    res.json({ id: updatedDoc.id, ...updatedDoc.data() });
+  } catch (error) {
+    console.error('❌ Error updating Monthly Finance customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Add payment to Monthly Finance customer
 app.post('/api/monthly-finance/customers/:id/payments', async (req, res) => {
   try {
