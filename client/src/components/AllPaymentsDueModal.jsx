@@ -16,8 +16,14 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
   const fetchDuePayments = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/customers`);
-      const customers = await response.json();
+      // Fetch both regular customers and monthly finance customers in parallel
+      const [customersResponse, monthlyCustomersResponse] = await Promise.all([
+        fetch(`${API_URL}/customers`),
+        fetch(`${API_URL}/monthly-finance/customers`)
+      ]);
+
+      const customers = await customersResponse.json();
+      const monthlyCustomers = await monthlyCustomersResponse.json();
 
       const weekly = [];
       const monthly = [];
@@ -28,6 +34,7 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
       const dayOfWeek = selectedDay.getDay(); // 0 = Sunday
       const dayOfMonth = selectedDay.getDate();
 
+      // Process regular loans (Weekly, Daily, Vaddi)
       for (const customer of customers) {
         if (!customer.loans || customer.loans.length === 0) continue;
 
@@ -35,64 +42,72 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
           // Skip closed/archived loans
           if (loan.balance <= 0 || loan.status === 'closed') continue;
 
-          try {
-            // Fetch full loan details to check payments
-            const loanResponse = await fetch(`${API_URL}/loans/${loan.loan_id}`);
-            const loanData = await loanResponse.json();
+          const loanInfo = {
+            customerId: customer.id,
+            customerName: customer.name,
+            customerPhone: customer.phone,
+            loanId: loan.loan_id,
+            loanName: loan.loan_name || 'General Loan',
+            loanAmount: loan.loan_amount,
+            balance: loan.balance,
+            weeklyAmount: loan.weekly_amount,
+            monthlyAmount: loan.monthly_amount,
+            dailyAmount: loan.daily_amount,
+            alreadyPaid: false,
+            paidAmount: 0
+          };
 
-            // Check if payment already made on selected date
-            const alreadyPaid = loanData.payments?.some(p =>
-              p.payment_date?.split('T')[0] === selectedDate
-            );
-
-            const loanInfo = {
-              customerId: customer.id,
-              customerName: customer.name,
-              customerPhone: customer.phone,
-              loanId: loan.loan_id,
-              loanName: loan.loan_name || 'General Loan',
-              loanAmount: loan.loan_amount,
-              balance: loan.balance,
-              weeklyAmount: loan.weekly_amount,
-              monthlyAmount: loan.monthly_amount,
-              dailyAmount: loan.daily_amount,
-              alreadyPaid,
-              paidAmount: alreadyPaid ? loanData.payments.find(p => p.payment_date?.split('T')[0] === selectedDate)?.amount : 0
-            };
-
-            // Weekly loans - due on Sundays
-            if (loan.loan_type === 'Weekly' && dayOfWeek === 0 && loan.balance > 0) {
-              weekly.push(loanInfo);
-            }
-
-            // Monthly loans - check payment_day
-            if (loan.loan_type === 'Monthly' && loan.balance > 0) {
-              const paymentDay = loan.payment_day || 1;
-              if (dayOfMonth === paymentDay) {
-                monthly.push(loanInfo);
-              }
-            }
-
-            // Daily loans - due every day
-            if (loan.loan_type === 'Daily' && loan.balance > 0) {
-              daily.push(loanInfo);
-            }
-
-            // Interest/Vaddi loans - monthly interest payments (typically on specific day)
-            if (loan.loan_type === 'Vaddi') {
-              // Check if interest is due (first day of month or custom day)
-              const interestDay = loan.interest_day || 1;
-              if (dayOfMonth === interestDay) {
-                interest.push({
-                  ...loanInfo,
-                  interestRate: loan.interest_rate || 0,
-                  monthlyInterest: (loan.loan_amount * (loan.interest_rate || 0)) / 100
-                });
-              }
-            }
-          } catch (error) {
-            console.error('Error fetching loan details:', error);
+          // Weekly loans - due on Sundays
+          if (loan.loan_type === 'Weekly' && dayOfWeek === 0 && loan.balance > 0) {
+            weekly.push(loanInfo);
           }
+
+          // Daily loans - due every day
+          if (loan.loan_type === 'Daily' && loan.balance > 0) {
+            daily.push(loanInfo);
+          }
+
+          // Interest/Vaddi loans - check interest payment date
+          if (loan.loan_type === 'Vaddi' && loan.balance > 0) {
+            // Calculate monthly interest and check if payment is due
+            const loanStartDate = new Date(loan.start_date);
+            const loanStartDay = loanStartDate.getDate();
+
+            // Interest is due on the same day each month as the start date
+            if (dayOfMonth === loanStartDay) {
+              interest.push({
+                ...loanInfo,
+                interestRate: loan.interest_rate || 0,
+                monthlyInterest: (loan.loan_amount * (loan.interest_rate || 0)) / 100
+              });
+            }
+          }
+        }
+      }
+
+      // Process Monthly Finance customers
+      for (const customer of monthlyCustomers) {
+        // Skip if no balance
+        if (customer.balance <= 0) continue;
+
+        // Get payment day from start_date
+        const startDate = new Date(customer.start_date);
+        const paymentDay = startDate.getDate();
+
+        // Check if this date matches the payment day
+        if (dayOfMonth === paymentDay) {
+          monthly.push({
+            customerId: customer.id,
+            customerName: customer.name,
+            customerPhone: customer.phone,
+            loanId: customer.id, // Use customer ID as loan ID for navigation
+            loanName: 'Monthly Finance',
+            loanAmount: customer.loan_amount,
+            balance: customer.balance,
+            monthlyAmount: customer.monthly_amount,
+            alreadyPaid: false,
+            paidAmount: 0
+          });
         }
       }
 
@@ -636,7 +651,12 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
       key={loan.loanId}
       onClick={() => {
         onClose();
-        navigateTo(`loan/${loan.loanId}`);
+        // Navigate to appropriate page based on type
+        if (type === 'monthly') {
+          navigateTo('monthly-finance');
+        } else {
+          navigateTo(`loan/${loan.loanId}`);
+        }
       }}
       style={{
         background: loan.alreadyPaid ? '#dcfce7' : 'white',
