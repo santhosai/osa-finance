@@ -10,6 +10,8 @@ import PrintReports from './PrintReports';
 import BackupData from './BackupData';
 import GlobalSearch from './GlobalSearch';
 import AllPaymentsDueModal from './AllPaymentsDueModal';
+import PaymentReminders from './PaymentReminders';
+import BulkWhatsApp from './BulkWhatsApp';
 import { jsPDF } from 'jspdf';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
@@ -32,6 +34,8 @@ function Dashboard({ navigateTo }) {
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [showAllPaymentsDue, setShowAllPaymentsDue] = useState(false);
+  const [showPaymentReminders, setShowPaymentReminders] = useState(false);
+  const [showBulkWhatsApp, setShowBulkWhatsApp] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMonthlyFinanceMonth, setSelectedMonthlyFinanceMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
@@ -1519,6 +1523,50 @@ function Dashboard({ navigateTo }) {
             onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)'}
           >
             🖨️ Print Reports
+          </button>
+
+          {/* Payment Reminders */}
+          <button
+            onClick={() => { setShowSidebar(false); setShowPaymentReminders(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'}
+          >
+            🔔 Payment Reminders
+          </button>
+
+          {/* Bulk WhatsApp */}
+          <button
+            onClick={() => { setShowSidebar(false); setShowBulkWhatsApp(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)'}
+          >
+            📱 Bulk Messages
           </button>
 
           {/* Dark Mode Toggle */}
@@ -3532,6 +3580,14 @@ function Dashboard({ navigateTo }) {
 
       {showBackupModal && (
         <BackupData onClose={() => setShowBackupModal(false)} />
+      )}
+
+      {showPaymentReminders && (
+        <PaymentReminders onClose={() => setShowPaymentReminders(false)} />
+      )}
+
+      {showBulkWhatsApp && (
+        <BulkWhatsApp onClose={() => setShowBulkWhatsApp(false)} />
       )}
 
       {showGlobalSearch && (

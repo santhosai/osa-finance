@@ -20,6 +20,7 @@ import AdminProfit from './components/AdminProfit';
 import UserCollections from './components/UserCollections';
 import AdminCollections from './components/AdminCollections';
 import ChitDashboard from './components/ChitDashboard';
+import BalanceCheck from './components/BalanceCheck';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -126,7 +127,8 @@ function ChitDashboardWrapper() {
 }
 
 
-function App() {
+// Main app component wrapper
+function AppContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     // Check localStorage for existing login session
     const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
@@ -223,6 +225,21 @@ function App() {
 
   // Fallback (should never reach here)
   return null;
+}
+
+// Main App component with public routes
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public route - no authentication required */}
+        <Route path="/balance-check" element={<BalanceCheck />} />
+
+        {/* All other routes require authentication */}
+        <Route path="/*" element={<AppContent />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;

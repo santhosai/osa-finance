@@ -31,7 +31,8 @@
       "Bash(__NEW_LINE__ curl -s -X POST \"$API\" -H \"Content-Type: application/json\" -d \"{\"\"chit_group_id\"\":\"\"$CHIT_ID\"\",\"\"name\"\":\"\"Revathi\"\",\"\"member_number\"\":11}\")",
       "Bash(vercel:*)",
       "Bash(git push:*)",
-      "Bash(pushd:*)"
+      "Bash(pushd:*)",
+      "Bash(ren:*)"
     ],
     "deny": [],
     "ask": []
