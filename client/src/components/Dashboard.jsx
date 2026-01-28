@@ -3125,11 +3125,16 @@ function Dashboard({ navigateTo }) {
                                 e.currentTarget.parentElement.style.boxShadow = 'none';
                               }}
                             >
-                              <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
-                                {customer.customer_name || customer.name}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46' }}>
+                                  {customer.customer_name || customer.name}
+                                </div>
+                                <div style={{ fontWeight: 700, fontSize: '11px', color: '#047857', background: 'rgba(255,255,255,0.6)', padding: '2px 6px', borderRadius: '4px' }}>
+                                  DATE {customer.payment_day || '-'}
+                                </div>
                               </div>
                               <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
-                                Day {customer.payment_day || '-'} • {formatCurrency(customer.monthly_amount || 0)}
+                                {formatCurrency(customer.monthly_amount || 0)}
                               </div>
                               <div style={{ fontSize: '9px', color: '#059669', fontWeight: 500 }}>
                                 Bal: {formatCurrency(customer.balance || 0)} • M{customer.current_month || '-'}
@@ -3275,12 +3280,17 @@ function Dashboard({ navigateTo }) {
                                   e.currentTarget.parentElement.style.boxShadow = 'none';
                                 }}
                               >
-                                <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
-                                  {customer.customer_name || customer.name}
-                                  {isDuePassed && <span style={{ marginLeft: '4px', color: '#dc2626' }}>⚠️</span>}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                  <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d' }}>
+                                    {customer.customer_name || customer.name}
+                                    {isDuePassed && <span style={{ marginLeft: '4px', color: '#dc2626' }}>⚠️</span>}
+                                  </div>
+                                  <div style={{ fontWeight: 700, fontSize: '11px', color: '#991b1b', background: 'rgba(255,255,255,0.6)', padding: '2px 6px', borderRadius: '4px' }}>
+                                    DATE {customer.payment_day || '-'}
+                                  </div>
                                 </div>
                                 <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
-                                  Day {customer.payment_day || '-'} • {formatCurrency(customer.monthly_amount || 0)}
+                                  {formatCurrency(customer.monthly_amount || 0)}
                                 </div>
                                 <div style={{ fontSize: '9px', color: '#dc2626', fontWeight: 500 }}>
                                   Bal: {formatCurrency(customer.balance || 0)} • M{customer.current_month || '-'}
