@@ -6,6 +6,8 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
   const [duePayments, setDuePayments] = useState({ weekly: [], monthly: [], daily: [], interest: [] });
   const [loading, setLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState({ weekly: true, monthly: true, daily: true, interest: true });
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsappPhone, setWhatsappPhone] = useState('');
 
   useEffect(() => {
     fetchDuePayments();
@@ -125,6 +127,508 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
       .filter(l => l.alreadyPaid)
       .forEach(l => total += l.paidAmount || 0);
     return total;
+  };
+
+  const handleThermalPrint = async () => {
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }]
+      });
+
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+      const characteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+
+      // ESC/POS commands
+      const ESC = 0x1B;
+      const GS = 0x1D;
+      const INIT = [ESC, 0x40]; // Initialize
+      const ALIGN_CENTER = [ESC, 0x61, 0x01];
+      const ALIGN_LEFT = [ESC, 0x61, 0x00];
+      const BOLD_ON = [ESC, 0x45, 0x01];
+      const BOLD_OFF = [ESC, 0x45, 0x00];
+      const CUT = [GS, 0x56, 0x00]; // Cut paper
+      const FEED = [ESC, 0x64, 0x03]; // Feed 3 lines
+
+      const encoder = new TextEncoder();
+      const commands = [];
+
+      // Initialize
+      commands.push(new Uint8Array(INIT));
+      commands.push(new Uint8Array(ALIGN_CENTER));
+
+      // Header
+      commands.push(new Uint8Array(BOLD_ON));
+      commands.push(encoder.encode('OM SAI MURUGAN FINANCE\n'));
+      commands.push(new Uint8Array(BOLD_OFF));
+      commands.push(encoder.encode('All Payments Due\n'));
+      commands.push(encoder.encode(`Date: ${new Date(selectedDate).toLocaleDateString('en-IN')}\n`));
+      commands.push(encoder.encode('================================\n'));
+      commands.push(new Uint8Array(ALIGN_LEFT));
+
+      // Monthly Finance Section
+      if (duePayments.monthly.length > 0) {
+        commands.push(new Uint8Array(BOLD_ON));
+        commands.push(encoder.encode('\nMONTHLY FINANCE\n'));
+        commands.push(new Uint8Array(BOLD_OFF));
+        commands.push(encoder.encode('--------------------------------\n'));
+        let monthlyTotal = 0;
+        duePayments.monthly.filter(l => !l.alreadyPaid).forEach((loan) => {
+          const name = loan.customerName.substring(0, 15).padEnd(15);
+          const amount = formatCurrency(loan.monthlyAmount).padStart(12);
+          commands.push(encoder.encode(`${name} ${amount}\n`));
+          monthlyTotal += loan.monthlyAmount || 0;
+        });
+        commands.push(encoder.encode(`Subtotal:       ${formatCurrency(monthlyTotal).padStart(12)}\n`));
+      }
+
+      // Weekly Finance Section
+      if (duePayments.weekly.length > 0) {
+        commands.push(new Uint8Array(BOLD_ON));
+        commands.push(encoder.encode('\nWEEKLY FINANCE\n'));
+        commands.push(new Uint8Array(BOLD_OFF));
+        commands.push(encoder.encode('--------------------------------\n'));
+        let weeklyTotal = 0;
+        duePayments.weekly.filter(l => !l.alreadyPaid).forEach((loan) => {
+          const name = loan.customerName.substring(0, 15).padEnd(15);
+          const amount = formatCurrency(loan.weeklyAmount).padStart(12);
+          commands.push(encoder.encode(`${name} ${amount}\n`));
+          weeklyTotal += loan.weeklyAmount || 0;
+        });
+        commands.push(encoder.encode(`Subtotal:       ${formatCurrency(weeklyTotal).padStart(12)}\n`));
+      }
+
+      // Daily Finance Section
+      if (duePayments.daily.length > 0) {
+        commands.push(new Uint8Array(BOLD_ON));
+        commands.push(encoder.encode('\nDAILY FINANCE\n'));
+        commands.push(new Uint8Array(BOLD_OFF));
+        commands.push(encoder.encode('--------------------------------\n'));
+        let dailyTotal = 0;
+        duePayments.daily.filter(l => !l.alreadyPaid).forEach((loan) => {
+          const name = loan.customerName.substring(0, 15).padEnd(15);
+          const amount = formatCurrency(loan.dailyAmount).padStart(12);
+          commands.push(encoder.encode(`${name} ${amount}\n`));
+          dailyTotal += loan.dailyAmount || 0;
+        });
+        commands.push(encoder.encode(`Subtotal:       ${formatCurrency(dailyTotal).padStart(12)}\n`));
+      }
+
+      // Interest/Vaddi Section
+      if (duePayments.interest.length > 0) {
+        commands.push(new Uint8Array(BOLD_ON));
+        commands.push(encoder.encode('\nINTEREST LOANS\n'));
+        commands.push(new Uint8Array(BOLD_OFF));
+        commands.push(encoder.encode('--------------------------------\n'));
+        let interestTotal = 0;
+        duePayments.interest.filter(l => !l.alreadyPaid).forEach((loan) => {
+          const name = loan.customerName.substring(0, 15).padEnd(15);
+          const amount = formatCurrency(loan.monthlyInterest).padStart(12);
+          commands.push(encoder.encode(`${name} ${amount}\n`));
+          interestTotal += loan.monthlyInterest || 0;
+        });
+        commands.push(encoder.encode(`Subtotal:       ${formatCurrency(interestTotal).padStart(12)}\n`));
+      }
+
+      // Grand Total
+      commands.push(encoder.encode('================================\n'));
+      commands.push(new Uint8Array(BOLD_ON));
+      commands.push(encoder.encode(`GRAND TOTAL:    ${formatCurrency(getTotalDue()).padStart(12)}\n`));
+      commands.push(new Uint8Array(BOLD_OFF));
+      commands.push(encoder.encode('================================\n'));
+
+      // Footer
+      commands.push(new Uint8Array(ALIGN_CENTER));
+      commands.push(encoder.encode(`\nPrinted: ${new Date().toLocaleString('en-IN')}\n`));
+      commands.push(encoder.encode('Thank you!\n'));
+
+      // Feed and cut
+      commands.push(new Uint8Array(FEED));
+      commands.push(new Uint8Array(CUT));
+
+      // Send to printer
+      for (const command of commands) {
+        await characteristic.writeValue(command);
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      alert('Thermal print sent successfully!');
+    } catch (error) {
+      console.error('Thermal print error:', error);
+      alert('Failed to print: ' + error.message);
+    }
+  };
+
+  const handleFullPrint = () => {
+    const printWindow = window.open('', '_blank');
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>All Payments Due - ${new Date(selectedDate).toLocaleDateString('en-IN')}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 20px;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #1e293b;
+          }
+          .header h2 {
+            margin: 10px 0;
+            font-size: 20px;
+            color: #64748b;
+          }
+          .date {
+            font-size: 16px;
+            color: #475569;
+            margin-top: 10px;
+          }
+          .section {
+            margin: 30px 0;
+            page-break-inside: avoid;
+          }
+          .section-header {
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: white;
+          }
+          .monthly { background-color: #8b5cf6; }
+          .weekly { background-color: #3b82f6; }
+          .daily { background-color: #f59e0b; }
+          .interest { background-color: #10b981; }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+          }
+          th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+          }
+          th {
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: #1e293b;
+          }
+          .amount {
+            text-align: right;
+            font-weight: 600;
+          }
+          .subtotal {
+            background-color: #f1f5f9;
+            font-weight: bold;
+          }
+          .grand-total {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #1e293b;
+            color: white;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+          }
+          .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #64748b;
+            font-size: 14px;
+            border-top: 2px solid #e5e7eb;
+            padding-top: 20px;
+          }
+          @media print {
+            body { padding: 20px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>OM SAI MURUGAN FINANCE</h1>
+          <h2>All Payments Due Report</h2>
+          <div class="date">Date: ${new Date(selectedDate).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+        </div>
+    `;
+
+    // Monthly Finance
+    if (duePayments.monthly.filter(l => !l.alreadyPaid).length > 0) {
+      html += `
+        <div class="section">
+          <div class="section-header monthly">💰 MONTHLY FINANCE</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Loan Name</th>
+                <th>Phone</th>
+                <th class="amount">Amount</th>
+                <th class="amount">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      let monthlyTotal = 0;
+      duePayments.monthly.filter(l => !l.alreadyPaid).forEach((loan) => {
+        html += `
+          <tr>
+            <td>${loan.customerName}</td>
+            <td>${loan.loanName}</td>
+            <td>${loan.customerPhone || '-'}</td>
+            <td class="amount">${formatCurrency(loan.monthlyAmount)}</td>
+            <td class="amount">${formatCurrency(loan.balance)}</td>
+          </tr>
+        `;
+        monthlyTotal += loan.monthlyAmount || 0;
+      });
+      html += `
+              <tr class="subtotal">
+                <td colspan="3">Subtotal</td>
+                <td class="amount">${formatCurrency(monthlyTotal)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // Weekly Finance
+    if (duePayments.weekly.filter(l => !l.alreadyPaid).length > 0) {
+      html += `
+        <div class="section">
+          <div class="section-header weekly">📅 WEEKLY FINANCE</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Loan Name</th>
+                <th>Phone</th>
+                <th class="amount">Amount</th>
+                <th class="amount">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      let weeklyTotal = 0;
+      duePayments.weekly.filter(l => !l.alreadyPaid).forEach((loan) => {
+        html += `
+          <tr>
+            <td>${loan.customerName}</td>
+            <td>${loan.loanName}</td>
+            <td>${loan.customerPhone || '-'}</td>
+            <td class="amount">${formatCurrency(loan.weeklyAmount)}</td>
+            <td class="amount">${formatCurrency(loan.balance)}</td>
+          </tr>
+        `;
+        weeklyTotal += loan.weeklyAmount || 0;
+      });
+      html += `
+              <tr class="subtotal">
+                <td colspan="3">Subtotal</td>
+                <td class="amount">${formatCurrency(weeklyTotal)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // Daily Finance
+    if (duePayments.daily.filter(l => !l.alreadyPaid).length > 0) {
+      html += `
+        <div class="section">
+          <div class="section-header daily">📆 DAILY FINANCE</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Loan Name</th>
+                <th>Phone</th>
+                <th class="amount">Amount</th>
+                <th class="amount">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      let dailyTotal = 0;
+      duePayments.daily.filter(l => !l.alreadyPaid).forEach((loan) => {
+        html += `
+          <tr>
+            <td>${loan.customerName}</td>
+            <td>${loan.loanName}</td>
+            <td>${loan.customerPhone || '-'}</td>
+            <td class="amount">${formatCurrency(loan.dailyAmount)}</td>
+            <td class="amount">${formatCurrency(loan.balance)}</td>
+          </tr>
+        `;
+        dailyTotal += loan.dailyAmount || 0;
+      });
+      html += `
+              <tr class="subtotal">
+                <td colspan="3">Subtotal</td>
+                <td class="amount">${formatCurrency(dailyTotal)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // Interest/Vaddi
+    if (duePayments.interest.filter(l => !l.alreadyPaid).length > 0) {
+      html += `
+        <div class="section">
+          <div class="section-header interest">💵 INTEREST LOANS</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Loan Name</th>
+                <th>Phone</th>
+                <th class="amount">Interest Amount</th>
+                <th class="amount">Principal Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      let interestTotal = 0;
+      duePayments.interest.filter(l => !l.alreadyPaid).forEach((loan) => {
+        html += `
+          <tr>
+            <td>${loan.customerName}</td>
+            <td>${loan.loanName}</td>
+            <td>${loan.customerPhone || '-'}</td>
+            <td class="amount">${formatCurrency(loan.monthlyInterest)}</td>
+            <td class="amount">${formatCurrency(loan.balance)}</td>
+          </tr>
+        `;
+        interestTotal += loan.monthlyInterest || 0;
+      });
+      html += `
+              <tr class="subtotal">
+                <td colspan="3">Subtotal</td>
+                <td class="amount">${formatCurrency(interestTotal)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // Grand Total
+    html += `
+        <div class="grand-total">
+          GRAND TOTAL: ${formatCurrency(getTotalDue())}
+        </div>
+        <div class="footer">
+          <p>Printed on: ${new Date().toLocaleString('en-IN')}</p>
+          <p>Om Sai Murugan Finance - All Rights Reserved</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  };
+
+  const handleWhatsAppSend = () => {
+    if (!whatsappPhone || whatsappPhone.length < 10) {
+      alert('Please enter a valid phone number');
+      return;
+    }
+
+    let message = `*ALL PAYMENTS DUE*\n`;
+    message += `Date: ${new Date(selectedDate).toLocaleDateString('en-IN')}\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    // Monthly Finance
+    if (duePayments.monthly.filter(l => !l.alreadyPaid).length > 0) {
+      message += `💰 *MONTHLY FINANCE*\n`;
+      let monthlyTotal = 0;
+      duePayments.monthly.filter(l => !l.alreadyPaid).forEach((loan) => {
+        message += `• ${loan.customerName}\n`;
+        message += `  ${loan.loanName} - ${formatCurrency(loan.monthlyAmount)}\n`;
+        message += `  Bal: ${formatCurrency(loan.balance)}\n\n`;
+        monthlyTotal += loan.monthlyAmount || 0;
+      });
+      message += `Subtotal: *${formatCurrency(monthlyTotal)}*\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    }
+
+    // Weekly Finance
+    if (duePayments.weekly.filter(l => !l.alreadyPaid).length > 0) {
+      message += `📅 *WEEKLY FINANCE*\n`;
+      let weeklyTotal = 0;
+      duePayments.weekly.filter(l => !l.alreadyPaid).forEach((loan) => {
+        message += `• ${loan.customerName}\n`;
+        message += `  ${loan.loanName} - ${formatCurrency(loan.weeklyAmount)}\n`;
+        message += `  Bal: ${formatCurrency(loan.balance)}\n\n`;
+        weeklyTotal += loan.weeklyAmount || 0;
+      });
+      message += `Subtotal: *${formatCurrency(weeklyTotal)}*\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    }
+
+    // Daily Finance
+    if (duePayments.daily.filter(l => !l.alreadyPaid).length > 0) {
+      message += `📆 *DAILY FINANCE*\n`;
+      let dailyTotal = 0;
+      duePayments.daily.filter(l => !l.alreadyPaid).forEach((loan) => {
+        message += `• ${loan.customerName}\n`;
+        message += `  ${loan.loanName} - ${formatCurrency(loan.dailyAmount)}\n`;
+        message += `  Bal: ${formatCurrency(loan.balance)}\n\n`;
+        dailyTotal += loan.dailyAmount || 0;
+      });
+      message += `Subtotal: *${formatCurrency(dailyTotal)}*\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    }
+
+    // Interest/Vaddi
+    if (duePayments.interest.filter(l => !l.alreadyPaid).length > 0) {
+      message += `💵 *INTEREST LOANS*\n`;
+      let interestTotal = 0;
+      duePayments.interest.filter(l => !l.alreadyPaid).forEach((loan) => {
+        message += `• ${loan.customerName}\n`;
+        message += `  ${loan.loanName} - ${formatCurrency(loan.monthlyInterest)}\n`;
+        message += `  Bal: ${formatCurrency(loan.balance)}\n\n`;
+        interestTotal += loan.monthlyInterest || 0;
+      });
+      message += `Subtotal: *${formatCurrency(interestTotal)}*\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    }
+
+    // Grand Total
+    message += `*GRAND TOTAL: ${formatCurrency(getTotalDue())}*\n\n`;
+    message += `- Om Sai Murugan Finance`;
+
+    const cleanPhone = whatsappPhone.replace(/\D/g, '');
+    const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+    setShowWhatsAppModal(false);
+    setWhatsappPhone('');
   };
 
   const renderLoanCard = (loan, type) => (
@@ -376,18 +880,203 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer - Action Buttons */}
+        {!loading && totalCount > 0 && (
+          <div style={{
+            padding: '16px 20px',
+            background: 'white',
+            borderTop: '2px solid #e5e7eb',
+            display: 'flex',
+            gap: '12px',
+            justifyContent: 'space-between'
+          }}>
+            <button
+              onClick={handleThermalPrint}
+              style={{
+                flex: 1,
+                padding: '14px',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)'
+              }}
+            >
+              <span style={{ fontSize: '20px' }}>🖨️</span>
+              <span>Thermal Print</span>
+            </button>
+
+            <button
+              onClick={handleFullPrint}
+              style={{
+                flex: 1,
+                padding: '14px',
+                background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)'
+              }}
+            >
+              <span style={{ fontSize: '20px' }}>📄</span>
+              <span>Full Print</span>
+            </button>
+
+            <button
+              onClick={() => setShowWhatsAppModal(true)}
+              style={{
+                flex: 1,
+                padding: '14px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+              }}
+            >
+              <span style={{ fontSize: '20px' }}>📱</span>
+              <span>WhatsApp</span>
+            </button>
+          </div>
+        )}
+
+        {/* Info Footer */}
         <div style={{
-          padding: '12px 20px',
-          background: 'white',
-          borderTop: '1px solid #e5e7eb',
+          padding: '10px 20px',
+          background: '#f8fafc',
           textAlign: 'center',
           fontSize: '11px',
           color: '#6b7280'
         }}>
-          Tap on any customer to view loan details and record payment
+          Tap on any customer to view loan details
         </div>
       </div>
+
+      {/* WhatsApp Phone Input Modal */}
+      {showWhatsAppModal && (
+        <div
+          onClick={() => setShowWhatsAppModal(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1001
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '24px',
+              width: '90%',
+              maxWidth: '350px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+          >
+            <h3 style={{
+              margin: '0 0 16px 0',
+              fontSize: '18px',
+              fontWeight: 700,
+              color: '#1e293b'
+            }}>
+              📱 Send via WhatsApp
+            </h3>
+
+            <p style={{
+              margin: '0 0 16px 0',
+              fontSize: '13px',
+              color: '#64748b'
+            }}>
+              Enter the phone number to send the payment list
+            </p>
+
+            <input
+              type="tel"
+              placeholder="Enter 10 digit mobile number"
+              value={whatsappPhone}
+              onChange={(e) => setWhatsappPhone(e.target.value)}
+              maxLength={10}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '2px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '16px',
+                marginBottom: '16px',
+                boxSizing: 'border-box'
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  setShowWhatsAppModal(false);
+                  setWhatsappPhone('');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: '#e5e7eb',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleWhatsAppSend}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+                }}
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
