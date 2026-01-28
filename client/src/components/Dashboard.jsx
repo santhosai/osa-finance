@@ -2875,7 +2875,7 @@ function Dashboard({ navigateTo }) {
                 // Check all possible payment numbers (1 to total_months)
                 for (let paymentNum = 0; paymentNum < customer.total_months; paymentNum++) {
                   const paymentDueDate = new Date(startDate);
-                  paymentDueDate.setMonth(startDate.getMonth() + paymentNum + 1); // +1 for first payment 1 month after start
+                  paymentDueDate.setMonth(startDate.getMonth() + paymentNum); // First payment on start_date
 
                   const paymentMonth = paymentDueDate.getMonth();
                   const paymentYear = paymentDueDate.getFullYear();
