@@ -168,6 +168,15 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
       const encoder = new TextEncoder();
       const commands = [];
 
+      // Helper function to pad text properly (32 char width)
+      const padLine = (left, right) => {
+        const totalWidth = 32;
+        const rightStr = String(right);
+        const leftStr = String(left).substring(0, totalWidth - rightStr.length - 1);
+        const spaces = totalWidth - leftStr.length - rightStr.length;
+        return leftStr + ' '.repeat(Math.max(0, spaces)) + rightStr;
+      };
+
       // Initialize
       commands.push(new Uint8Array(INIT));
       commands.push(new Uint8Array(ALIGN_CENTER));
@@ -177,84 +186,84 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
       commands.push(encoder.encode('OM SAI MURUGAN FINANCE\n'));
       commands.push(new Uint8Array(BOLD_OFF));
       commands.push(encoder.encode('All Payments Due\n'));
-      commands.push(encoder.encode(`Date: ${new Date(selectedDate).toLocaleDateString('en-IN')}\n`));
+      commands.push(encoder.encode(`${new Date(selectedDate).toLocaleDateString('en-IN')}\n`));
       commands.push(encoder.encode('================================\n'));
       commands.push(new Uint8Array(ALIGN_LEFT));
 
       // Monthly Finance Section
-      if (duePayments.monthly.length > 0) {
+      if (duePayments.monthly.filter(l => !l.alreadyPaid).length > 0) {
         commands.push(new Uint8Array(BOLD_ON));
         commands.push(encoder.encode('\nMONTHLY FINANCE\n'));
         commands.push(new Uint8Array(BOLD_OFF));
         commands.push(encoder.encode('--------------------------------\n'));
         let monthlyTotal = 0;
         duePayments.monthly.filter(l => !l.alreadyPaid).forEach((loan) => {
-          const name = loan.customerName.substring(0, 15).padEnd(15);
-          const amount = formatCurrency(loan.monthlyAmount).padStart(12);
-          commands.push(encoder.encode(`${name} ${amount}\n`));
+          const name = loan.customerName.substring(0, 18);
+          const amt = formatCurrency(loan.monthlyAmount);
+          commands.push(encoder.encode(padLine(name, amt) + '\n'));
           monthlyTotal += loan.monthlyAmount || 0;
         });
-        commands.push(encoder.encode(`Subtotal:       ${formatCurrency(monthlyTotal).padStart(12)}\n`));
+        commands.push(encoder.encode(padLine('Subtotal:', formatCurrency(monthlyTotal)) + '\n'));
       }
 
       // Weekly Finance Section
-      if (duePayments.weekly.length > 0) {
+      if (duePayments.weekly.filter(l => !l.alreadyPaid).length > 0) {
         commands.push(new Uint8Array(BOLD_ON));
         commands.push(encoder.encode('\nWEEKLY FINANCE\n'));
         commands.push(new Uint8Array(BOLD_OFF));
         commands.push(encoder.encode('--------------------------------\n'));
         let weeklyTotal = 0;
         duePayments.weekly.filter(l => !l.alreadyPaid).forEach((loan) => {
-          const name = loan.customerName.substring(0, 15).padEnd(15);
-          const amount = formatCurrency(loan.weeklyAmount).padStart(12);
-          commands.push(encoder.encode(`${name} ${amount}\n`));
+          const name = loan.customerName.substring(0, 18);
+          const amt = formatCurrency(loan.weeklyAmount);
+          commands.push(encoder.encode(padLine(name, amt) + '\n'));
           weeklyTotal += loan.weeklyAmount || 0;
         });
-        commands.push(encoder.encode(`Subtotal:       ${formatCurrency(weeklyTotal).padStart(12)}\n`));
+        commands.push(encoder.encode(padLine('Subtotal:', formatCurrency(weeklyTotal)) + '\n'));
       }
 
       // Daily Finance Section
-      if (duePayments.daily.length > 0) {
+      if (duePayments.daily.filter(l => !l.alreadyPaid).length > 0) {
         commands.push(new Uint8Array(BOLD_ON));
         commands.push(encoder.encode('\nDAILY FINANCE\n'));
         commands.push(new Uint8Array(BOLD_OFF));
         commands.push(encoder.encode('--------------------------------\n'));
         let dailyTotal = 0;
         duePayments.daily.filter(l => !l.alreadyPaid).forEach((loan) => {
-          const name = loan.customerName.substring(0, 15).padEnd(15);
-          const amount = formatCurrency(loan.dailyAmount).padStart(12);
-          commands.push(encoder.encode(`${name} ${amount}\n`));
+          const name = loan.customerName.substring(0, 18);
+          const amt = formatCurrency(loan.dailyAmount);
+          commands.push(encoder.encode(padLine(name, amt) + '\n'));
           dailyTotal += loan.dailyAmount || 0;
         });
-        commands.push(encoder.encode(`Subtotal:       ${formatCurrency(dailyTotal).padStart(12)}\n`));
+        commands.push(encoder.encode(padLine('Subtotal:', formatCurrency(dailyTotal)) + '\n'));
       }
 
       // Interest/Vaddi Section
-      if (duePayments.interest.length > 0) {
+      if (duePayments.interest.filter(l => !l.alreadyPaid).length > 0) {
         commands.push(new Uint8Array(BOLD_ON));
         commands.push(encoder.encode('\nINTEREST LOANS\n'));
         commands.push(new Uint8Array(BOLD_OFF));
         commands.push(encoder.encode('--------------------------------\n'));
         let interestTotal = 0;
         duePayments.interest.filter(l => !l.alreadyPaid).forEach((loan) => {
-          const name = loan.customerName.substring(0, 15).padEnd(15);
-          const amount = formatCurrency(loan.monthlyInterest).padStart(12);
-          commands.push(encoder.encode(`${name} ${amount}\n`));
+          const name = loan.customerName.substring(0, 18);
+          const amt = formatCurrency(loan.monthlyInterest);
+          commands.push(encoder.encode(padLine(name, amt) + '\n'));
           interestTotal += loan.monthlyInterest || 0;
         });
-        commands.push(encoder.encode(`Subtotal:       ${formatCurrency(interestTotal).padStart(12)}\n`));
+        commands.push(encoder.encode(padLine('Subtotal:', formatCurrency(interestTotal)) + '\n'));
       }
 
       // Grand Total
       commands.push(encoder.encode('================================\n'));
       commands.push(new Uint8Array(BOLD_ON));
-      commands.push(encoder.encode(`GRAND TOTAL:    ${formatCurrency(getTotalDue()).padStart(12)}\n`));
+      commands.push(encoder.encode(padLine('GRAND TOTAL:', formatCurrency(getTotalDue())) + '\n'));
       commands.push(new Uint8Array(BOLD_OFF));
       commands.push(encoder.encode('================================\n'));
 
       // Footer
       commands.push(new Uint8Array(ALIGN_CENTER));
-      commands.push(encoder.encode(`\nPrinted: ${new Date().toLocaleString('en-IN')}\n`));
+      commands.push(encoder.encode(`\n${new Date().toLocaleString('en-IN')}\n`));
       commands.push(encoder.encode('Thank you!\n'));
 
       // Feed and cut
