@@ -1027,11 +1027,12 @@ function Dashboard({ navigateTo }) {
       return;
     }
 
+    const paymentDay = customer.start_date ? new Date(customer.start_date).getDate() : '-';
     const message = `*Payment Receipt*\n\n` +
       `Customer: ${customer.customer_name || customer.name}\n` +
       `Amount Paid: ₹${customer.monthly_amount}\n` +
       `Balance: ₹${customer.balance}\n` +
-      `Payment Day: ${customer.payment_day}\n\n` +
+      `Payment Day: ${paymentDay}\n\n` +
       `Thank you for your payment!\n- Om Sai Murugan Finance`;
 
     const cleanPhone = customer.phone.replace(/\D/g, '');
@@ -1041,6 +1042,7 @@ function Dashboard({ navigateTo }) {
 
   // Print Monthly Finance Receipt
   const printMonthlyReceipt = (customer) => {
+    const paymentDay = customer.start_date ? new Date(customer.start_date).getDate() : '-';
     setPrintData({
       customerName: customer.customer_name || customer.name,
       phone: customer.phone,
@@ -1049,7 +1051,7 @@ function Dashboard({ navigateTo }) {
       loanAmount: customer.loan_amount,
       balance: customer.balance,
       monthlyAmount: customer.monthly_amount,
-      paymentDay: customer.payment_day,
+      paymentDay: paymentDay,
       date: new Date().toISOString()
     });
   };
@@ -3098,7 +3100,9 @@ function Dashboard({ navigateTo }) {
                         ✓ {t('paid').toUpperCase()} ({paidMonthlyCustomers.length})
                       </h4>
                       <div style={{ display: 'grid', gap: '4px', maxHeight: '300px', overflowY: 'auto' }}>
-                        {paidMonthlyCustomers.map((customer) => (
+                        {paidMonthlyCustomers.map((customer) => {
+                          const paymentDay = customer.start_date ? new Date(customer.start_date).getDate() : '-';
+                          return (
                           <div
                             key={customer.id}
                             style={{
@@ -3130,7 +3134,7 @@ function Dashboard({ navigateTo }) {
                                   {customer.customer_name || customer.name}
                                 </div>
                                 <div style={{ fontWeight: 700, fontSize: '11px', color: '#047857', background: 'rgba(255,255,255,0.6)', padding: '2px 6px', borderRadius: '4px' }}>
-                                  DATE {customer.payment_day || '-'}
+                                  DATE {paymentDay}
                                 </div>
                               </div>
                               <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
@@ -3224,7 +3228,8 @@ function Dashboard({ navigateTo }) {
                               </button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                         {paidMonthlyCustomers.length === 0 && (
                           <div style={{ fontSize: '11px', color: '#6b7280', textAlign: 'center', padding: '10px' }}>
                             No payments yet
@@ -3250,7 +3255,8 @@ function Dashboard({ navigateTo }) {
                       </h4>
                       <div style={{ display: 'grid', gap: '4px', maxHeight: '300px', overflowY: 'auto' }}>
                         {unpaidMonthlyCustomers.map((customer) => {
-                          const isDuePassed = customer.payment_day && customer.payment_day < currentDay;
+                          const paymentDay = customer.start_date ? new Date(customer.start_date).getDate() : null;
+                          const isDuePassed = paymentDay && paymentDay < currentDay;
                           return (
                             <div
                               key={customer.id}
@@ -3286,7 +3292,7 @@ function Dashboard({ navigateTo }) {
                                     {isDuePassed && <span style={{ marginLeft: '4px', color: '#dc2626' }}>⚠️</span>}
                                   </div>
                                   <div style={{ fontWeight: 700, fontSize: '11px', color: '#991b1b', background: 'rgba(255,255,255,0.6)', padding: '2px 6px', borderRadius: '4px' }}>
-                                    DATE {customer.payment_day || '-'}
+                                    DATE {paymentDay || '-'}
                                   </div>
                                 </div>
                                 <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
