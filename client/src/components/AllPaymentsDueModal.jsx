@@ -168,11 +168,17 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
       const encoder = new TextEncoder();
       const commands = [];
 
+      // Format currency for thermal print (use Rs. instead of ₹ for ASCII compatibility)
+      const formatThermalAmount = (amount) => {
+        return `Rs.${(amount || 0).toLocaleString('en-IN')}`;
+      };
+
       // Helper function to pad text properly (32 char width)
       const padLine = (left, right) => {
         const totalWidth = 32;
         const rightStr = String(right);
-        const leftStr = String(left).substring(0, totalWidth - rightStr.length - 1);
+        const leftMax = totalWidth - rightStr.length - 1;
+        const leftStr = String(left).substring(0, leftMax);
         const spaces = totalWidth - leftStr.length - rightStr.length;
         return leftStr + ' '.repeat(Math.max(0, spaces)) + rightStr;
       };
@@ -198,12 +204,12 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
         commands.push(encoder.encode('--------------------------------\n'));
         let monthlyTotal = 0;
         duePayments.monthly.filter(l => !l.alreadyPaid).forEach((loan) => {
-          const name = loan.customerName.substring(0, 18);
-          const amt = formatCurrency(loan.monthlyAmount);
+          const name = loan.customerName.substring(0, 16);
+          const amt = formatThermalAmount(loan.monthlyAmount);
           commands.push(encoder.encode(padLine(name, amt) + '\n'));
           monthlyTotal += loan.monthlyAmount || 0;
         });
-        commands.push(encoder.encode(padLine('Subtotal:', formatCurrency(monthlyTotal)) + '\n'));
+        commands.push(encoder.encode(padLine('Subtotal:', formatThermalAmount(monthlyTotal)) + '\n'));
       }
 
       // Weekly Finance Section
@@ -214,12 +220,12 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
         commands.push(encoder.encode('--------------------------------\n'));
         let weeklyTotal = 0;
         duePayments.weekly.filter(l => !l.alreadyPaid).forEach((loan) => {
-          const name = loan.customerName.substring(0, 18);
-          const amt = formatCurrency(loan.weeklyAmount);
+          const name = loan.customerName.substring(0, 16);
+          const amt = formatThermalAmount(loan.weeklyAmount);
           commands.push(encoder.encode(padLine(name, amt) + '\n'));
           weeklyTotal += loan.weeklyAmount || 0;
         });
-        commands.push(encoder.encode(padLine('Subtotal:', formatCurrency(weeklyTotal)) + '\n'));
+        commands.push(encoder.encode(padLine('Subtotal:', formatThermalAmount(weeklyTotal)) + '\n'));
       }
 
       // Daily Finance Section
@@ -230,12 +236,12 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
         commands.push(encoder.encode('--------------------------------\n'));
         let dailyTotal = 0;
         duePayments.daily.filter(l => !l.alreadyPaid).forEach((loan) => {
-          const name = loan.customerName.substring(0, 18);
-          const amt = formatCurrency(loan.dailyAmount);
+          const name = loan.customerName.substring(0, 16);
+          const amt = formatThermalAmount(loan.dailyAmount);
           commands.push(encoder.encode(padLine(name, amt) + '\n'));
           dailyTotal += loan.dailyAmount || 0;
         });
-        commands.push(encoder.encode(padLine('Subtotal:', formatCurrency(dailyTotal)) + '\n'));
+        commands.push(encoder.encode(padLine('Subtotal:', formatThermalAmount(dailyTotal)) + '\n'));
       }
 
       // Interest/Vaddi Section
@@ -246,18 +252,18 @@ function AllPaymentsDueModal({ onClose, navigateTo }) {
         commands.push(encoder.encode('--------------------------------\n'));
         let interestTotal = 0;
         duePayments.interest.filter(l => !l.alreadyPaid).forEach((loan) => {
-          const name = loan.customerName.substring(0, 18);
-          const amt = formatCurrency(loan.monthlyInterest);
+          const name = loan.customerName.substring(0, 16);
+          const amt = formatThermalAmount(loan.monthlyInterest);
           commands.push(encoder.encode(padLine(name, amt) + '\n'));
           interestTotal += loan.monthlyInterest || 0;
         });
-        commands.push(encoder.encode(padLine('Subtotal:', formatCurrency(interestTotal)) + '\n'));
+        commands.push(encoder.encode(padLine('Subtotal:', formatThermalAmount(interestTotal)) + '\n'));
       }
 
       // Grand Total
       commands.push(encoder.encode('================================\n'));
       commands.push(new Uint8Array(BOLD_ON));
-      commands.push(encoder.encode(padLine('GRAND TOTAL:', formatCurrency(getTotalDue())) + '\n'));
+      commands.push(encoder.encode(padLine('GRAND TOTAL:', formatThermalAmount(getTotalDue())) + '\n'));
       commands.push(new Uint8Array(BOLD_OFF));
       commands.push(encoder.encode('================================\n'));
 
