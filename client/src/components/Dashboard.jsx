@@ -585,6 +585,7 @@ function Dashboard({ navigateTo }) {
       return;
     }
 
+    console.log('🖨️ Printing loans data:', loansData);
     const totalGiven = loansData.reduce((sum, loan) => sum + (loan.loan_amount || loan.loanAmount || 0), 0);
 
     let receipt = THERMAL_COMMANDS.INIT;
@@ -610,8 +611,10 @@ function Dashboard({ navigateTo }) {
     receipt += THERMAL_COMMANDS.DASHED;
 
     loansData.forEach((item, i) => {
-      const name = item.customerName || item.customer_name || item.customer?.name || 'Customer';
+      console.log(`Loan ${i + 1}:`, item);
+      const name = (item.customer_name || item.name || item.customerName || item.customer?.name || 'Customer').trim();
       const amount = item.loan_amount || item.loanAmount || 0;
+      console.log(`  Name: "${name}", Amount: ${amount}`);
       receipt += `${i + 1}.${name.substring(0, 18)}\n`;
       receipt += `  Rs.${amount.toLocaleString('en-IN')}\n`;
     });

@@ -1298,7 +1298,7 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
   };
 
   // Generate payment schedule based on start date and total months
-  // First payment is 1 month after start_date
+  // First payment is on start_date (not 1 month after)
   const generatePaymentSchedule = () => {
     const schedule = [];
     const startDate = new Date(customer.start_date);
@@ -1306,15 +1306,19 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
 
     for (let i = 0; i < customer.total_months; i++) {
       const paymentDate = new Date(startDate);
-      paymentDate.setMonth(startDate.getMonth() + i + 1); // +1 so first payment is 1 month after start_date
+      paymentDate.setMonth(startDate.getMonth() + i); // First payment on start_date
 
       // Check if this month's payment has been made based on balance
       const totalPaid = customer.loan_amount - customer.balance;
       const monthsPaid = Math.floor(totalPaid / monthlyAmount);
       const isPaid = i < monthsPaid;
 
+      // Get month name
+      const monthName = paymentDate.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+
       schedule.push({
         month: i + 1,
+        monthName: monthName,
         date: paymentDate.toISOString().split('T')[0],
         amount: monthlyAmount,
         paid: isPaid
@@ -1851,7 +1855,7 @@ Thank you for your payment!
               >
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b', marginBottom: '4px' }}>
-                    Month {payment.month}
+                    Month {payment.month} - {payment.monthName}
                   </div>
                   <div style={{ fontSize: '13px', color: '#64748b' }}>
                     Due: {formatDate(payment.date)} | {formatCurrency(payment.amount)}
