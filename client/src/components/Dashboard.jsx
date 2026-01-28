@@ -49,6 +49,8 @@ function Dashboard({ navigateTo }) {
   const [loansGivenDate, setLoansGivenDate] = useState(new Date().toISOString().split('T')[0]); // For loans given tracker
   const [showLoansGivenModal, setShowLoansGivenModal] = useState(false); // For loans given modal
   const [printData, setPrintData] = useState(null); // For print receipt
+  const [monthlyPaymentConfirm, setMonthlyPaymentConfirm] = useState(null); // For Monthly Finance payment confirmation
+  const [monthlyUndoConfirm, setMonthlyUndoConfirm] = useState(null); // For Monthly Finance undo confirmation
   const [quickNote, setQuickNote] = useState(() => localStorage.getItem('dashboardQuickNote') || ''); // Quick Note
   const [showQuickNote, setShowQuickNote] = useState(true); // Show/hide quick note
   const [noteMode, setNoteMode] = useState('text'); // 'text' or 'draw' for stylus
@@ -941,6 +943,115 @@ function Dashboard({ navigateTo }) {
     } finally {
       setIsPaymentLoading(false);
     }
+  };
+
+  // Monthly Finance Payment Handler
+  const handleMonthlyPayment = async (customer) => {
+    if (isPaymentLoading) return;
+
+    setIsPaymentLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/monthly-finance/customers/${customer.id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: customer.monthly_amount,
+          payment_date: new Date().toISOString().split('T')[0],
+          payment_mode: 'cash'
+        })
+      });
+
+      if (!response.ok) throw new Error('Payment failed');
+
+      const result = await response.json();
+
+      // Show choice modal: WhatsApp/Print/Both/Skip
+      const whatsappChoice = window.confirm(
+        'Payment recorded!\n\n' +
+        'Click OK to send WhatsApp\n' +
+        'Click Cancel to skip'
+      );
+
+      if (whatsappChoice) {
+        sendMonthlyWhatsApp(result.customer || customer);
+      }
+
+      // Ask about printing
+      const printChoice = window.confirm('Print receipt?');
+      if (printChoice) {
+        printMonthlyReceipt(result.customer || customer);
+      }
+
+      // Refresh data
+      mutateMonthly();
+
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert('Failed to record payment');
+    } finally {
+      setIsPaymentLoading(false);
+    }
+  };
+
+  // Monthly Finance Undo Handler
+  const handleMonthlyUndo = async (customer) => {
+    if (isPaymentLoading) return;
+
+    setIsPaymentLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/monthly-finance/customers/${customer.id}/undo-payment`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) throw new Error('Undo failed');
+
+      // Refresh data
+      mutateMonthly();
+      alert('Payment undone successfully');
+
+    } catch (error) {
+      console.error('Undo error:', error);
+      alert('Failed to undo payment');
+    } finally {
+      setIsPaymentLoading(false);
+    }
+  };
+
+  // Send Monthly Finance WhatsApp Receipt
+  const sendMonthlyWhatsApp = (customer) => {
+    if (!customer.phone) {
+      alert('No phone number for this customer');
+      return;
+    }
+
+    const message = `*Payment Receipt*\n\n` +
+      `Customer: ${customer.customer_name || customer.name}\n` +
+      `Amount Paid: ₹${customer.monthly_amount}\n` +
+      `Balance: ₹${customer.balance}\n` +
+      `Payment Day: ${customer.payment_day}\n\n` +
+      `Thank you for your payment!\n- Om Sai Murugan Finance`;
+
+    const cleanPhone = customer.phone.replace(/\D/g, '');
+    const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Print Monthly Finance Receipt
+  const printMonthlyReceipt = (customer) => {
+    setPrintData({
+      customerName: customer.customer_name || customer.name,
+      phone: customer.phone,
+      loanType: 'Monthly Finance',
+      amountPaid: customer.monthly_amount,
+      loanAmount: customer.loan_amount,
+      balance: customer.balance,
+      monthlyAmount: customer.monthly_amount,
+      paymentDay: customer.payment_day,
+      date: new Date().toISOString()
+    });
   };
 
   // Show loading screen while initial data loads
@@ -2990,32 +3101,122 @@ function Dashboard({ navigateTo }) {
                         {paidMonthlyCustomers.map((customer) => (
                           <div
                             key={customer.id}
-                            onClick={() => navigateTo('monthly-finance')}
                             style={{
                               background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
                               padding: '6px 8px',
                               borderRadius: '6px',
                               border: '1px solid #6ee7b7',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseOver={(e) => {
-                              e.currentTarget.style.transform = 'scale(1.02)';
-                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.style.transform = 'scale(1)';
-                              e.currentTarget.style.boxShadow = 'none';
+                              transition: 'all 0.15s',
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '8px'
                             }}
                           >
-                            <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
-                              {customer.customer_name || customer.name}
+                            {/* Customer Info - clickable */}
+                            <div
+                              style={{ flex: 1, cursor: 'pointer' }}
+                              onClick={() => navigateTo('monthly-finance')}
+                              onMouseOver={(e) => {
+                                e.currentTarget.parentElement.style.transform = 'scale(1.02)';
+                                e.currentTarget.parentElement.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+                              }}
+                              onMouseOut={(e) => {
+                                e.currentTarget.parentElement.style.transform = 'scale(1)';
+                                e.currentTarget.parentElement.style.boxShadow = 'none';
+                              }}
+                            >
+                              <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
+                                {customer.customer_name || customer.name}
+                              </div>
+                              <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
+                                Day {customer.payment_day || '-'} • {formatCurrency(customer.monthly_amount || 0)}
+                              </div>
+                              <div style={{ fontSize: '9px', color: '#059669', fontWeight: 500 }}>
+                                Bal: {formatCurrency(customer.balance || 0)} • M{customer.current_month || '-'}
+                              </div>
                             </div>
-                            <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
-                              Day {customer.payment_day || '-'} • {formatCurrency(customer.monthly_amount || 0)}
-                            </div>
-                            <div style={{ fontSize: '9px', color: '#059669', fontWeight: 500 }}>
-                              Bal: {formatCurrency(customer.balance || 0)} • M{customer.current_month || '-'}
+
+                            {/* Action Buttons */}
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              {/* WhatsApp Button */}
+                              {customer.phone && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    sendMonthlyWhatsApp(customer);
+                                  }}
+                                  style={{
+                                    background: '#dcfce7',
+                                    border: '1px solid #86efac',
+                                    borderRadius: '4px',
+                                    padding: '4px 6px',
+                                    cursor: 'pointer',
+                                    fontSize: '9px',
+                                    color: '#16a34a',
+                                    fontWeight: 600,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '1px'
+                                  }}
+                                  title="Send WhatsApp receipt"
+                                >
+                                  📱
+                                  <span>WA</span>
+                                </button>
+                              )}
+
+                              {/* Print Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  printMonthlyReceipt(customer);
+                                }}
+                                style={{
+                                  background: '#ede9fe',
+                                  border: '1px solid #c4b5fd',
+                                  borderRadius: '4px',
+                                  padding: '4px 6px',
+                                  cursor: 'pointer',
+                                  fontSize: '9px',
+                                  color: '#7c3aed',
+                                  fontWeight: 600,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '1px'
+                                }}
+                                title="Print receipt"
+                              >
+                                🖨️
+                                <span>Print</span>
+                              </button>
+
+                              {/* Undo Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMonthlyUndoConfirm(customer);
+                                }}
+                                style={{
+                                  background: '#fee2e2',
+                                  border: '1px solid #fca5a5',
+                                  borderRadius: '4px',
+                                  padding: '4px 6px',
+                                  cursor: 'pointer',
+                                  fontSize: '9px',
+                                  color: '#dc2626',
+                                  fontWeight: 600,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '1px'
+                                }}
+                                title="Undo this payment"
+                              >
+                                ↩️
+                                <span>Undo</span>
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -3048,7 +3249,6 @@ function Dashboard({ navigateTo }) {
                           return (
                             <div
                               key={customer.id}
-                              onClick={() => navigateTo('monthly-finance')}
                               style={{
                                 background: isDuePassed
                                   ? 'linear-gradient(135deg, #fecaca 0%, #fca5a5 100%)'
@@ -3056,27 +3256,59 @@ function Dashboard({ navigateTo }) {
                                 padding: '6px 8px',
                                 borderRadius: '6px',
                                 border: isDuePassed ? '2px solid #ef4444' : '1px solid #fca5a5',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s'
-                              }}
-                              onMouseOver={(e) => {
-                                e.currentTarget.style.transform = 'scale(1.02)';
-                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
-                              }}
-                              onMouseOut={(e) => {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = 'none';
+                                transition: 'all 0.15s',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '8px'
                               }}
                             >
-                              <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
-                                {customer.customer_name || customer.name}
-                                {isDuePassed && <span style={{ marginLeft: '4px', color: '#dc2626' }}>⚠️</span>}
+                              {/* Customer Info - clickable */}
+                              <div
+                                style={{ flex: 1, cursor: 'pointer' }}
+                                onClick={() => navigateTo('monthly-finance')}
+                                onMouseOver={(e) => {
+                                  e.currentTarget.parentElement.style.transform = 'scale(1.02)';
+                                  e.currentTarget.parentElement.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
+                                }}
+                                onMouseOut={(e) => {
+                                  e.currentTarget.parentElement.style.transform = 'scale(1)';
+                                  e.currentTarget.parentElement.style.boxShadow = 'none';
+                                }}
+                              >
+                                <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
+                                  {customer.customer_name || customer.name}
+                                  {isDuePassed && <span style={{ marginLeft: '4px', color: '#dc2626' }}>⚠️</span>}
+                                </div>
+                                <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
+                                  Day {customer.payment_day || '-'} • {formatCurrency(customer.monthly_amount || 0)}
+                                </div>
+                                <div style={{ fontSize: '9px', color: '#dc2626', fontWeight: 500 }}>
+                                  Bal: {formatCurrency(customer.balance || 0)} • M{customer.current_month || '-'}
+                                </div>
                               </div>
-                              <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
-                                Day {customer.payment_day || '-'} • {formatCurrency(customer.monthly_amount || 0)}
-                              </div>
-                              <div style={{ fontSize: '9px', color: '#dc2626', fontWeight: 500 }}>
-                                Bal: {formatCurrency(customer.balance || 0)} • M{customer.current_month || '-'}
+
+                              {/* Pay Checkbox */}
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '2px'
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  onChange={() => setMonthlyPaymentConfirm(customer)}
+                                  checked={false}
+                                  style={{
+                                    cursor: 'pointer',
+                                    width: '18px',
+                                    height: '18px',
+                                    accentColor: '#10b981'
+                                  }}
+                                />
+                                <span style={{ fontSize: '8px', color: '#059669', fontWeight: 600 }}>Paid</span>
                               </div>
                             </div>
                           );
@@ -3520,6 +3752,269 @@ function Dashboard({ navigateTo }) {
               </button>
               <button
                 onClick={handleUndoPayment}
+                disabled={isPaymentLoading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: isPaymentLoading
+                    ? '#9ca3af'
+                    : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: isPaymentLoading ? 'none' : '0 4px 12px rgba(220, 38, 38, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {isPaymentLoading ? (
+                  <>
+                    <span style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid white',
+                      borderTopColor: 'transparent',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Undoing...
+                  </>
+                ) : (
+                  '↩️ Undo Payment'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Finance Payment Confirmation Modal */}
+      {monthlyPaymentConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1001,
+            padding: '20px'
+          }}
+          onClick={() => setMonthlyPaymentConfirm(null)}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '400px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>💰</div>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
+                Confirm Payment
+              </h3>
+            </div>
+
+            <div style={{
+              background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#065f46', marginBottom: '8px' }}>
+                {monthlyPaymentConfirm.customer_name || monthlyPaymentConfirm.name}
+              </div>
+              <div style={{ fontSize: '12px', color: '#059669', marginBottom: '8px' }}>
+                Monthly Finance • Payment Day {monthlyPaymentConfirm.payment_day}
+              </div>
+              <div style={{
+                fontSize: '24px',
+                fontWeight: 700,
+                color: '#059669',
+                textAlign: 'center',
+                padding: '8px',
+                background: 'white',
+                borderRadius: '8px'
+              }}>
+                {formatCurrency(monthlyPaymentConfirm.monthly_amount)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#6b7280', textAlign: 'center', marginTop: '8px' }}>
+                Payment Date: {new Date().toLocaleDateString('en-IN', {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric'
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setMonthlyPaymentConfirm(null)}
+                disabled={isPaymentLoading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                  opacity: isPaymentLoading ? 0.5 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleMonthlyPayment(monthlyPaymentConfirm);
+                  setMonthlyPaymentConfirm(null);
+                }}
+                disabled={isPaymentLoading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: isPaymentLoading
+                    ? '#9ca3af'
+                    : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: isPaymentLoading ? 'none' : '0 4px 12px rgba(124, 58, 237, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {isPaymentLoading ? (
+                  <>
+                    <span style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid white',
+                      borderTopColor: 'transparent',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Paying...
+                  </>
+                ) : (
+                  '✓ Confirm Paid'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Finance Undo Payment Confirmation Modal */}
+      {monthlyUndoConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1001,
+            padding: '20px'
+          }}
+          onClick={() => setMonthlyUndoConfirm(null)}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '400px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#dc2626' }}>
+                Undo Payment?
+              </h3>
+            </div>
+
+            <div style={{
+              background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#7f1d1d', marginBottom: '8px' }}>
+                {monthlyUndoConfirm.customer_name || monthlyUndoConfirm.name}
+              </div>
+              <div style={{ fontSize: '12px', color: '#dc2626', marginBottom: '8px' }}>
+                Monthly Finance • Payment Day {monthlyUndoConfirm.payment_day}
+              </div>
+              <div style={{
+                fontSize: '24px',
+                fontWeight: 700,
+                color: '#dc2626',
+                textAlign: 'center',
+                padding: '8px',
+                background: 'white',
+                borderRadius: '8px'
+              }}>
+                {formatCurrency(monthlyUndoConfirm.monthly_amount)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#991b1b', textAlign: 'center', marginTop: '8px' }}>
+                This will delete the most recent payment and mark as unpaid
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setMonthlyUndoConfirm(null)}
+                disabled={isPaymentLoading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                  opacity: isPaymentLoading ? 0.5 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleMonthlyUndo(monthlyUndoConfirm);
+                  setMonthlyUndoConfirm(null);
+                }}
                 disabled={isPaymentLoading}
                 style={{
                   flex: 1,
