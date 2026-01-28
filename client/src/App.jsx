@@ -176,30 +176,28 @@ function AppContent() {
     return (
       <ThemeProvider>
         <LanguageProvider>
-          <BrowserRouter>
-            <div className="app">
-              <Routes>
-                <Route path="/dashboard" element={<DashboardWrapper />} />
-                <Route path="/customers" element={<CustomersWrapper />} />
-                <Route path="/customer-loans/:customerId" element={<CustomerLoansWrapper />} />
-                <Route path="/loan-details/:loanId" element={<LoanDetailsWrapper />} />
-                <Route path="/sunday-collections" element={<SundayCollectionsWrapper />} />
-                <Route path="/overdue-payments" element={<OverduePaymentsWrapper />} />
-                <Route path="/payment-tracker" element={<ExcelPaymentTrackerWrapper />} />
-                <Route path="/vaddi-list" element={<VaddiListWrapper />} />
-                <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
-                <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
-                <Route path="/investments" element={<InvestmentsListWrapper />} />
-                <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
-                <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
-                <Route path="/user-management" element={<UserManagementWrapper />} />
-                <Route path="/admin-profit" element={<AdminProfitWrapper />} />
-                <Route path="/my-collections" element={<UserCollectionsWrapper />} />
-                <Route path="/admin-collections" element={<AdminCollectionsWrapper />} />
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
-            </div>
-          </BrowserRouter>
+          <div className="app">
+            <Routes>
+              <Route path="/dashboard" element={<DashboardWrapper />} />
+              <Route path="/customers" element={<CustomersWrapper />} />
+              <Route path="/customer-loans/:customerId" element={<CustomerLoansWrapper />} />
+              <Route path="/loan-details/:loanId" element={<LoanDetailsWrapper />} />
+              <Route path="/sunday-collections" element={<SundayCollectionsWrapper />} />
+              <Route path="/overdue-payments" element={<OverduePaymentsWrapper />} />
+              <Route path="/payment-tracker" element={<ExcelPaymentTrackerWrapper />} />
+              <Route path="/vaddi-list" element={<VaddiListWrapper />} />
+              <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
+              <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
+              <Route path="/investments" element={<InvestmentsListWrapper />} />
+              <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
+              <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
+              <Route path="/user-management" element={<UserManagementWrapper />} />
+              <Route path="/admin-profit" element={<AdminProfitWrapper />} />
+              <Route path="/my-collections" element={<UserCollectionsWrapper />} />
+              <Route path="/admin-collections" element={<AdminCollectionsWrapper />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </div>
         </LanguageProvider>
       </ThemeProvider>
     );
@@ -210,14 +208,12 @@ function AppContent() {
     return (
       <ThemeProvider>
         <LanguageProvider>
-          <BrowserRouter>
-            <div className="app">
-              <Routes>
-                <Route path="/chit-dashboard" element={<ChitDashboardWrapper />} />
-                <Route path="*" element={<Navigate to="/chit-dashboard" replace />} />
-              </Routes>
-            </div>
-          </BrowserRouter>
+          <div className="app">
+            <Routes>
+              <Route path="/chit-dashboard" element={<ChitDashboardWrapper />} />
+              <Route path="*" element={<Navigate to="/chit-dashboard" replace />} />
+            </Routes>
+          </div>
         </LanguageProvider>
       </ThemeProvider>
     );
