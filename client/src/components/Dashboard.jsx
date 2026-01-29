@@ -1254,6 +1254,51 @@ function Dashboard({ navigateTo }) {
           </button>
 
           <button
+            onClick={() => { setShowSidebar(false); setShowPendingPayments(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: pendingPayments && pendingPayments.length > 0
+                ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                : 'transparent',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+            onMouseOver={(e) => {
+              if (!pendingPayments || pendingPayments.length === 0) {
+                e.currentTarget.style.background = '#334155';
+              }
+            }}
+            onMouseOut={(e) => {
+              if (!pendingPayments || pendingPayments.length === 0) {
+                e.currentTarget.style.background = 'transparent';
+              }
+            }}
+          >
+            <span>⏳ {language === 'ta' ? 'நிலுவை செலுத்துதல்' : 'Pending Payments'}</span>
+            {pendingPayments && pendingPayments.length > 0 && (
+              <span style={{
+                background: 'white',
+                color: '#d97706',
+                borderRadius: '12px',
+                padding: '2px 8px',
+                fontSize: '11px',
+                fontWeight: 700
+              }}>
+                {pendingPayments.length}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => { setShowSidebar(false); navigateTo('sunday-collections'); }}
             style={{
               width: '100%',
@@ -3924,6 +3969,320 @@ function Dashboard({ navigateTo }) {
 
       {showPrintReports && (
         <PrintReports onClose={() => setShowPrintReports(false)} />
+      )}
+
+      {/* Pending Payments Modal */}
+      {showPendingPayments && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+          onClick={() => setShowPendingPayments(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '800px',
+              maxHeight: '90vh',
+              overflow: 'hidden',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '20px',
+              borderBottom: '2px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'
+            }}>
+              <div>
+                <h2 style={{
+                  margin: 0,
+                  fontSize: '20px',
+                  fontWeight: 700,
+                  color: '#92400e',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  ⏳ {language === 'ta' ? 'நிலுவையில் உள்ள கொடுப்பனவுகள்' : 'Pending UPI Payments'}
+                  {pendingPayments && pendingPayments.length > 0 && (
+                    <span style={{
+                      background: '#f59e0b',
+                      color: 'white',
+                      borderRadius: '50%',
+                      width: '28px',
+                      height: '28px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px'
+                    }}>
+                      {pendingPayments.length}
+                    </span>
+                  )}
+                </h2>
+                <p style={{
+                  margin: '4px 0 0 0',
+                  fontSize: '13px',
+                  color: '#78350f'
+                }}>
+                  {language === 'ta' ? 'வாடிக்கையாளர்கள் சமர்ப்பித்த கொடுப்பனவுகளை ஒப்புக்கொள் அல்லது நிராகரி' : 'Review and approve customer payment submissions'}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPendingPayments(false)}
+                style={{
+                  background: 'white',
+                  border: '2px solid #f59e0b',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '20px',
+                  color: '#92400e',
+                  fontWeight: 700
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{
+              padding: '20px',
+              overflowY: 'auto',
+              flex: 1
+            }}>
+              {!pendingPayments || pendingPayments.length === 0 ? (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '60px 20px',
+                  color: '#64748b'
+                }}>
+                  <div style={{ fontSize: '64px', marginBottom: '16px' }}>✓</div>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600 }}>
+                    {language === 'ta' ? 'நிலுவையில் கொடுப்பனவுகள் இல்லை' : 'No Pending Payments'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '14px' }}>
+                    {language === 'ta' ? 'அனைத்து கொடுப்பனவுகளும் செயலாக்கப்பட்டன' : 'All payments have been processed'}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '16px' }}>
+                  {pendingPayments.map((payment) => (
+                    <div
+                      key={payment.id}
+                      style={{
+                        background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                        border: '2px solid #f59e0b',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.2)'
+                      }}
+                    >
+                      {/* Payment Header */}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        marginBottom: '12px',
+                        paddingBottom: '12px',
+                        borderBottom: '1px solid #f59e0b'
+                      }}>
+                        <div>
+                          <div style={{
+                            fontSize: '16px',
+                            fontWeight: 700,
+                            color: '#92400e',
+                            marginBottom: '4px'
+                          }}>
+                            {payment.customer_name}
+                          </div>
+                          <div style={{
+                            fontSize: '12px',
+                            color: '#78350f',
+                            fontFamily: 'monospace'
+                          }}>
+                            📱 {payment.customer_phone}
+                          </div>
+                        </div>
+                        <div style={{
+                          background: 'white',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          fontSize: '14px',
+                          fontWeight: 700,
+                          color: '#059669'
+                        }}>
+                          {formatCurrency(payment.amount)}
+                        </div>
+                      </div>
+
+                      {/* Payment Details */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                        gap: '8px',
+                        marginBottom: '12px',
+                        fontSize: '12px',
+                        color: '#78350f'
+                      }}>
+                        <div>
+                          <strong>{language === 'ta' ? 'கடன் வகை:' : 'Loan Type:'}</strong> {payment.loan_type}
+                        </div>
+                        <div>
+                          <strong>{language === 'ta' ? 'கடன் ID:' : 'Loan ID:'}</strong> #{payment.loan_id}
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <strong>{language === 'ta' ? 'சமர்ப்பிக்கப்பட்டது:' : 'Submitted:'}</strong> {new Date(payment.created_at).toLocaleString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Payment Screenshot */}
+                      {payment.payment_proof_url && (
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#78350f',
+                            marginBottom: '8px'
+                          }}>
+                            {language === 'ta' ? 'கொடுப்பனவு ஸ்கிரீன்ஷாட்:' : 'Payment Screenshot:'}
+                          </div>
+                          <a
+                            href={payment.payment_proof_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              maxWidth: '300px',
+                              margin: '0 auto'
+                            }}
+                          >
+                            <img
+                              src={payment.payment_proof_url}
+                              alt="Payment proof"
+                              style={{
+                                width: '100%',
+                                height: 'auto',
+                                borderRadius: '8px',
+                                border: '2px solid #d97706',
+                                cursor: 'pointer',
+                                maxHeight: '200px',
+                                objectFit: 'contain',
+                                background: 'white'
+                              }}
+                            />
+                          </a>
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#92400e',
+                            textAlign: 'center',
+                            marginTop: '4px'
+                          }}>
+                            {language === 'ta' ? 'முழு அளவு பார்க்க கிளிக் செய்யவும்' : 'Click to view full size'}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => handleApprovePendingPayment(payment)}
+                          style={{
+                            flex: 1,
+                            padding: '12px',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.4)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+                          }}
+                        >
+                          ✓ {language === 'ta' ? 'ஒப்புக்கொள்' : 'Approve'}
+                        </button>
+                        <button
+                          onClick={() => handleRejectPendingPayment(payment)}
+                          style={{
+                            flex: 1,
+                            padding: '12px',
+                            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.3)';
+                          }}
+                        >
+                          ✗ {language === 'ta' ? 'நிராகரி' : 'Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {showBackupModal && (
