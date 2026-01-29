@@ -3666,7 +3666,7 @@ function Dashboard({ navigateTo }) {
                       </div>
 
                       {/* Payment Screenshot */}
-                      {payment.payment_proof_url && (
+                      {payment?.payment_proof_url && (
                         <div style={{ marginBottom: '12px' }}>
                           <div style={{
                             fontSize: '11px',
@@ -3997,10 +3997,8 @@ function Dashboard({ navigateTo }) {
               width: '100%',
               maxWidth: '800px',
               maxHeight: '90vh',
-              overflow: 'hidden',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-              display: 'flex',
-              flexDirection: 'column'
+              overflow: 'auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
             }}
           >
             {/* Header */}
@@ -4070,11 +4068,9 @@ function Dashboard({ navigateTo }) {
 
             {/* Content */}
             <div style={{
-              padding: '20px',
-              overflowY: 'auto',
-              flex: 1
+              padding: '20px'
             }}>
-              {!pendingPayments || pendingPayments.length === 0 ? (
+              {(!pendingPayments || pendingPayments.length === 0) ? (
                 <div style={{
                   textAlign: 'center',
                   padding: '60px 20px',
@@ -4090,9 +4086,9 @@ function Dashboard({ navigateTo }) {
                 </div>
               ) : (
                 <div style={{ display: 'grid', gap: '16px' }}>
-                  {pendingPayments.map((payment) => (
+                  {Array.isArray(pendingPayments) && pendingPayments.map((payment) => (
                     <div
-                      key={payment.id}
+                      key={payment?.id || Math.random()}
                       style={{
                         background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
                         border: '2px solid #f59e0b',
@@ -4117,14 +4113,14 @@ function Dashboard({ navigateTo }) {
                             color: '#92400e',
                             marginBottom: '4px'
                           }}>
-                            {payment.customer_name}
+                            {payment?.customer_name || 'Unknown'}
                           </div>
                           <div style={{
                             fontSize: '12px',
                             color: '#78350f',
                             fontFamily: 'monospace'
                           }}>
-                            📱 {payment.customer_phone}
+                            📱 {payment?.customer_phone || 'N/A'}
                           </div>
                         </div>
                         <div style={{
@@ -4135,7 +4131,7 @@ function Dashboard({ navigateTo }) {
                           fontWeight: 700,
                           color: '#059669'
                         }}>
-                          {formatCurrency(payment.amount)}
+                          {formatCurrency(payment?.amount || 0)}
                         </div>
                       </div>
 
@@ -4149,24 +4145,24 @@ function Dashboard({ navigateTo }) {
                         color: '#78350f'
                       }}>
                         <div>
-                          <strong>{language === 'ta' ? 'கடன் வகை:' : 'Loan Type:'}</strong> {payment.loan_type}
+                          <strong>{language === 'ta' ? 'கடன் வகை:' : 'Loan Type:'}</strong> {payment?.loan_type || 'N/A'}
                         </div>
                         <div>
-                          <strong>{language === 'ta' ? 'கடன் ID:' : 'Loan ID:'}</strong> #{payment.loan_id}
+                          <strong>{language === 'ta' ? 'கடன் ID:' : 'Loan ID:'}</strong> #{payment?.loan_id || 'N/A'}
                         </div>
                         <div style={{ gridColumn: '1 / -1' }}>
-                          <strong>{language === 'ta' ? 'சமர்ப்பிக்கப்பட்டது:' : 'Submitted:'}</strong> {new Date(payment.created_at).toLocaleString('en-IN', {
+                          <strong>{language === 'ta' ? 'சமர்ப்பிக்கப்பட்டது:' : 'Submitted:'}</strong> {payment?.created_at ? new Date(payment.created_at).toLocaleString('en-IN', {
                             day: '2-digit',
                             month: 'short',
                             year: 'numeric',
                             hour: '2-digit',
                             minute: '2-digit'
-                          })}
+                          }) : 'N/A'}
                         </div>
                       </div>
 
                       {/* Payment Screenshot */}
-                      {payment.payment_proof_url && (
+                      {payment?.payment_proof_url && (
                         <div style={{ marginBottom: '12px' }}>
                           <div style={{
                             fontSize: '12px',
