@@ -9,7 +9,8 @@ function BalanceCheck() {
   const [expandedLoans, setExpandedLoans] = useState({});
 
   const formatCurrency = (amount) => {
-    return `₹${amount.toLocaleString('en-IN')}`;
+    if (amount === null || amount === undefined || isNaN(amount)) return '₹0';
+    return `₹${Number(amount).toLocaleString('en-IN')}`;
   };
 
   const formatDate = (dateString) => {
