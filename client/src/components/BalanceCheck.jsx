@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { API_URL } from '../config';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 function BalanceCheck() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -7,6 +9,13 @@ function BalanceCheck() {
   const [customerData, setCustomerData] = useState(null);
   const [error, setError] = useState('');
   const [expandedLoans, setExpandedLoans] = useState({});
+
+  // UPI Payment Modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState(null);
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
 
   const formatCurrency = (amount) => {
     if (amount === null || amount === undefined || isNaN(amount)) return '₹0';
@@ -156,6 +165,109 @@ function BalanceCheck() {
       ...prev,
       [key]: !prev[key]
     }));
+  };
+
+  // Open payment modal for a loan
+  const handlePayNow = (loan, loanType) => {
+    setSelectedLoan({ ...loan, loanType });
+    setShowPaymentModal(true);
+    setPaymentScreenshot(null);
+  };
+
+  // Handle screenshot file selection
+  const handleScreenshotChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      // Validate file is an image
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file');
+        return;
+      }
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+      setPaymentScreenshot(file);
+    }
+  };
+
+  // Submit payment request
+  const handleSubmitPayment = async () => {
+    if (!paymentScreenshot) {
+      alert('Please upload payment screenshot');
+      return;
+    }
+
+    if (!selectedLoan) {
+      alert('Loan information missing');
+      return;
+    }
+
+    setPaymentSubmitting(true);
+
+    try {
+      // Upload screenshot to Firebase Storage
+      const timestamp = Date.now();
+      const fileName = `payment-proofs/${selectedLoan.loanId}_${timestamp}.jpg`;
+      const storageRef = ref(storage, fileName);
+
+      setUploading(true);
+      await uploadBytes(storageRef, paymentScreenshot);
+      const downloadURL = await getDownloadURL(storageRef);
+      setUploading(false);
+
+      // Determine amount based on loan type
+      let amount = 0;
+      let loanType = selectedLoan.loanType;
+
+      if (loanType === 'monthly') {
+        amount = selectedLoan.monthlyAmount;
+        loanType = 'Monthly';
+      } else if (loanType === 'weekly') {
+        amount = selectedLoan.weeklyAmount;
+        loanType = 'Weekly';
+      } else if (loanType === 'daily') {
+        amount = selectedLoan.dailyAmount;
+        loanType = 'Daily';
+      } else if (loanType === 'interest') {
+        amount = selectedLoan.monthlyInterest;
+        loanType = 'Vaddi';
+      }
+
+      // Submit payment request to API
+      const response = await fetch(`${API_URL}/pending-payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: customerData.customerId || phoneNumber,
+          customer_name: customerData.name,
+          customer_phone: phoneNumber,
+          loan_id: selectedLoan.loanId,
+          loan_type: loanType,
+          amount: amount,
+          payment_proof_url: downloadURL
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit payment request');
+      }
+
+      const result = await response.json();
+
+      // Success
+      alert('Payment request submitted successfully! Please wait for admin approval.');
+      setShowPaymentModal(false);
+      setSelectedLoan(null);
+      setPaymentScreenshot(null);
+    } catch (error) {
+      console.error('Error submitting payment:', error);
+      alert('Failed to submit payment request. Please try again.');
+    } finally {
+      setPaymentSubmitting(false);
+      setUploading(false);
+    }
   };
 
   return (
@@ -496,12 +608,38 @@ function BalanceCheck() {
                     <div>💵 Total Paid: {formatCurrency(totalPaid)} ({paymentsCompleted} payment{paymentsCompleted !== 1 ? 's' : ''})</div>
                   </div>
 
+                  {/* Pay Now Button */}
+                  {monthlyLoan.balance > 0 && (
+                    <button
+                      onClick={() => handlePayNow(monthlyLoan, 'monthly')}
+                      style={{
+                        marginTop: '12px',
+                        width: '100%',
+                        padding: '14px',
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                      }}
+                    >
+                      💳 Pay Now via UPI
+                    </button>
+                  )}
+
                   {/* View Payment History Button */}
                   {payments.length > 0 && (
                     <button
                       onClick={() => toggleLoan('monthly', index)}
                       style={{
-                        marginTop: '12px',
+                        marginTop: '8px',
                         width: '100%',
                         padding: '12px',
                         background: isExpanded ? '#f1f5f9' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -731,12 +869,38 @@ function BalanceCheck() {
                     <div>💵 Total Paid: {formatCurrency(totalPaid)} ({paymentsCompleted} payment{paymentsCompleted !== 1 ? 's' : ''})</div>
                   </div>
 
+                  {/* Pay Now Button */}
+                  {loan.balance > 0 && (
+                    <button
+                      onClick={() => handlePayNow(loan, 'weekly')}
+                      style={{
+                        marginTop: '12px',
+                        width: '100%',
+                        padding: '14px',
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                      }}
+                    >
+                      💳 Pay Now via UPI
+                    </button>
+                  )}
+
                   {/* View Payment History Button */}
                   {payments.length > 0 && (
                     <button
                       onClick={() => toggleLoan('weekly', index)}
                       style={{
-                        marginTop: '12px',
+                        marginTop: '8px',
                         width: '100%',
                         padding: '12px',
                         background: isExpanded ? '#f1f5f9' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -966,12 +1130,38 @@ function BalanceCheck() {
                     <div>💵 Total Paid: {formatCurrency(totalPaid)} ({paymentsCompleted} payment{paymentsCompleted !== 1 ? 's' : ''})</div>
                   </div>
 
+                  {/* Pay Now Button */}
+                  {loan.balance > 0 && (
+                    <button
+                      onClick={() => handlePayNow(loan, 'daily')}
+                      style={{
+                        marginTop: '12px',
+                        width: '100%',
+                        padding: '14px',
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                      }}
+                    >
+                      💳 Pay Now via UPI
+                    </button>
+                  )}
+
                   {/* View Payment History Button */}
                   {payments.length > 0 && (
                     <button
                       onClick={() => toggleLoan('daily', index)}
                       style={{
-                        marginTop: '12px',
+                        marginTop: '8px',
                         width: '100%',
                         padding: '12px',
                         background: isExpanded ? '#f1f5f9' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -1202,12 +1392,38 @@ function BalanceCheck() {
                     <div>💵 Total Paid: {formatCurrency(totalPaid)} ({paymentsCompleted} payment{paymentsCompleted !== 1 ? 's' : ''})</div>
                   </div>
 
+                  {/* Pay Now Button */}
+                  {loan.balance > 0 && (
+                    <button
+                      onClick={() => handlePayNow(loan, 'interest')}
+                      style={{
+                        marginTop: '12px',
+                        width: '100%',
+                        padding: '14px',
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                      }}
+                    >
+                      💳 Pay Interest via UPI
+                    </button>
+                  )}
+
                   {/* View Payment History Button */}
                   {payments.length > 0 && (
                     <button
                       onClick={() => toggleLoan('interest', index)}
                       style={{
-                        marginTop: '12px',
+                        marginTop: '8px',
                         width: '100%',
                         padding: '12px',
                         background: isExpanded ? '#f1f5f9' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -1397,6 +1613,257 @@ function BalanceCheck() {
       }}>
         <p style={{ margin: 0 }}>© 2026 Om Sai Murugan Finance. All rights reserved.</p>
       </div>
+
+      {/* UPI Payment Modal */}
+      {showPaymentModal && selectedLoan && (
+        <div
+          onClick={() => !uploading && !paymentSubmitting && setShowPaymentModal(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'white',
+              borderRadius: '20px',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '450px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              textAlign: 'center',
+              marginBottom: '20px',
+              paddingBottom: '16px',
+              borderBottom: '2px solid #e5e7eb'
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>💳</div>
+              <h3 style={{
+                margin: '0 0 8px 0',
+                fontSize: '20px',
+                fontWeight: 700,
+                color: '#1e293b'
+              }}>
+                Pay via UPI
+              </h3>
+              <div style={{ fontSize: '13px', color: '#64748b' }}>
+                {selectedLoan.loanName || 'Loan Payment'}
+              </div>
+            </div>
+
+            {/* Payment Details */}
+            <div style={{
+              background: '#f8fafc',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '20px'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '12px'
+              }}>
+                <span style={{ color: '#64748b', fontSize: '14px' }}>Amount to Pay:</span>
+                <span style={{ fontWeight: 700, fontSize: '18px', color: '#10b981' }}>
+                  {selectedLoan.loanType === 'monthly' && formatCurrency(selectedLoan.monthlyAmount)}
+                  {selectedLoan.loanType === 'weekly' && formatCurrency(selectedLoan.weeklyAmount)}
+                  {selectedLoan.loanType === 'daily' && formatCurrency(selectedLoan.dailyAmount)}
+                  {selectedLoan.loanType === 'interest' && formatCurrency(selectedLoan.monthlyInterest)}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                paddingTop: '12px',
+                borderTop: '1px solid #e5e7eb'
+              }}>
+                <span style={{ color: '#64748b', fontSize: '14px' }}>Current Balance:</span>
+                <span style={{ fontWeight: 600, fontSize: '16px', color: '#475569' }}>
+                  {formatCurrency(selectedLoan.balance)}
+                </span>
+              </div>
+            </div>
+
+            {/* UPI Details */}
+            <div style={{
+              background: '#dcfce7',
+              border: '2px solid #86efac',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#166534', marginBottom: '12px' }}>
+                📱 Pay to this UPI ID:
+              </div>
+              <div style={{
+                background: 'white',
+                padding: '12px',
+                borderRadius: '8px',
+                fontFamily: 'monospace',
+                fontSize: '16px',
+                fontWeight: 700,
+                color: '#1e293b',
+                textAlign: 'center',
+                marginBottom: '12px'
+              }}>
+                8667510724@pthdfc
+              </div>
+              <button
+                onClick={() => {
+                  const amount = selectedLoan.loanType === 'monthly' ? selectedLoan.monthlyAmount :
+                                selectedLoan.loanType === 'weekly' ? selectedLoan.weeklyAmount :
+                                selectedLoan.loanType === 'daily' ? selectedLoan.dailyAmount :
+                                selectedLoan.monthlyInterest;
+                  const upiLink = `upi://pay?pa=8667510724@pthdfc&pn=Om%20Sai%20Murugan%20Finance&am=${amount}&cu=INR&tn=${selectedLoan.loanName}%20Payment`;
+                  window.open(upiLink, '_blank');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Open UPI App to Pay
+              </button>
+            </div>
+
+            {/* Instructions */}
+            <div style={{
+              background: '#fef3c7',
+              border: '1px solid #fcd34d',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '20px',
+              fontSize: '13px',
+              color: '#92400e'
+            }}>
+              <div style={{ fontWeight: 700, marginBottom: '8px' }}>📋 Payment Instructions:</div>
+              <ol style={{ margin: '0', paddingLeft: '20px' }}>
+                <li>Click "Open UPI App to Pay" above</li>
+                <li>Complete the payment in your UPI app</li>
+                <li>Take a screenshot of the payment success page</li>
+                <li>Upload the screenshot below</li>
+                <li>Click "Submit" to notify us</li>
+              </ol>
+            </div>
+
+            {/* Screenshot Upload */}
+            <div style={{
+              marginBottom: '20px'
+            }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: 600,
+                color: '#1e293b',
+                marginBottom: '8px'
+              }}>
+                Upload Payment Screenshot *
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleScreenshotChange}
+                disabled={uploading || paymentSubmitting}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px dashed #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              />
+              {paymentScreenshot && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '8px',
+                  background: '#dcfce7',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: '#166534'
+                }}>
+                  ✓ Screenshot selected: {paymentScreenshot.name}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setPaymentScreenshot(null);
+                }}
+                disabled={uploading || paymentSubmitting}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#e5e7eb',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: uploading || paymentSubmitting ? 'not-allowed' : 'pointer',
+                  opacity: uploading || paymentSubmitting ? 0.5 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitPayment}
+                disabled={!paymentScreenshot || uploading || paymentSubmitting}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: !paymentScreenshot || uploading || paymentSubmitting ? '#9ca3af' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: !paymentScreenshot || uploading || paymentSubmitting ? 'not-allowed' : 'pointer',
+                  boxShadow: !paymentScreenshot || uploading || paymentSubmitting ? 'none' : '0 4px 12px rgba(59, 130, 246, 0.3)'
+                }}
+              >
+                {uploading ? 'Uploading...' : paymentSubmitting ? 'Submitting...' : 'Submit Payment'}
+              </button>
+            </div>
+
+            {/* Note */}
+            <div style={{
+              marginTop: '16px',
+              fontSize: '11px',
+              color: '#64748b',
+              textAlign: 'center'
+            }}>
+              Your payment will be verified by our admin before updating your balance
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -578,6 +578,242 @@ app.post('/api/loans/recalculate-all', async (req, res) => {
   }
 });
 
+// ============ PENDING PAYMENTS ROUTES (UPI Customer Payments) ============
+
+// Submit payment request (Customer)
+app.post('/api/pending-payments', async (req, res) => {
+  try {
+    const {
+      customer_id,
+      customer_name,
+      customer_phone,
+      loan_id,
+      loan_type,
+      amount,
+      payment_proof_url,
+      upi_transaction_id
+    } = req.body;
+
+    // Validate required fields
+    if (!customer_id || !customer_name || !loan_id || !loan_type || !amount) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate amount is positive
+    if (amount <= 0) {
+      return res.status(400).json({ error: 'Amount must be greater than 0' });
+    }
+
+    // Create pending payment record
+    const pendingPayment = {
+      customer_id,
+      customer_name,
+      customer_phone: customer_phone || '',
+      loan_id,
+      loan_type, // Weekly, Monthly, Daily, Vaddi
+      amount: Number(amount),
+      payment_proof_url: payment_proof_url || '',
+      upi_transaction_id: upi_transaction_id || '',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      verified_by: null,
+      verified_at: null,
+      rejection_reason: ''
+    };
+
+    const docRef = await db.collection('pending_payments').add(pendingPayment);
+
+    res.status(201).json({
+      id: docRef.id,
+      ...pendingPayment,
+      message: 'Payment request submitted successfully. Waiting for admin approval.'
+    });
+  } catch (error) {
+    console.error('Error submitting payment request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all pending payments (Admin)
+app.get('/api/pending-payments', async (req, res) => {
+  try {
+    const { status } = req.query; // Optional filter by status (pending, approved, rejected)
+
+    let query = db.collection('pending_payments');
+
+    if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    const snapshot = await query.orderBy('created_at', 'desc').get();
+
+    const pendingPayments = [];
+    snapshot.forEach(doc => {
+      pendingPayments.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    res.json(pendingPayments);
+  } catch (error) {
+    console.error('Error fetching pending payments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Approve payment request (Admin)
+app.post('/api/pending-payments/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { verified_by } = req.body; // Admin user ID/name
+
+    // Get pending payment details
+    const pendingPaymentDoc = await db.collection('pending_payments').doc(id).get();
+
+    if (!pendingPaymentDoc.exists) {
+      return res.status(404).json({ error: 'Payment request not found' });
+    }
+
+    const pendingPayment = pendingPaymentDoc.data();
+
+    // Check if already processed
+    if (pendingPayment.status !== 'pending') {
+      return res.status(400).json({ error: `Payment already ${pendingPayment.status}` });
+    }
+
+    // Record payment based on loan type
+    let paymentResult;
+
+    if (pendingPayment.loan_type === 'Monthly') {
+      // Monthly Finance payment
+      const customerDoc = await db.collection('monthly_finance_customers').doc(pendingPayment.loan_id).get();
+
+      if (!customerDoc.exists) {
+        throw new Error('Monthly finance customer not found');
+      }
+
+      const customerData = customerDoc.data();
+      const newBalance = customerData.balance - pendingPayment.amount;
+
+      // Record payment in monthly_finance_payments collection
+      const paymentData = {
+        customer_id: pendingPayment.loan_id,
+        amount: pendingPayment.amount,
+        payment_date: new Date().toISOString().split('T')[0],
+        payment_mode: 'upi',
+        balance_after: newBalance,
+        created_at: new Date().toISOString(),
+        pending_payment_id: id
+      };
+
+      await db.collection('monthly_finance_payments').add(paymentData);
+
+      // Update customer balance
+      await db.collection('monthly_finance_customers').doc(pendingPayment.loan_id).update({
+        balance: newBalance,
+        current_month: customerData.current_month + 1
+      });
+
+      paymentResult = { newBalance, paymentData };
+    } else {
+      // Regular loan payment (Weekly, Daily, Vaddi)
+      const loanDoc = await db.collection('loans').doc(pendingPayment.loan_id).get();
+
+      if (!loanDoc.exists) {
+        throw new Error('Loan not found');
+      }
+
+      const loanData = loanDoc.data();
+      const newBalance = loanData.balance - pendingPayment.amount;
+
+      // Get all payments for period_number calculation
+      const paymentsSnapshot = await db.collection('payments')
+        .where('loan_id', '==', pendingPayment.loan_id)
+        .get();
+
+      const periodNumber = paymentsSnapshot.size + 1;
+
+      // Record payment
+      const paymentData = {
+        loan_id: pendingPayment.loan_id,
+        amount: pendingPayment.amount,
+        payment_date: new Date().toISOString().split('T')[0],
+        payment_mode: 'upi',
+        period_number: periodNumber,
+        balance_after: newBalance,
+        created_at: new Date().toISOString(),
+        pending_payment_id: id
+      };
+
+      await db.collection('payments').add(paymentData);
+
+      // Update loan balance
+      await db.collection('loans').doc(pendingPayment.loan_id).update({
+        balance: newBalance
+      });
+
+      paymentResult = { newBalance, paymentData };
+    }
+
+    // Update pending payment status
+    await db.collection('pending_payments').doc(id).update({
+      status: 'approved',
+      verified_by: verified_by || 'admin',
+      verified_at: new Date().toISOString()
+    });
+
+    res.json({
+      message: 'Payment approved successfully',
+      pending_payment_id: id,
+      new_balance: paymentResult.newBalance,
+      payment_data: paymentResult.paymentData
+    });
+  } catch (error) {
+    console.error('Error approving payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reject payment request (Admin)
+app.post('/api/pending-payments/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rejection_reason, verified_by } = req.body;
+
+    // Get pending payment details
+    const pendingPaymentDoc = await db.collection('pending_payments').doc(id).get();
+
+    if (!pendingPaymentDoc.exists) {
+      return res.status(404).json({ error: 'Payment request not found' });
+    }
+
+    const pendingPayment = pendingPaymentDoc.data();
+
+    // Check if already processed
+    if (pendingPayment.status !== 'pending') {
+      return res.status(400).json({ error: `Payment already ${pendingPayment.status}` });
+    }
+
+    // Update pending payment status
+    await db.collection('pending_payments').doc(id).update({
+      status: 'rejected',
+      verified_by: verified_by || 'admin',
+      verified_at: new Date().toISOString(),
+      rejection_reason: rejection_reason || 'No reason provided'
+    });
+
+    res.json({
+      message: 'Payment rejected successfully',
+      pending_payment_id: id,
+      rejection_reason: rejection_reason || 'No reason provided'
+    });
+  } catch (error) {
+    console.error('Error rejecting payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ PAYMENT ROUTES ============
 
 // Get all payments for a specific date (optimized batch query)

@@ -64,6 +64,9 @@ function Dashboard({ navigateTo }) {
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
 
+  // Pending Payments (UPI) state
+  const [showPendingPayments, setShowPendingPayments] = useState(false);
+
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
     refreshInterval: 30000, // Auto-refresh every 30 seconds
@@ -115,6 +118,17 @@ function Dashboard({ navigateTo }) {
     fetcher,
     {
       refreshInterval: 30000,
+      revalidateOnFocus: true,
+      dedupingInterval: 2000,
+    }
+  );
+
+  // Fetch Pending UPI Payments
+  const { data: pendingPayments = [], mutate: mutatePendingPayments } = useSWR(
+    `${API_URL}/pending-payments?status=pending`,
+    fetcher,
+    {
+      refreshInterval: 15000, // Auto-refresh every 15 seconds for pending payments
       revalidateOnFocus: true,
       dedupingInterval: 2000,
     }
@@ -1060,6 +1074,56 @@ function Dashboard({ navigateTo }) {
     });
   };
 
+  // Approve Pending Payment
+  const handleApprovePendingPayment = async (payment) => {
+    if (!window.confirm(`Approve payment of ${formatCurrency(payment.amount)} from ${payment.customer_name}?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/pending-payments/${payment.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to approve payment');
+      }
+
+      alert('Payment approved successfully!');
+      mutatePendingPayments(); // Refresh pending payments
+      mutate(); // Refresh stats
+      mutateCustomers(); // Refresh customer data
+    } catch (error) {
+      console.error('Error approving payment:', error);
+      alert('Failed to approve payment. Please try again.');
+    }
+  };
+
+  // Reject Pending Payment
+  const handleRejectPendingPayment = async (payment) => {
+    const reason = window.prompt('Enter rejection reason (optional):');
+    if (reason === null) return; // User cancelled
+
+    try {
+      const response = await fetch(`${API_URL}/pending-payments/${payment.id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason || 'Invalid payment proof' })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reject payment');
+      }
+
+      alert('Payment rejected successfully!');
+      mutatePendingPayments(); // Refresh pending payments
+    } catch (error) {
+      console.error('Error rejecting payment:', error);
+      alert('Failed to reject payment. Please try again.');
+    }
+  };
+
   // Show loading screen while initial data loads
   if (isLoading && !stats) {
     return (
@@ -1703,6 +1767,39 @@ function Dashboard({ navigateTo }) {
               ☰
             </button>
             <h2 style={{ margin: 0, color: 'white', fontSize: '16px', fontWeight: 700 }}>{t('dashboard')}</h2>
+            {/* Pending Payments Notification Badge */}
+            {pendingPayments && pendingPayments.length > 0 && (
+              <div
+                onClick={() => {
+                  setShowPendingPayments(true);
+                  document.getElementById('pending-payments-section')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                style={{
+                  position: 'relative',
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  color: 'white',
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
+                  animation: 'pulse 2s infinite'
+                }}
+              >
+                <span>⏳</span>
+                <span>{pendingPayments.length}</span>
+                <style>{`
+                  @keyframes pulse {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                  }
+                `}</style>
+              </div>
+            )}
           </div>
 
           {/* Search Bar */}
@@ -3389,6 +3486,257 @@ function Dashboard({ navigateTo }) {
               );
             })()}
           </div>
+
+          {/* Pending Payments (UPI) Section */}
+          {pendingPayments && pendingPayments.length > 0 && (
+            <div
+              id="pending-payments-section"
+              style={{
+                background: isDarkMode ? theme.backgroundCard : 'white',
+                borderRadius: '12px',
+                padding: '16px',
+                marginTop: '10px',
+                boxShadow: isDarkMode ? theme.shadow : '0 2px 6px rgba(0,0,0,0.1)'
+              }}
+            >
+              <div
+                onClick={() => setShowPendingPayments(!showPendingPayments)}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  marginBottom: showPendingPayments ? '16px' : 0
+                }}
+              >
+                <h3 style={{
+                  margin: 0,
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: isDarkMode ? theme.text : '#1e293b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span style={{
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    color: 'white',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: 700
+                  }}>
+                    {pendingPayments.length}
+                  </span>
+                  {language === 'ta' ? '⏳ நிலுவையில் உள்ள கொடுப்பனவுகள்' : '⏳ Pending UPI Payments'}
+                </h3>
+                <span style={{
+                  fontSize: '16px',
+                  transition: 'transform 0.3s',
+                  transform: showPendingPayments ? 'rotate(180deg)' : 'rotate(0deg)'
+                }}>
+                  {showPendingPayments ? '▲' : '▼'}
+                </span>
+              </div>
+
+              {showPendingPayments && (
+                <div style={{ display: 'grid', gap: '12px' }}>
+                  {pendingPayments.map((payment) => (
+                    <div
+                      key={payment.id}
+                      style={{
+                        background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                        border: '2px solid #f59e0b',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.2)'
+                      }}
+                    >
+                      {/* Payment Header */}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        marginBottom: '12px',
+                        paddingBottom: '12px',
+                        borderBottom: '1px solid #f59e0b'
+                      }}>
+                        <div>
+                          <div style={{
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            color: '#92400e',
+                            marginBottom: '4px'
+                          }}>
+                            {payment.customer_name}
+                          </div>
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#78350f',
+                            fontFamily: 'monospace'
+                          }}>
+                            📱 {payment.customer_phone}
+                          </div>
+                        </div>
+                        <div style={{
+                          background: 'white',
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: '#059669'
+                        }}>
+                          {formatCurrency(payment.amount)}
+                        </div>
+                      </div>
+
+                      {/* Payment Details */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '8px',
+                        marginBottom: '12px',
+                        fontSize: '11px',
+                        color: '#78350f'
+                      }}>
+                        <div>
+                          <strong>Loan Type:</strong> {payment.loan_type}
+                        </div>
+                        <div>
+                          <strong>Loan ID:</strong> #{payment.loan_id}
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <strong>Submitted:</strong> {new Date(payment.created_at).toLocaleString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Payment Screenshot */}
+                      {payment.payment_proof_url && (
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#78350f',
+                            marginBottom: '6px'
+                          }}>
+                            Payment Screenshot:
+                          </div>
+                          <a
+                            href={payment.payment_proof_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              maxWidth: '300px',
+                              margin: '0 auto'
+                            }}
+                          >
+                            <img
+                              src={payment.payment_proof_url}
+                              alt="Payment proof"
+                              style={{
+                                width: '100%',
+                                height: 'auto',
+                                borderRadius: '8px',
+                                border: '2px solid #d97706',
+                                cursor: 'pointer',
+                                maxHeight: '200px',
+                                objectFit: 'contain',
+                                background: 'white'
+                              }}
+                            />
+                          </a>
+                          <div style={{
+                            fontSize: '10px',
+                            color: '#92400e',
+                            textAlign: 'center',
+                            marginTop: '4px'
+                          }}>
+                            Click to view full size
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => handleApprovePendingPayment(payment)}
+                          style={{
+                            flex: 1,
+                            padding: '12px',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.4)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+                          }}
+                        >
+                          ✓ Approve
+                        </button>
+                        <button
+                          onClick={() => handleRejectPendingPayment(payment)}
+                          style={{
+                            flex: 1,
+                            padding: '12px',
+                            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.3)';
+                          }}
+                        >
+                          ✗ Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Charts Section */}
           <div style={{
