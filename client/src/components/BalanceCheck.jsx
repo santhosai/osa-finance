@@ -207,16 +207,6 @@ function BalanceCheck() {
     setPaymentSubmitting(true);
 
     try {
-      // Upload screenshot to Firebase Storage
-      const timestamp = Date.now();
-      const fileName = `payment-proofs/${selectedLoan.loanId}_${timestamp}.jpg`;
-      const storageRef = ref(storage, fileName);
-
-      setUploading(true);
-      await uploadBytes(storageRef, paymentScreenshot);
-      const downloadURL = await getDownloadURL(storageRef);
-      setUploading(false);
-
       // Determine amount based on loan type
       let amount = 0;
       let loanType = selectedLoan.loanType;
@@ -234,6 +224,23 @@ function BalanceCheck() {
         amount = selectedLoan.monthlyInterest;
         loanType = 'Vaddi';
       }
+
+      // Validate minimum amount (UPI usually requires minimum ₹10)
+      if (amount < 10) {
+        alert('Minimum payment amount is ₹10. Please contact admin for smaller amounts.');
+        setPaymentSubmitting(false);
+        return;
+      }
+
+      // Upload screenshot to Firebase Storage
+      const timestamp = Date.now();
+      const fileName = `payment-proofs/${selectedLoan.loanId}_${timestamp}.jpg`;
+      const storageRef = ref(storage, fileName);
+
+      setUploading(true);
+      await uploadBytes(storageRef, paymentScreenshot);
+      const downloadURL = await getDownloadURL(storageRef);
+      setUploading(false);
 
       // Submit payment request to API
       const response = await fetch(`${API_URL}/pending-payments`, {
@@ -1766,6 +1773,16 @@ function BalanceCheck() {
                 <li>Upload the screenshot below</li>
                 <li>Click "Submit" to notify us</li>
               </ol>
+              <div style={{
+                marginTop: '12px',
+                padding: '8px',
+                background: '#fef3c7',
+                border: '1px solid #f59e0b',
+                borderRadius: '6px',
+                fontSize: '11px'
+              }}>
+                <strong>Note:</strong> If payment fails in UPI app, still upload the screenshot showing the payment attempt. Our admin will verify and update manually.
+              </div>
             </div>
 
             {/* Screenshot Upload */}
