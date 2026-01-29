@@ -501,6 +501,83 @@ app.post('/api/loans/:id/recalculate-balance', async (req, res) => {
   }
 });
 
+// Recalculate balance_after for ALL loans (bulk fix)
+app.post('/api/loans/recalculate-all', async (req, res) => {
+  try {
+    const loansSnapshot = await db.collection('loans').get();
+    const results = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const loanDoc of loansSnapshot.docs) {
+      try {
+        const loanData = loanDoc.data();
+        const loanId = loanDoc.id;
+
+        // Get all payments for this loan
+        const paymentsSnapshot = await db.collection('payments')
+          .where('loan_id', '==', loanId)
+          .get();
+
+        if (paymentsSnapshot.empty) {
+          continue; // Skip loans with no payments
+        }
+
+        // Sort payments by date
+        const payments = paymentsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })).sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
+
+        // Recalculate balance_after for each payment
+        let runningBalance = loanData.loan_amount;
+        for (let i = 0; i < payments.length; i++) {
+          runningBalance = runningBalance - payments[i].amount;
+          await db.collection('payments').doc(payments[i].id).update({
+            period_number: i + 1,
+            balance_after: runningBalance
+          });
+        }
+
+        // Calculate total paid and update loan balance
+        const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const correctBalance = loanData.loan_amount - totalPaid;
+
+        await db.collection('loans').doc(loanId).update({
+          balance: correctBalance
+        });
+
+        results.push({
+          loan_id: loanId,
+          customer_id: loanData.customer_id,
+          payments_updated: payments.length,
+          status: 'success'
+        });
+        successCount++;
+      } catch (loanError) {
+        results.push({
+          loan_id: loanDoc.id,
+          status: 'error',
+          error: loanError.message
+        });
+        errorCount++;
+      }
+    }
+
+    console.log(`✅ Bulk recalculation complete: ${successCount} loans updated, ${errorCount} errors`);
+
+    res.json({
+      message: 'Bulk recalculation complete',
+      total_loans: loansSnapshot.size,
+      success_count: successCount,
+      error_count: errorCount,
+      results: results
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ PAYMENT ROUTES ============
 
 // Get all payments for a specific date (optimized batch query)
@@ -1856,7 +1933,9 @@ app.get('/api/all-payments', async (req, res) => {
         type: 'regular',
         payment_date: data.payment_date,
         amount: data.amount || 0,
-        loan_id: data.loan_id
+        loan_id: data.loan_id,
+        balance_after: data.balance_after,
+        payment_mode: data.payment_mode || 'cash'
       });
     });
 
