@@ -16,9 +16,12 @@ const VaddiList = ({ navigateTo }) => {
     phone: '',
     loan_date: new Date().toISOString().split('T')[0],
     principal_amount: '',
-    aadhar_number: ''
+    aadhar_number: '',
+    interest_rate: '',
+    collateral_type: ''
   });
   const [loading, setLoading] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
   const [showAcknowledgmentModal, setShowAcknowledgmentModal] = useState(false);
   const [selectedEntryForAck, setSelectedEntryForAck] = useState(null);
 
@@ -293,8 +296,8 @@ const VaddiList = ({ navigateTo }) => {
     }
   };
 
-  // Add new entry for selected day
-  const handleAddEntry = async (e) => {
+  // Add or edit entry
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     // Prevent double submission
@@ -313,22 +316,37 @@ const VaddiList = ({ navigateTo }) => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/vaddi-entries`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          day: selectedDay,
-          name: formData.name,
-          amount: parseInt(formData.amount),
-          phone: formData.phone,
-          loan_date: formData.loan_date,
-          principal_amount: formData.principal_amount ? parseInt(formData.principal_amount) : null,
-          aadhar_number: formData.aadhar_number
-        })
-      });
+      const payload = {
+        name: formData.name,
+        amount: parseInt(formData.amount),
+        phone: formData.phone,
+        loan_date: formData.loan_date,
+        principal_amount: formData.principal_amount ? parseInt(formData.principal_amount) : null,
+        aadhar_number: formData.aadhar_number,
+        interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : null,
+        collateral_type: formData.collateral_type
+      };
+
+      let response;
+      if (editingEntry) {
+        // Update existing entry
+        response = await fetch(`${API_URL}/vaddi-entries/${editingEntry.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        // Add new entry
+        payload.day = selectedDay;
+        response = await fetch(`${API_URL}/vaddi-entries`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
 
       if (!response.ok) {
-        throw new Error('Failed to add entry');
+        throw new Error(editingEntry ? 'Failed to update entry' : 'Failed to add entry');
       }
 
       mutate();
@@ -338,15 +356,50 @@ const VaddiList = ({ navigateTo }) => {
         phone: '',
         loan_date: new Date().toISOString().split('T')[0],
         principal_amount: '',
-        aadhar_number: ''
+        aadhar_number: '',
+        interest_rate: '',
+        collateral_type: ''
       });
-      alert('Entry added successfully!');
+      setEditingEntry(null);
+      alert(editingEntry ? 'Entry updated successfully!' : 'Entry added successfully!');
     } catch (error) {
-      console.error('Error adding entry:', error);
-      alert('Failed to add entry: ' + error.message);
+      console.error('Error saving entry:', error);
+      alert('Failed to save entry: ' + error.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle edit button click
+  const handleEditEntry = (entry) => {
+    setEditingEntry(entry);
+    setFormData({
+      name: entry.name || '',
+      amount: entry.amount?.toString() || '',
+      phone: entry.phone || '',
+      loan_date: entry.loan_date || new Date().toISOString().split('T')[0],
+      principal_amount: entry.principal_amount?.toString() || '',
+      aadhar_number: entry.aadhar_number || '',
+      interest_rate: entry.interest_rate?.toString() || '',
+      collateral_type: entry.collateral_type || ''
+    });
+    setSelectedDay(entry.day);
+    setShowModal(true);
+  };
+
+  // Cancel edit
+  const handleCancelEdit = () => {
+    setEditingEntry(null);
+    setFormData({
+      name: '',
+      amount: '',
+      phone: '',
+      loan_date: new Date().toISOString().split('T')[0],
+      principal_amount: '',
+      aadhar_number: '',
+      interest_rate: '',
+      collateral_type: ''
+    });
   };
 
   // Generate Acknowledgment PDF (Tamil)
@@ -1926,8 +1979,8 @@ Thank you for your payment!
                 👤 Select from Contacts
               </button>
 
-              {/* Add Entry Form */}
-              <form onSubmit={handleAddEntry} style={{ marginBottom: '20px' }}>
+              {/* Add/Edit Entry Form */}
+              <form onSubmit={handleSubmit} style={{ marginBottom: '20px' }}>
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
                     👤 Name *
@@ -2044,24 +2097,99 @@ Thank you for your payment!
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  style={{
-                    width: '100%',
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                    color: 'white',
-                    border: 'none',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    fontWeight: 600,
-                    fontSize: '14px',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    opacity: loading ? 0.6 : 1
-                  }}
-                >
-                  {loading ? 'Adding...' : '➕ Add Entry'}
-                </button>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                      📊 Interest Rate (%)
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={formData.interest_rate}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9.]/g, '');
+                        setFormData({ ...formData, interest_rate: value });
+                      }}
+                      placeholder="e.g., 8 or 8.5"
+                      disabled={loading}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151', fontSize: '14px' }}>
+                      🏍️ Collateral / Basis
+                    </label>
+                    <select
+                      value={formData.collateral_type}
+                      onChange={(e) => setFormData({ ...formData, collateral_type: e.target.value })}
+                      disabled={loading}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        background: 'white'
+                      }}
+                    >
+                      <option value="">Select...</option>
+                      <option value="Vehicle">Vehicle</option>
+                      <option value="Gold">Gold</option>
+                      <option value="Property">Property</option>
+                      <option value="Signature">Signature</option>
+                      <option value="Documents">Documents</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  {editingEntry && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      disabled={loading}
+                      style={{
+                        flex: 1,
+                        background: '#e5e7eb',
+                        color: '#374151',
+                        border: 'none',
+                        padding: '12px',
+                        borderRadius: '6px',
+                        fontWeight: 600,
+                        fontSize: '14px',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        opacity: loading ? 0.6 : 1
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    style={{
+                      flex: 1,
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: 'white',
+                      border: 'none',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      fontWeight: 600,
+                      fontSize: '14px',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      opacity: loading ? 0.6 : 1
+                    }}
+                  >
+                    {loading ? (editingEntry ? 'Updating...' : 'Adding...') : (editingEntry ? '✓ Update Entry' : '➕ Add Entry')}
+                  </button>
+                </div>
               </form>
 
               {/* Entries List */}
@@ -2112,6 +2240,13 @@ Thank you for your payment!
                                 📱 {entry.phone}
                                 {entry.loan_date && ` • 📅 ${new Date(entry.loan_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}`}
                               </div>
+                              {(entry.interest_rate || entry.collateral_type) && (
+                                <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                                  {entry.interest_rate && `📊 ${entry.interest_rate}% interest`}
+                                  {entry.interest_rate && entry.collateral_type && ' • '}
+                                  {entry.collateral_type && `🏍️ ${entry.collateral_type}`}
+                                </div>
+                              )}
                               {entry.aadhar_number && (
                                 <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
                                   🆔 {entry.aadhar_number}
@@ -2212,6 +2347,21 @@ Thank you for your payment!
                                 }}
                               >
                                 {entry.signed_acknowledgment ? '✓ Signed' : '📷 Upload'}
+                              </button>
+                              <button
+                                onClick={() => handleEditEntry(entry)}
+                                style={{
+                                  background: '#6366f1',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '5px 10px',
+                                  fontSize: '11px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600
+                                }}
+                              >
+                                ✏️ Edit
                               </button>
                               <button
                                 onClick={() => handleDelete(entry.id)}

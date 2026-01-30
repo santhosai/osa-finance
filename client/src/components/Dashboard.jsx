@@ -134,6 +134,84 @@ function Dashboard({ navigateTo }) {
     }
   );
 
+  // Track previous pending payments count for notifications
+  const prevPendingCountRef = useRef(0);
+  const notificationAudioRef = useRef(null);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Monitor for new pending payments and trigger notifications
+  useEffect(() => {
+    if (!pendingPayments || pendingPayments.length === 0) {
+      prevPendingCountRef.current = 0;
+      return;
+    }
+
+    const currentCount = pendingPayments.length;
+    const prevCount = prevPendingCountRef.current;
+
+    // If we have new pending payments (count increased)
+    if (currentCount > prevCount && prevCount > 0) {
+      const newPaymentsCount = currentCount - prevCount;
+
+      // Play notification sound (when app is active)
+      try {
+        // Create notification sound (beep) - works when tab is active
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.value = 800; // Frequency in Hz
+        oscillator.type = 'sine';
+
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+      } catch (error) {
+        console.error('Error playing notification sound:', error);
+      }
+
+      // Show browser notification with sound and vibration
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const notification = new Notification('🔔 New UPI Payment Request', {
+          body: `${newPaymentsCount} new payment${newPaymentsCount > 1 ? 's' : ''} pending approval\nClick to view details`,
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          tag: 'pending-payment',
+          requireInteraction: true, // Keeps notification visible until user interacts
+          silent: false, // Explicitly request sound (browser/OS will play default notification sound)
+          vibrate: [200, 100, 200, 100, 200], // Vibration pattern for mobile devices
+          renotify: true, // Re-alert even if notification with same tag exists
+          timestamp: Date.now(),
+        });
+
+        // Focus window when notification is clicked
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+          // Scroll to pending payments section
+          const pendingSection = document.querySelector('[data-section="pending-payments"]');
+          if (pendingSection) {
+            pendingSection.scrollIntoView({ behavior: 'smooth' });
+          }
+        };
+      }
+    }
+
+    // Update previous count
+    prevPendingCountRef.current = currentCount;
+  }, [pendingPayments]);
+
   // Fetch weekly payments data when selectedDate or customers change
   const customersLength = customers?.length || 0;
   useEffect(() => {
@@ -1094,6 +1172,20 @@ function Dashboard({ navigateTo }) {
       mutatePendingPayments(); // Refresh pending payments
       mutate(); // Refresh stats
       mutateCustomers(); // Refresh customer data
+
+      // Send WhatsApp notification
+      if (payment.customer_phone) {
+        const message = `✅ *Payment Approved*\n\n` +
+          `Dear ${payment.customer_name},\n\n` +
+          `Your payment of ₹${payment.amount} has been approved successfully!\n\n` +
+          `Your balance has been updated.\n\n` +
+          `Thank you for your payment!\n` +
+          `- Om Sai Murugan Finance`;
+
+        const cleanPhone = payment.customer_phone.replace(/\D/g, '');
+        const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
     } catch (error) {
       console.error('Error approving payment:', error);
       alert('Failed to approve payment. Please try again.');
@@ -1118,6 +1210,21 @@ function Dashboard({ navigateTo }) {
 
       alert('Payment rejected successfully!');
       mutatePendingPayments(); // Refresh pending payments
+
+      // Send WhatsApp notification
+      if (payment.customer_phone) {
+        const rejectionReason = reason || 'Invalid payment proof';
+        const message = `❌ *Payment Rejected*\n\n` +
+          `Dear ${payment.customer_name},\n\n` +
+          `Your payment of ₹${payment.amount} was rejected.\n\n` +
+          `Reason: ${rejectionReason}\n\n` +
+          `Please contact us for assistance or submit a valid payment proof.\n\n` +
+          `- Om Sai Murugan Finance`;
+
+        const cleanPhone = payment.customer_phone.replace(/\D/g, '');
+        const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
     } catch (error) {
       console.error('Error rejecting payment:', error);
       alert('Failed to reject payment. Please try again.');
@@ -2340,7 +2447,7 @@ function Dashboard({ navigateTo }) {
               </div>
               <span style={{ fontSize: '10px', opacity: 0.8 }}>Tap to view →</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '18px', fontWeight: 700 }}>
                   {formatCurrency(vaddiSummary.totalCollected || 0)}
@@ -2352,12 +2459,6 @@ function Dashboard({ navigateTo }) {
                   {formatCurrency(vaddiSummary.myProfit || 0)}
                 </div>
                 <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('myProfit')}</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '18px', fontWeight: 700, color: '#fcd34d' }}>
-                  {formatCurrency(vaddiSummary.friendShare || 0)}
-                </div>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('friend')}</div>
               </div>
             </div>
             {vaddiSummary.paymentCount > 0 && (
@@ -3536,6 +3637,7 @@ function Dashboard({ navigateTo }) {
           {pendingPayments && pendingPayments.length > 0 && (
             <div
               id="pending-payments-section"
+              data-section="pending-payments"
               style={{
                 background: isDarkMode ? theme.backgroundCard : 'white',
                 borderRadius: '12px',
