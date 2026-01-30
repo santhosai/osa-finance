@@ -1865,7 +1865,7 @@ app.get('/api/vaddi-entries', async (req, res) => {
 // Create new vaddi entry
 app.post('/api/vaddi-entries', async (req, res) => {
   try {
-    const { day, name, amount, phone, loan_date, principal_amount, aadhar_number } = req.body;
+    const { day, name, amount, phone, loan_date, principal_amount, aadhar_number, interest_rate, collateral_type } = req.body;
 
     // Validate required fields
     if (!day || !name || !amount || !phone) {
@@ -1890,6 +1890,8 @@ app.post('/api/vaddi-entries', async (req, res) => {
       loan_date: loan_date || new Date().toISOString().split('T')[0],
       principal_amount: principal_amount ? parseInt(principal_amount) : null,
       aadhar_number: aadhar_number || '',
+      interest_rate: interest_rate ? parseFloat(interest_rate) : null,
+      collateral_type: collateral_type || '',
       signed_acknowledgment: '',
       createdAt: new Date().toISOString()
     };
@@ -1935,11 +1937,11 @@ app.put('/api/vaddi-entries/:id/acknowledgment', async (req, res) => {
   }
 });
 
-// Update vaddi entry (mark as paid/unpaid)
+// Update vaddi entry (full edit)
 app.put('/api/vaddi-entries/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { paid, paidDate } = req.body;
+    const { paid, paidDate, name, phone, amount, principal_amount, interest_rate, collateral_type, loan_date, aadhar_number, day } = req.body;
 
     const entryRef = db.collection('vaddi_entries').doc(id);
     const entryDoc = await entryRef.get();
@@ -1948,18 +1950,34 @@ app.put('/api/vaddi-entries/:id', async (req, res) => {
       return res.status(404).json({ error: 'Vaddi entry not found' });
     }
 
+    // Build update data - only include fields that are provided
     const updateData = {
-      paid,
-      paidDate: paid ? (paidDate || new Date().toISOString().split('T')[0]) : null,
       updatedAt: new Date().toISOString()
     };
 
+    // Payment status update (legacy support)
+    if (paid !== undefined) {
+      updateData.paid = paid;
+      updateData.paidDate = paid ? (paidDate || new Date().toISOString().split('T')[0]) : null;
+    }
+
+    // Full entry edit fields
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (amount !== undefined) updateData.amount = parseInt(amount);
+    if (principal_amount !== undefined) updateData.principal_amount = principal_amount ? parseInt(principal_amount) : null;
+    if (interest_rate !== undefined) updateData.interest_rate = interest_rate ? parseFloat(interest_rate) : null;
+    if (collateral_type !== undefined) updateData.collateral_type = collateral_type;
+    if (loan_date !== undefined) updateData.loan_date = loan_date;
+    if (aadhar_number !== undefined) updateData.aadhar_number = aadhar_number;
+    if (day !== undefined) updateData.day = parseInt(day);
+
     await entryRef.update(updateData);
 
+    const updatedDoc = await entryRef.get();
     res.json({
       id,
-      ...entryDoc.data(),
-      ...updateData
+      ...updatedDoc.data()
     });
   } catch (error) {
     console.error('Error updating vaddi entry:', error);
