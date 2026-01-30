@@ -32,7 +32,11 @@
       "Bash(vercel:*)",
       "Bash(git push:*)",
       "Bash(pushd:*)",
-      "Bash(ren:*)"
+      "Bash(ren:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(npm start)"
     ],
     "deny": [],
     "ask": []

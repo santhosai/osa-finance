@@ -32,7 +32,7 @@ const VaddiList = ({ navigateTo }) => {
   });
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
-  const [paymentData, setPaymentData] = useState({ totalAmount: '', myShare: '', friendShare: '' });
+  const [paymentData, setPaymentData] = useState({ paymentType: 'interest', interestAmount: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [printReceiptData, setPrintReceiptData] = useState(null); // For thermal print
   const [showSendChoice, setShowSendChoice] = useState(false); // Show WhatsApp/Print choice modal
@@ -162,10 +162,11 @@ const VaddiList = ({ navigateTo }) => {
   // Open payment modal
   const openPaymentModal = (entry) => {
     setSelectedEntry(entry);
+    // Calculate monthly interest: principal * rate / 100
+    const monthlyInterest = Math.round((entry.principal_amount || entry.amount) * (entry.interest_rate || 0) / 100);
     setPaymentData({
-      totalAmount: entry.amount?.toString() || '',
-      myShare: '',
-      friendShare: ''
+      paymentType: 'interest',
+      interestAmount: monthlyInterest.toString()
     });
     setShowPaymentModal(true);
   };
@@ -174,7 +175,7 @@ const VaddiList = ({ navigateTo }) => {
   const closePaymentModal = () => {
     setShowPaymentModal(false);
     setSelectedEntry(null);
-    setPaymentData({ totalAmount: '', myShare: '', friendShare: '' });
+    setPaymentData({ paymentType: 'interest', interestAmount: '' });
   };
 
   // Undo/delete a payment
@@ -207,49 +208,85 @@ const VaddiList = ({ navigateTo }) => {
 
     if (isSubmitting) return;
 
-    const total = parseInt(paymentData.totalAmount) || 0;
-    const myShare = parseInt(paymentData.myShare) || 0;
-    const friendShare = parseInt(paymentData.friendShare) || 0;
-
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_URL}/vaddi-entries/${selectedEntry.id}/monthly-payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          month: selectedMonth,
-          totalAmount: total,
-          myShare: myShare,
-          friendShare: friendShare
-        })
-      });
+      if (paymentData.paymentType === 'settled') {
+        // Settle the loan - customer paid full principal
+        const response = await fetch(`${API_URL}/vaddi-entries/${selectedEntry.id}/settle`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' }
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to record payment');
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to settle loan');
+        }
+
+        mutate(); // Refresh entries list
+        mutatePayments();
+        mutateSummary();
+
+        // Store payment data for receipt
+        setPendingPaymentData({
+          customerName: selectedEntry.name,
+          phone: selectedEntry.phone,
+          loanType: 'Vaddi - SETTLED',
+          amountPaid: selectedEntry.principal_amount || selectedEntry.amount,
+          loanAmount: selectedEntry.principal_amount || selectedEntry.amount,
+          balance: 0,
+          interestMonth: 'Principal Returned',
+          date: new Date().toISOString()
+        });
+        setShowSendChoice(true);
+
+        closePaymentModal();
+        alert('Loan marked as SETTLED! Principal returned.');
+      } else {
+        // Record interest payment
+        const interestAmount = parseInt(paymentData.interestAmount) || 0;
+
+        if (interestAmount <= 0) {
+          alert('Please enter interest amount');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const response = await fetch(`${API_URL}/vaddi-entries/${selectedEntry.id}/monthly-payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            month: selectedMonth,
+            totalAmount: interestAmount,
+            myShare: interestAmount,
+            friendShare: 0
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to record payment');
+        }
+
+        mutatePayments();
+        mutateSummary();
+
+        // Store payment data and show choice modal
+        const monthName = getMonthOptions().find(m => m.value === selectedMonth)?.label || selectedMonth;
+        setPendingPaymentData({
+          customerName: selectedEntry.name,
+          phone: selectedEntry.phone,
+          loanType: 'Vaddi Interest',
+          amountPaid: interestAmount,
+          loanAmount: selectedEntry.principal_amount || selectedEntry.amount,
+          balance: selectedEntry.principal_amount || selectedEntry.amount,
+          interestMonth: monthName,
+          date: new Date().toISOString()
+        });
+        setShowSendChoice(true);
+
+        closePaymentModal();
       }
-
-      mutatePayments();
-      mutateSummary();
-
-      // Store payment data and show choice modal
-      const monthName = getMonthOptions().find(m => m.value === selectedMonth)?.label || selectedMonth;
-      setPendingPaymentData({
-        customerName: selectedEntry.name,
-        phone: selectedEntry.phone,
-        loanType: 'Vaddi Interest',
-        amountPaid: total,
-        loanAmount: selectedEntry.principal_amount || selectedEntry.amount,
-        balance: selectedEntry.principal_amount || selectedEntry.amount,
-        myShare: myShare,
-        friendShare: friendShare,
-        interestMonth: monthName,
-        date: new Date().toISOString()
-      });
-      setShowSendChoice(true);
-
-      closePaymentModal();
     } catch (error) {
       console.error('Error recording payment:', error);
       alert(error.message);
@@ -1040,8 +1077,7 @@ Thank you for your payment!
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
     doc.text(`Total Collected: ${formatCurrency(summary.totalCollected)}`, 20, 65);
-    doc.text(`My Profit: ${formatCurrency(summary.myProfit)}`, 80, 65);
-    doc.text(`Friend Share: ${formatCurrency(summary.friendShare)}`, 140, 65);
+    doc.text(`My Profit: ${formatCurrency(summary.myProfit)}`, 110, 65);
     doc.text(`Payments: ${paidThisMonth.length} paid / ${unpaidThisMonth.length} pending`, 20, 73);
 
     let yPos = 95;
@@ -1070,8 +1106,7 @@ Thank you for your payment!
           yPos = 20;
         }
         doc.text(`${index + 1}. ${entry.name} (Day ${entry.day})`, 20, yPos);
-        doc.text(`Total: ${formatCurrency(payment?.totalAmount)}`, 100, yPos);
-        doc.text(`My: ${formatCurrency(payment?.myShare)} | Friend: ${formatCurrency(payment?.friendShare)}`, 140, yPos);
+        doc.text(`Interest: ${formatCurrency(payment?.totalAmount)}`, 120, yPos);
         yPos += 8;
       });
     }
@@ -1399,7 +1434,7 @@ Thank you for your payment!
             <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '12px' }}>
               {getMonthOptions().find(m => m.value === selectedMonth)?.label} Summary
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '24px', fontWeight: 700 }}>{formatCurrency(summary.totalCollected)}</div>
                 <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Collected</div>
@@ -1407,10 +1442,6 @@ Thank you for your payment!
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '24px', fontWeight: 700, color: '#10b981' }}>{formatCurrency(summary.myProfit)}</div>
                 <div style={{ fontSize: '12px', opacity: 0.8 }}>My Profit</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: '#f59e0b' }}>{formatCurrency(summary.friendShare)}</div>
-                <div style={{ fontSize: '12px', opacity: 0.8 }}>Friend Share</div>
               </div>
             </div>
             <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '13px', opacity: 0.9 }}>
@@ -1606,11 +1637,6 @@ Thank you for your payment!
                             <div style={{ fontSize: '13px', color: '#059669', fontWeight: 600 }}>
                               Total: {formatCurrency(payment?.totalAmount)} • Day {entry.day}
                             </div>
-                            {payment && (
-                              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                                My: {formatCurrency(payment.myShare)} | Friend: {formatCurrency(payment.friendShare)}
-                              </div>
-                            )}
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
                             <div style={{
@@ -1823,7 +1849,7 @@ Thank you for your payment!
               <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '10px' }}>
                 💰 All Time Total
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '20px', fontWeight: 700 }}>
                     {formatCurrency(allMonthsSummary.reduce((sum, m) => sum + (m.totalCollected || 0), 0))}
@@ -1835,12 +1861,6 @@ Thank you for your payment!
                     {formatCurrency(allMonthsSummary.reduce((sum, m) => sum + (m.myProfit || 0), 0))}
                   </div>
                   <div style={{ fontSize: '11px', opacity: 0.8 }}>My Profit</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '20px', fontWeight: 700 }}>
-                    {formatCurrency(allMonthsSummary.reduce((sum, m) => sum + (m.friendShare || 0), 0))}
-                  </div>
-                  <div style={{ fontSize: '11px', opacity: 0.8 }}>Friend</div>
                 </div>
               </div>
             </div>
@@ -1907,7 +1927,7 @@ Thank you for your payment!
                         </div>
                         <span style={{ color: '#6b7280', fontSize: '12px' }}>Tap to view →</span>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                         <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(102, 126, 234, 0.1)', borderRadius: '8px' }}>
                           <div style={{ fontSize: '16px', fontWeight: 700, color: '#667eea' }}>
                             {formatCurrency(monthData.totalCollected || 0)}
@@ -1919,12 +1939,6 @@ Thank you for your payment!
                             {formatCurrency(monthData.myProfit || 0)}
                           </div>
                           <div style={{ fontSize: '10px', color: '#6b7280' }}>My Profit</div>
-                        </div>
-                        <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px' }}>
-                          <div style={{ fontSize: '16px', fontWeight: 700, color: '#f59e0b' }}>
-                            {formatCurrency(monthData.friendShare || 0)}
-                          </div>
-                          <div style={{ fontSize: '10px', color: '#6b7280' }}>Friend</div>
                         </div>
                       </div>
                       {monthData.paymentCount > 0 && (
@@ -2525,90 +2539,118 @@ Thank you for your payment!
 
             {/* Modal Content */}
             <form onSubmit={handlePaymentSubmit} style={{ padding: '20px' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151' }}>
-                  💰 Total Amount Collected
+              {/* Payment Type Selection */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '10px', fontWeight: 600, color: '#374151' }}>
+                  Payment Type
                 </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={paymentData.totalAmount}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9]/g, '');
-                    setPaymentData({ ...paymentData, totalAmount: value });
-                  }}
-                  placeholder="Total amount"
-                  autoComplete="off"
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '2px solid #e5e7eb',
-                    borderRadius: '8px',
-                    fontSize: '16px'
-                  }}
-                />
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentData({ ...paymentData, paymentType: 'interest' })}
+                    style={{
+                      flex: 1,
+                      padding: '14px 10px',
+                      border: paymentData.paymentType === 'interest' ? '2px solid #10b981' : '2px solid #e5e7eb',
+                      borderRadius: '10px',
+                      background: paymentData.paymentType === 'interest' ? '#dcfce7' : 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '6px' }}>💵</div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: paymentData.paymentType === 'interest' ? '#059669' : '#374151' }}>
+                      Only Interest
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                      Monthly interest
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentData({ ...paymentData, paymentType: 'settled' })}
+                    style={{
+                      flex: 1,
+                      padding: '14px 10px',
+                      border: paymentData.paymentType === 'settled' ? '2px solid #f59e0b' : '2px solid #e5e7eb',
+                      borderRadius: '10px',
+                      background: paymentData.paymentType === 'settled' ? '#fef3c7' : 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '6px' }}>✅</div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: paymentData.paymentType === 'settled' ? '#d97706' : '#374151' }}>
+                      Settled
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                      Full principal paid
+                    </div>
+                  </button>
+                </div>
               </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151' }}>
-                  👤 My Share
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={paymentData.myShare}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9]/g, '');
-                    setPaymentData({ ...paymentData, myShare: value });
-                  }}
-                  placeholder="Your share"
-                  autoComplete="off"
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '2px solid #e5e7eb',
-                    borderRadius: '8px',
-                    fontSize: '16px'
-                  }}
-                />
-              </div>
+              {/* Interest Amount Input - Only show if payment type is 'interest' */}
+              {paymentData.paymentType === 'interest' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151' }}>
+                    💰 Interest Amount Collected
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={paymentData.interestAmount}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setPaymentData({ ...paymentData, interestAmount: value });
+                    }}
+                    placeholder="Interest amount"
+                    autoComplete="off"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '18px',
+                      fontWeight: 600
+                    }}
+                  />
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#6b7280' }}>
+                    Principal: ₹{(selectedEntry?.principal_amount || selectedEntry?.amount || 0).toLocaleString('en-IN')} × {selectedEntry?.interest_rate || 0}% = ₹{Math.round((selectedEntry?.principal_amount || selectedEntry?.amount || 0) * (selectedEntry?.interest_rate || 0) / 100).toLocaleString('en-IN')}/month
+                  </div>
+                </div>
+              )}
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#374151' }}>
-                  🤝 Friend Share
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={paymentData.friendShare}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9]/g, '');
-                    setPaymentData({ ...paymentData, friendShare: value });
-                  }}
-                  placeholder="Friend's share"
-                  autoComplete="off"
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '2px solid #e5e7eb',
-                    borderRadius: '8px',
-                    fontSize: '16px'
-                  }}
-                />
-              </div>
+              {/* Settled Confirmation - Only show if payment type is 'settled' */}
+              {paymentData.paymentType === 'settled' && (
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '16px',
+                  background: '#fef3c7',
+                  borderRadius: '10px',
+                  border: '2px solid #fcd34d'
+                }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#92400e', marginBottom: '8px' }}>
+                    ⚠️ Settle this loan?
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#78350f' }}>
+                    This will mark <strong>{selectedEntry?.name}</strong>'s loan as fully settled.
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#78350f', marginTop: '6px' }}>
+                    Principal: <strong>₹{(selectedEntry?.principal_amount || selectedEntry?.amount || 0).toLocaleString('en-IN')}</strong> returned.
+                  </div>
+                </div>
+              )}
 
               <button
                 type="submit"
                 disabled={isSubmitting}
                 style={{
                   width: '100%',
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  background: paymentData.paymentType === 'settled'
+                    ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                    : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   color: 'white',
                   border: 'none',
                   padding: '14px',
@@ -2619,7 +2661,7 @@ Thank you for your payment!
                   opacity: isSubmitting ? 0.6 : 1
                 }}
               >
-                {isSubmitting ? 'Recording...' : '✓ Record Payment'}
+                {isSubmitting ? 'Processing...' : paymentData.paymentType === 'settled' ? '✓ Mark as Settled' : '✓ Record Interest'}
               </button>
             </form>
           </div>
