@@ -462,9 +462,21 @@ const VaddiList = ({ navigateTo }) => {
     doc.setFontSize(10);
 
     if (entry.principal_amount) {
-      doc.text(`Asal Thogai / Principal Amount: Rs. ${entry.principal_amount.toLocaleString('en-IN')}/-`, 25, yPos + 18);
+      doc.text(`Asal Thogai / Principal Amount: Rs ${formatForThermal(entry.principal_amount)}/-`, 25, yPos + 18);
     }
-    doc.text(`Vatti Seluthum Theti / Interest Due Day: ${entry.day} (Every Month)`, 25, yPos + 30);
+    if (entry.amount) {
+      doc.text(`Vatti Thogai / Monthly Interest: Rs ${formatForThermal(entry.amount)}/-`, 25, yPos + 25);
+      yPos += 7;
+    }
+    if (entry.interest_rate) {
+      doc.text(`Vatti Viruppu / Interest Rate: ${entry.interest_rate}% per month`, 25, yPos + 25);
+      yPos += 7;
+    }
+    if (entry.collateral_type) {
+      doc.text(`Othaikkapatta Porulgal / Collateral: ${entry.collateral_type}`, 25, yPos + 25);
+      yPos += 7;
+    }
+    doc.text(`Vatti Seluthum Theti / Interest Due Day: ${entry.day} (Every Month)`, 25, yPos + 25);
     yPos += 55;
 
     // Terms
@@ -748,6 +760,12 @@ Thank you for your payment!
     LINE: '--------------------------------\n'
   };
 
+  // Format amount for thermal printer (no commas, simple number)
+  const formatForThermal = (amount) => {
+    if (!amount) return '0';
+    return Math.round(amount).toString();
+  };
+
   // Print Vaddi Audit Report (Thermal)
   const printVaddiAuditThermal = async () => {
     try {
@@ -807,8 +825,8 @@ Thank you for your payment!
       receipt += THERMAL_COMMANDS.BOLD_OFF;
       receipt += THERMAL_COMMANDS.ALIGN_LEFT;
       receipt += `Active Entries: ${totalActive}\n`;
-      receipt += `Total Principal: Rs.${totalPrincipal.toLocaleString('en-IN')}\n`;
-      receipt += `Total Monthly Int: Rs.${totalInterest.toLocaleString('en-IN')}\n`;
+      receipt += `Total Principal: Rs ${formatForThermal(totalPrincipal)}\n`;
+      receipt += `Total Monthly Int: Rs ${formatForThermal(totalInterest)}\n`;
       receipt += THERMAL_COMMANDS.LINE;
 
       // Customer List sorted by day
@@ -826,8 +844,14 @@ Thank you for your payment!
         receipt += `${idx + 1}. ${entry.name}\n`;
         receipt += `   Ph: ${entry.phone || '-'}\n`;
         receipt += `   Day: ${entry.day} | Date: ${loanDate}\n`;
-        receipt += `   Principal: Rs.${(entry.principal_amount || entry.amount || 0).toLocaleString('en-IN')}\n`;
-        receipt += `   Interest: Rs.${(entry.amount || 0).toLocaleString('en-IN')}/mo\n`;
+        receipt += `   Principal: Rs ${formatForThermal(entry.principal_amount || entry.amount || 0)}\n`;
+        receipt += `   Interest: Rs ${formatForThermal(entry.amount || 0)}/mo\n`;
+        if (entry.interest_rate) {
+          receipt += `   Rate: ${entry.interest_rate}%\n`;
+        }
+        if (entry.collateral_type) {
+          receipt += `   Collateral: ${entry.collateral_type}\n`;
+        }
         if (entry.aadhar_number) {
           receipt += `   Aadhar: ${entry.aadhar_number}\n`;
         }
@@ -930,8 +954,8 @@ Thank you for your payment!
       receipt += THERMAL_COMMANDS.BOLD_OFF;
       receipt += THERMAL_COMMANDS.ALIGN_LEFT;
       receipt += `Entries: ${dayEntries.length}\n`;
-      receipt += `Principal: Rs.${totalPrincipal.toLocaleString('en-IN')}\n`;
-      receipt += `Monthly Int: Rs.${totalInterest.toLocaleString('en-IN')}\n`;
+      receipt += `Principal: Rs ${formatForThermal(totalPrincipal)}\n`;
+      receipt += `Monthly Int: Rs ${formatForThermal(totalInterest)}\n`;
       receipt += THERMAL_COMMANDS.LINE;
 
       // Customer List
@@ -946,15 +970,21 @@ Thank you for your payment!
         receipt += `${idx + 1}. ${entry.name}\n`;
         receipt += `   Ph: ${entry.phone || '-'}\n`;
         receipt += `   Date: ${loanDate}\n`;
-        receipt += `   Principal: Rs.${(entry.principal_amount || entry.amount || 0).toLocaleString('en-IN')}\n`;
-        receipt += `   Interest: Rs.${(entry.amount || 0).toLocaleString('en-IN')}/mo\n`;
+        receipt += `   Principal: Rs ${formatForThermal(entry.principal_amount || entry.amount || 0)}\n`;
+        receipt += `   Interest: Rs ${formatForThermal(entry.amount || 0)}/mo\n`;
+        if (entry.interest_rate) {
+          receipt += `   Rate: ${entry.interest_rate}%\n`;
+        }
+        if (entry.collateral_type) {
+          receipt += `   Collateral: ${entry.collateral_type}\n`;
+        }
         receipt += '- - - - - - - - - - - - - -\n';
       });
 
       receipt += THERMAL_COMMANDS.LINE;
       receipt += THERMAL_COMMANDS.ALIGN_CENTER;
       receipt += THERMAL_COMMANDS.BOLD_ON;
-      receipt += `TOTAL: Rs.${totalInterest.toLocaleString('en-IN')}/mo\n`;
+      receipt += `TOTAL: Rs ${formatForThermal(totalInterest)}/mo\n`;
       receipt += THERMAL_COMMANDS.BOLD_OFF;
       receipt += 'Om Sai Murugan Finance\n';
       receipt += 'Ph: 8667510724\n';
@@ -1478,7 +1508,7 @@ Thank you for your payment!
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
+                        <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 700, color: '#1e293b', marginBottom: '4px' }}>
                             {entry.name}
                           </div>
@@ -1486,15 +1516,35 @@ Thank you for your payment!
                             {formatCurrency(entry.amount)} • Day {entry.day}
                           </div>
                         </div>
-                        <div style={{
-                          background: '#ef4444',
-                          color: 'white',
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600
-                        }}>
-                          Record Payment →
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditEntry(entry);
+                            }}
+                            style={{
+                              background: '#6366f1',
+                              color: 'white',
+                              border: 'none',
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✏️ Edit
+                          </button>
+                          <div style={{
+                            background: '#ef4444',
+                            color: 'white',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600
+                          }}>
+                            Record Payment →
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1549,7 +1599,7 @@ Thank you for your payment!
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                          <div>
+                          <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 700, color: '#1e293b', marginBottom: '4px' }}>
                               {entry.name}
                             </div>
@@ -1573,6 +1623,21 @@ Thank you for your payment!
                             }}>
                               ✓ PAID
                             </div>
+                            <button
+                              onClick={() => handleEditEntry(entry)}
+                              style={{
+                                background: '#6366f1',
+                                color: 'white',
+                                border: 'none',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ✏️ Edit
+                            </button>
                             {payment && (
                               <button
                                 onClick={() => handleUndoPayment(payment.id, entry.name)}

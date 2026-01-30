@@ -32,6 +32,10 @@ function PrintReceipt({
   const [isPrinting, setIsPrinting] = useState(false);
 
   const formatCurrency = (amount) => `₹${(Number(amount) || 0).toLocaleString('en-IN')}`;
+  const formatForThermal = (amount) => {
+    if (!amount) return '0';
+    return Math.round(Number(amount)).toString();
+  };
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
@@ -210,11 +214,11 @@ function PrintReceipt({
     receipt += COMMANDS.BOLD_ON;
     receipt += COMMANDS.DOUBLE_HEIGHT;
     if (type === 'payment' || type === 'chit_payment') {
-      receipt += `PAID: Rs.${(Number(data.amountPaid) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `PAID: Rs ${formatForThermal(data.amountPaid)}\n`;
     } else if (type === 'loan_given') {
-      receipt += `GIVEN: Rs.${(Number(data.loanAmount) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `GIVEN: Rs ${formatForThermal(data.loanAmount)}\n`;
     } else if (type === 'chit_auction') {
-      receipt += `WINNER: Rs.${(Number(data.amountToWinner) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `WINNER: Rs ${formatForThermal(data.amountToWinner)}\n`;
     }
     receipt += COMMANDS.NORMAL_SIZE;
     receipt += COMMANDS.BOLD_OFF;
@@ -224,24 +228,24 @@ function PrintReceipt({
 
     // Additional Details
     if (data.loanAmount && type === 'payment') {
-      receipt += `Loan Amt: Rs.${(Number(data.loanAmount) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `Loan Amt: Rs ${formatForThermal(data.loanAmount)}\n`;
     }
     if (data.totalPaid !== undefined) {
-      receipt += `Total Paid: Rs.${(Number(data.totalPaid) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `Total Paid: Rs ${formatForThermal(data.totalPaid)}\n`;
     }
     if (data.balance !== undefined) {
       receipt += COMMANDS.BOLD_ON;
-      receipt += `BALANCE: Rs.${(Number(data.balance) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `BALANCE: Rs ${formatForThermal(data.balance)}\n`;
       receipt += COMMANDS.BOLD_OFF;
     }
     if (data.weekNumber) {
       receipt += `Week No: ${data.weekNumber}\n`;
     }
     if (data.weeklyAmount) {
-      receipt += `Weekly EMI: Rs.${(Number(data.weeklyAmount) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `Weekly EMI: Rs ${formatForThermal(data.weeklyAmount)}\n`;
     }
     if (data.monthlyAmount) {
-      receipt += `Monthly EMI: Rs.${(Number(data.monthlyAmount) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `Monthly EMI: Rs ${formatForThermal(data.monthlyAmount)}\n`;
     }
     if (data.interestRate) {
       receipt += `Interest: ${data.interestRate}% per month\n`;
@@ -251,10 +255,10 @@ function PrintReceipt({
       receipt += `Interest Month: ${data.interestMonth}\n`;
     }
     if (data.myShare !== undefined) {
-      receipt += `My Share: Rs.${(Number(data.myShare) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `My Share: Rs ${formatForThermal(data.myShare)}\n`;
     }
     if (data.friendShare !== undefined) {
-      receipt += `Friend Share: Rs.${(Number(data.friendShare) || 0).toLocaleString('en-IN')}\n`;
+      receipt += `Friend Share: Rs ${formatForThermal(data.friendShare)}\n`;
     }
 
     // Footer
