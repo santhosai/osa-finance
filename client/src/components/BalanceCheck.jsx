@@ -193,15 +193,20 @@ function BalanceCheck() {
   };
 
   // Submit payment request
-  const handleSubmitPayment = async () => {
-    if (!paymentScreenshot) {
-      alert('Please upload payment screenshot');
-      return;
-    }
-
+  const handleSubmitPayment = async (skipScreenshot = false) => {
     if (!selectedLoan) {
       alert('Loan information missing');
       return;
+    }
+
+    // If no screenshot and not skipping, ask for confirmation
+    if (!paymentScreenshot && !skipScreenshot) {
+      const proceed = window.confirm(
+        'No screenshot uploaded.\n\n' +
+        'You can still submit, but admin will need to verify manually.\n\n' +
+        'Click OK to submit without screenshot, or Cancel to upload one.'
+      );
+      if (!proceed) return;
     }
 
     setPaymentSubmitting(true);
@@ -232,15 +237,44 @@ function BalanceCheck() {
         return;
       }
 
-      // Upload screenshot to Firebase Storage
-      const timestamp = Date.now();
-      const fileName = `payment-proofs/${selectedLoan.loanId}_${timestamp}.jpg`;
-      const storageRef = ref(storage, fileName);
+      let downloadURL = null;
 
-      setUploading(true);
-      await uploadBytes(storageRef, paymentScreenshot);
-      const downloadURL = await getDownloadURL(storageRef);
-      setUploading(false);
+      // Only upload screenshot if provided
+      if (paymentScreenshot) {
+        try {
+          setUploading(true);
+
+          // Upload with timeout (30 seconds)
+          const timestamp = Date.now();
+          const fileName = `payment-proofs/${selectedLoan.loanId}_${timestamp}.jpg`;
+          const storageRef = ref(storage, fileName);
+
+          // Create upload promise with timeout
+          const uploadPromise = uploadBytes(storageRef, paymentScreenshot);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Upload timeout')), 30000)
+          );
+
+          await Promise.race([uploadPromise, timeoutPromise]);
+          downloadURL = await getDownloadURL(storageRef);
+          setUploading(false);
+        } catch (uploadError) {
+          console.error('Screenshot upload failed:', uploadError);
+          setUploading(false);
+
+          // Ask if they want to continue without screenshot
+          const continueWithout = window.confirm(
+            'Screenshot upload failed (slow network).\n\n' +
+            'Click OK to submit without screenshot.\n' +
+            'Admin will verify your payment manually.'
+          );
+          if (!continueWithout) {
+            setPaymentSubmitting(false);
+            return;
+          }
+          downloadURL = null;
+        }
+      }
 
       // Submit payment request to API
       const response = await fetch(`${API_URL}/pending-payments`, {
@@ -253,7 +287,7 @@ function BalanceCheck() {
           loan_id: selectedLoan.loanId,
           loan_type: loanType,
           amount: amount,
-          payment_proof_url: downloadURL
+          payment_proof_url: downloadURL || 'NO_SCREENSHOT_UPLOADED'
         })
       });
 
@@ -261,7 +295,7 @@ function BalanceCheck() {
         throw new Error('Failed to submit payment request');
       }
 
-      const result = await response.json();
+      await response.json();
 
       // Success
       alert('Payment request submitted successfully! Please wait for admin approval.');
@@ -1796,7 +1830,7 @@ function BalanceCheck() {
                 color: '#1e293b',
                 marginBottom: '8px'
               }}>
-                Upload Payment Screenshot *
+                Upload Payment Screenshot <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
               </label>
               <input
                 type="file"
@@ -1850,19 +1884,19 @@ function BalanceCheck() {
                 Cancel
               </button>
               <button
-                onClick={handleSubmitPayment}
-                disabled={!paymentScreenshot || uploading || paymentSubmitting}
+                onClick={() => handleSubmitPayment(false)}
+                disabled={uploading || paymentSubmitting}
                 style={{
                   flex: 1,
                   padding: '14px',
-                  background: !paymentScreenshot || uploading || paymentSubmitting ? '#9ca3af' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  background: uploading || paymentSubmitting ? '#9ca3af' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '10px',
                   fontSize: '15px',
                   fontWeight: 600,
-                  cursor: !paymentScreenshot || uploading || paymentSubmitting ? 'not-allowed' : 'pointer',
-                  boxShadow: !paymentScreenshot || uploading || paymentSubmitting ? 'none' : '0 4px 12px rgba(59, 130, 246, 0.3)'
+                  cursor: uploading || paymentSubmitting ? 'not-allowed' : 'pointer',
+                  boxShadow: uploading || paymentSubmitting ? 'none' : '0 4px 12px rgba(59, 130, 246, 0.3)'
                 }}
               >
                 {uploading ? 'Uploading...' : paymentSubmitting ? 'Submitting...' : 'Submit Payment'}
