@@ -277,14 +277,17 @@ function BalanceCheck() {
       }
 
       // Submit payment request to API
+      // Use loanId for regular loans, id for monthly finance loans
+      const loanIdentifier = selectedLoan.loanId || selectedLoan.id || `${loanType}_${phoneNumber}`;
+
       const response = await fetch(`${API_URL}/pending-payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customer_id: customerData.customerId || phoneNumber,
+          customer_id: phoneNumber,
           customer_name: customerData.name,
           customer_phone: phoneNumber,
-          loan_id: selectedLoan.loanId,
+          loan_id: loanIdentifier,
           loan_type: loanType,
           amount: amount,
           payment_proof_url: downloadURL || 'NO_SCREENSHOT_UPLOADED'
@@ -292,19 +295,30 @@ function BalanceCheck() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to submit payment request');
+        const errorData = await response.json().catch(() => ({ error: 'Server error' }));
+        throw new Error(errorData.error || 'Failed to submit payment request');
       }
 
       await response.json();
 
-      // Success
-      alert('Payment request submitted successfully! Please wait for admin approval.');
+      // Success - show clear message
+      alert(
+        '✅ Payment Request Submitted!\n\n' +
+        `Amount: ₹${amount}\n` +
+        `Customer: ${customerData.name}\n\n` +
+        'Admin will verify and approve your payment shortly.'
+      );
       setShowPaymentModal(false);
       setSelectedLoan(null);
       setPaymentScreenshot(null);
     } catch (error) {
       console.error('Error submitting payment:', error);
-      alert('Failed to submit payment request. Please try again.');
+      alert(
+        '❌ Payment Submission Failed!\n\n' +
+        'Error: ' + error.message + '\n\n' +
+        'Please try again or contact admin at:\n' +
+        '📞 +91 8667510724'
+      );
     } finally {
       setPaymentSubmitting(false);
       setUploading(false);
