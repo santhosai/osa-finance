@@ -16,6 +16,7 @@ function BalanceCheck() {
   const [paymentScreenshot, setPaymentScreenshot] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(null); // { amount, customerName, loanType }
 
   const formatCurrency = (amount) => {
     if (amount === null || amount === undefined || isNaN(amount)) return '₹0';
@@ -301,16 +302,15 @@ function BalanceCheck() {
 
       await response.json();
 
-      // Success - show clear message
-      alert(
-        '✅ Payment Request Submitted!\n\n' +
-        `Amount: ₹${amount}\n` +
-        `Customer: ${customerData.name}\n\n` +
-        'Admin will verify and approve your payment shortly.'
-      );
+      // Success - show success modal with WhatsApp button
       setShowPaymentModal(false);
       setSelectedLoan(null);
       setPaymentScreenshot(null);
+      setPaymentSuccess({
+        amount: amount,
+        customerName: customerData.name,
+        loanType: loanType
+      });
     } catch (error) {
       console.error('Error submitting payment:', error);
       alert(
@@ -1926,6 +1926,134 @@ function BalanceCheck() {
             }}>
               Your payment will be verified by our admin before updating your balance
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Success Modal with WhatsApp */}
+      {paymentSuccess && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '20px',
+            padding: '30px',
+            maxWidth: '400px',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }}>
+            {/* Success Icon */}
+            <div style={{
+              width: '80px',
+              height: '80px',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 20px',
+              fontSize: '40px'
+            }}>
+              ✓
+            </div>
+
+            <h2 style={{
+              color: '#1e293b',
+              fontSize: '22px',
+              fontWeight: 700,
+              margin: '0 0 10px'
+            }}>
+              Payment Submitted!
+            </h2>
+
+            <p style={{
+              color: '#64748b',
+              fontSize: '14px',
+              margin: '0 0 20px',
+              lineHeight: 1.5
+            }}>
+              Amount: <strong style={{ color: '#059669' }}>₹{paymentSuccess.amount?.toLocaleString('en-IN')}</strong><br />
+              Customer: <strong>{paymentSuccess.customerName}</strong>
+            </p>
+
+            {/* WhatsApp Button - Important! */}
+            <button
+              onClick={() => {
+                const message = `🔔 *புதிய பணம் செலுத்தப்பட்டது!*
+
+👤 வாடிக்கையாளர்: ${paymentSuccess.customerName}
+💰 தொகை: ₹${paymentSuccess.amount?.toLocaleString('en-IN')}
+📋 வகை: ${paymentSuccess.loanType === 'weekly' ? 'வாராந்திர கடன்' :
+                paymentSuccess.loanType === 'monthly' ? 'மாதாந்திர கடன்' :
+                paymentSuccess.loanType === 'daily' ? 'தினசரி கடன்' :
+                paymentSuccess.loanType === 'vaddi' ? 'வட்டி கடன்' : paymentSuccess.loanType}
+⏰ நேரம்: ${new Date().toLocaleString('en-IN')}
+
+தயவுசெய்து ஆப்பில் சரிபார்த்து அனுமதிக்கவும் 🙏`;
+
+                const whatsappUrl = `https://wa.me/918667510724?text=${encodeURIComponent(message)}`;
+                window.open(whatsappUrl, '_blank');
+              }}
+              style={{
+                width: '100%',
+                padding: '16px',
+                background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                fontSize: '16px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                marginBottom: '12px',
+                boxShadow: '0 4px 15px rgba(37, 211, 102, 0.4)'
+              }}
+            >
+              <span style={{ fontSize: '24px' }}>📱</span>
+              Notify Admin via WhatsApp
+            </button>
+
+            <p style={{
+              color: '#f59e0b',
+              fontSize: '12px',
+              margin: '0 0 16px',
+              fontWeight: 600
+            }}>
+              ⚠️ Please click above to notify admin instantly!
+            </p>
+
+            {/* Done Button */}
+            <button
+              onClick={() => setPaymentSuccess(null)}
+              style={{
+                width: '100%',
+                padding: '14px',
+                background: '#e5e7eb',
+                color: '#374151',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Done
+            </button>
           </div>
         </div>
       )}

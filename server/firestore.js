@@ -45,4 +45,8 @@ try {
   process.exit(1);
 }
 
+// Get Firebase Cloud Messaging instance
+const messaging = admin.messaging();
+
+export { messaging };
 export default db;

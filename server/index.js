@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import db from './firestore.js';
+import db, { messaging } from './firestore.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -578,6 +578,148 @@ app.post('/api/loans/recalculate-all', async (req, res) => {
   }
 });
 
+// ============ FCM TOKEN REGISTRATION ============
+
+// Register FCM token for push notifications
+app.post('/api/register-fcm-token', async (req, res) => {
+  try {
+    const { token, userRole, deviceInfo } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'FCM token is required' });
+    }
+
+    // Store token in Firestore (update if exists, create if not)
+    const tokenDoc = {
+      token,
+      userRole: userRole || 'admin',
+      deviceInfo: deviceInfo || 'Unknown device',
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+
+    // Check if token already exists
+    const existingToken = await db.collection('fcm_tokens')
+      .where('token', '==', token)
+      .get();
+
+    if (!existingToken.empty) {
+      // Update existing token
+      const docId = existingToken.docs[0].id;
+      await db.collection('fcm_tokens').doc(docId).update({
+        userRole: userRole || 'admin',
+        deviceInfo: deviceInfo || 'Unknown device',
+        updatedAt: new Date().toISOString()
+      });
+      res.json({ message: 'FCM token updated', id: docId });
+    } else {
+      // Create new token
+      const docRef = await db.collection('fcm_tokens').add(tokenDoc);
+      res.json({ message: 'FCM token registered', id: docRef.id });
+    }
+  } catch (error) {
+    console.error('Error registering FCM token:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to send push notifications to all admin devices
+async function sendPushNotification(title, body, data = {}) {
+  try {
+    // Get all admin FCM tokens
+    const tokensSnapshot = await db.collection('fcm_tokens')
+      .where('userRole', '==', 'admin')
+      .get();
+
+    if (tokensSnapshot.empty) {
+      console.log('No FCM tokens found for admin');
+      return { success: false, reason: 'No tokens' };
+    }
+
+    const tokens = [];
+    tokensSnapshot.forEach(doc => {
+      tokens.push(doc.data().token);
+    });
+
+    console.log(`Sending push notification to ${tokens.length} device(s)`);
+
+    // Send to all devices
+    const message = {
+      notification: {
+        title,
+        body
+      },
+      data: {
+        ...data,
+        url: '/',
+        timestamp: new Date().toISOString()
+      },
+      tokens
+    };
+
+    const response = await messaging.sendEachForMulticast(message);
+    console.log(`Push notification sent: ${response.successCount} success, ${response.failureCount} failed`);
+
+    // Remove invalid tokens
+    if (response.failureCount > 0) {
+      const invalidTokens = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success && resp.error?.code === 'messaging/registration-token-not-registered') {
+          invalidTokens.push(tokens[idx]);
+        }
+      });
+
+      // Delete invalid tokens
+      for (const invalidToken of invalidTokens) {
+        const tokenDoc = await db.collection('fcm_tokens')
+          .where('token', '==', invalidToken)
+          .get();
+        tokenDoc.forEach(doc => doc.ref.delete());
+      }
+    }
+
+    return { success: true, successCount: response.successCount };
+  } catch (error) {
+    console.error('Error sending push notification:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Get all FCM tokens (for debugging)
+app.get('/api/fcm-tokens', async (req, res) => {
+  try {
+    const snapshot = await db.collection('fcm_tokens').get();
+    const tokens = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      tokens.push({
+        id: doc.id,
+        userRole: data.userRole,
+        deviceInfo: data.deviceInfo?.substring(0, 50) + '...',
+        updatedAt: data.updatedAt,
+        tokenPreview: data.token?.substring(0, 20) + '...'
+      });
+    });
+    res.json({ count: tokens.length, tokens });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send test notification (for debugging)
+app.post('/api/test-notification', async (req, res) => {
+  try {
+    const result = await sendPushNotification(
+      '🔔 Test Notification',
+      'This is a test notification from Om Sai Finance!',
+      { type: 'test' }
+    );
+    res.json({ message: 'Test notification sent', result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ PENDING PAYMENTS ROUTES (UPI Customer Payments) ============
 
 // Submit payment request (Customer)
@@ -622,6 +764,18 @@ app.post('/api/pending-payments', async (req, res) => {
     };
 
     const docRef = await db.collection('pending_payments').add(pendingPayment);
+
+    // Send push notification to admin devices
+    sendPushNotification(
+      '💰 New Payment Received!',
+      `${customer_name} paid ₹${Number(amount).toLocaleString('en-IN')} (${loan_type})`,
+      {
+        paymentId: docRef.id,
+        customerName: customer_name,
+        amount: String(amount),
+        loanType: loan_type
+      }
+    ).catch(err => console.error('Push notification error:', err));
 
     res.status(201).json({
       id: docRef.id,

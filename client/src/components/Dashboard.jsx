@@ -16,6 +16,7 @@ import { jsPDF } from 'jspdf';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { requestNotificationPermission, onForegroundMessage } from '../firebase';
 
 // Fetcher function for SWR
 const fetcher = (url) => fetch(url).then(res => res.json());
@@ -66,6 +67,9 @@ function Dashboard({ navigateTo }) {
 
   // Pending Payments (UPI) state
   const [showPendingPayments, setShowPendingPayments] = useState(false);
+
+  // Push Notification state
+  const [notificationStatus, setNotificationStatus] = useState('unknown'); // 'unknown', 'enabled', 'disabled', 'error'
 
   // Use SWR for automatic caching and re-fetching
   const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
@@ -138,11 +142,142 @@ function Dashboard({ navigateTo }) {
   const prevPendingCountRef = useRef(0);
   const notificationAudioRef = useRef(null);
 
-  // Request notification permission on mount
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
+  // Function to enable push notifications manually
+  const enablePushNotifications = async () => {
+    try {
+      setNotificationStatus('enabling');
+
+      // Request permission and get FCM token
+      const fcmToken = await requestNotificationPermission();
+
+      if (fcmToken) {
+        // Save FCM token to server
+        const response = await fetch(`${API_URL}/register-fcm-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: fcmToken,
+            userRole: 'admin',
+            deviceInfo: navigator.userAgent
+          })
+        });
+
+        if (response.ok) {
+          setNotificationStatus('enabled');
+          alert('✅ Push notifications enabled!\n\nYou will now receive alerts when customers make payments.');
+        } else {
+          throw new Error('Failed to register token');
+        }
+      } else {
+        setNotificationStatus('disabled');
+        alert('❌ Notifications blocked!\n\nPlease allow notifications in your browser settings.');
+      }
+    } catch (error) {
+      console.error('FCM setup error:', error);
+      setNotificationStatus('error');
+      alert('❌ Error enabling notifications:\n' + error.message);
     }
+  };
+
+  // Request notification permission and register FCM token on mount
+  useEffect(() => {
+    const setupNotifications = async () => {
+      const userRole = localStorage.getItem('userRole');
+
+      // Only setup FCM for admin users
+      if (userRole === 'admin') {
+        try {
+          // Check current permission status
+          if ('Notification' in window) {
+            if (Notification.permission === 'granted') {
+              // Try to get FCM token
+              const fcmToken = await requestNotificationPermission();
+              if (fcmToken) {
+                await fetch(`${API_URL}/register-fcm-token`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    token: fcmToken,
+                    userRole: 'admin',
+                    deviceInfo: navigator.userAgent
+                  })
+                });
+                setNotificationStatus('enabled');
+                console.log('FCM token registered successfully');
+              } else {
+                setNotificationStatus('error');
+              }
+            } else if (Notification.permission === 'denied') {
+              setNotificationStatus('disabled');
+            } else {
+              setNotificationStatus('unknown');
+            }
+          }
+        } catch (error) {
+          console.error('FCM setup error:', error);
+          setNotificationStatus('error');
+        }
+
+        // Listen for foreground messages
+        const unsubscribe = onForegroundMessage((payload) => {
+          console.log('Foreground notification received:', payload);
+
+          // Play custom notification sound
+          try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.frequency.value = 880;
+            oscillator.type = 'sine';
+
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.8);
+
+            setTimeout(() => {
+              const osc2 = audioContext.createOscillator();
+              const gain2 = audioContext.createGain();
+              osc2.connect(gain2);
+              gain2.connect(audioContext.destination);
+              osc2.frequency.value = 1100;
+              osc2.type = 'sine';
+              gain2.gain.setValueAtTime(0.5, audioContext.currentTime);
+              gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+              osc2.start(audioContext.currentTime);
+              osc2.stop(audioContext.currentTime + 0.5);
+            }, 200);
+          } catch (error) {
+            console.error('Error playing notification sound:', error);
+          }
+
+          // Show in-app notification
+          if (payload.notification) {
+            const notification = new Notification(payload.notification.title, {
+              body: payload.notification.body,
+              icon: '/murugan.png',
+              requireInteraction: true,
+              vibrate: [200, 100, 200, 100, 200]
+            });
+
+            notification.onclick = () => {
+              window.focus();
+              notification.close();
+              mutatePendingPayments();
+            };
+          }
+        });
+
+        return () => unsubscribe();
+      }
+    };
+
+    setupNotifications();
   }, []);
 
   // Monitor for new pending payments and trigger notifications
@@ -1313,15 +1448,17 @@ function Dashboard({ navigateTo }) {
           background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
           transition: 'left 0.3s ease',
           zIndex: 1000,
-          boxShadow: '2px 0 10px rgba(0,0,0,0.3)'
+          boxShadow: '2px 0 10px rgba(0,0,0,0.3)',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
-        <div style={{ padding: '14px', borderBottom: '1px solid #334155' }}>
+        <div style={{ padding: '14px', borderBottom: '1px solid #334155', flexShrink: 0 }}>
           <h3 style={{ color: '#d97706', margin: 0, fontSize: '16px', fontWeight: 700 }}>OM SAI MURUGAN</h3>
           <p style={{ color: '#94a3b8', margin: '3px 0 0', fontSize: '10px' }}>FINANCE</p>
         </div>
 
-        <div style={{ padding: '6px 0' }}>
+        <div style={{ padding: '6px 0', flex: 1, overflowY: 'auto', paddingBottom: '70px' }}>
           <button
             onClick={() => { setShowSidebar(false); }}
             style={{
@@ -1341,6 +1478,43 @@ function Dashboard({ navigateTo }) {
           >
             📊 {t('dashboard')}
           </button>
+
+          {/* Push Notifications - At Top for visibility */}
+          {localStorage.getItem('userRole') === 'admin' && (
+            <button
+              onClick={() => {
+                enablePushNotifications();
+              }}
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                background: notificationStatus === 'enabled'
+                  ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                  : notificationStatus === 'disabled'
+                  ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                  : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                color: 'white',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}
+            >
+              <span style={{ fontSize: '18px' }}>
+                {notificationStatus === 'enabled' ? '🔔' : notificationStatus === 'disabled' ? '🔕' : '🔔'}
+              </span>
+              <span>
+                {notificationStatus === 'enabled' ? '✓ Notifications ON' :
+                 notificationStatus === 'disabled' ? 'Notifications Blocked' :
+                 notificationStatus === 'enabling' ? 'Enabling...' :
+                 'Enable Notifications'}
+              </span>
+            </button>
+          )}
 
           <button
             onClick={() => { setShowSidebar(false); setShowAllPaymentsDue(true); }}
@@ -3303,9 +3477,17 @@ function Dashboard({ navigateTo }) {
                 }
               });
 
-              // Sort by payment_day
-              paidMonthlyCustomers.sort((a, b) => (a.payment_day || 1) - (b.payment_day || 1));
-              unpaidMonthlyCustomers.sort((a, b) => (a.payment_day || 1) - (b.payment_day || 1));
+              // Sort by payment day (from start_date) - Date 1, Date 2, etc.
+              paidMonthlyCustomers.sort((a, b) => {
+                const dayA = a.start_date ? new Date(a.start_date).getDate() : 1;
+                const dayB = b.start_date ? new Date(b.start_date).getDate() : 1;
+                return dayA - dayB;
+              });
+              unpaidMonthlyCustomers.sort((a, b) => {
+                const dayA = a.start_date ? new Date(a.start_date).getDate() : 1;
+                const dayB = b.start_date ? new Date(b.start_date).getDate() : 1;
+                return dayA - dayB;
+              });
 
               // Calculate totals
               const paidTotal = paidMonthlyCustomers.reduce((sum, c) => sum + (c.monthly_amount || 0), 0);
