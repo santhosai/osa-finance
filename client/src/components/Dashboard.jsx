@@ -1458,7 +1458,7 @@ function Dashboard({ navigateTo }) {
           <p style={{ color: '#94a3b8', margin: '3px 0 0', fontSize: '10px' }}>FINANCE</p>
         </div>
 
-        <div style={{ padding: '6px 0', flex: 1, overflowY: 'auto', paddingBottom: '70px' }}>
+        <div style={{ padding: '6px 0', flex: 1, overflowY: 'auto' }}>
           <button
             onClick={() => { setShowSidebar(false); }}
             style={{
@@ -2028,25 +2028,25 @@ function Dashboard({ navigateTo }) {
 
         </div>
 
-        <button
-          onClick={handleLogout}
-          style={{
-            position: 'absolute',
-            bottom: '14px',
-            left: '14px',
-            right: '14px',
-            padding: '10px',
-            background: '#dc2626',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: 600
-          }}
-        >
-          🚪 {t('logout')}
-        </button>
+        {/* Logout Button - Fixed at bottom */}
+        <div style={{ padding: '14px', borderTop: '1px solid #334155', flexShrink: 0 }}>
+          <button
+            onClick={handleLogout}
+            style={{
+              width: '100%',
+              padding: '10px',
+              background: '#dc2626',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600
+            }}
+          >
+            🚪 {t('logout')}
+          </button>
+        </div>
       </div>
 
       {/* Overlay */}
