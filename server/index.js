@@ -639,20 +639,27 @@ app.get('/api/pending-payments', async (req, res) => {
   try {
     const { status } = req.query; // Optional filter by status (pending, approved, rejected)
 
-    let query = db.collection('pending_payments');
+    // Fetch all pending payments (no composite index needed)
+    const snapshot = await db.collection('pending_payments').get();
 
-    if (status) {
-      query = query.where('status', '==', status);
-    }
-
-    const snapshot = await query.orderBy('created_at', 'desc').get();
-
-    const pendingPayments = [];
+    let pendingPayments = [];
     snapshot.forEach(doc => {
       pendingPayments.push({
         id: doc.id,
         ...doc.data()
       });
+    });
+
+    // Filter by status in memory (avoids needing composite index)
+    if (status) {
+      pendingPayments = pendingPayments.filter(p => p.status === status);
+    }
+
+    // Sort by created_at descending (newest first)
+    pendingPayments.sort((a, b) => {
+      const dateA = new Date(a.created_at || 0);
+      const dateB = new Date(b.created_at || 0);
+      return dateB - dateA;
     });
 
     res.json(pendingPayments);
