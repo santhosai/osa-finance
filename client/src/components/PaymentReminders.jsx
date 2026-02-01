@@ -39,14 +39,14 @@ function PaymentReminders({ onClose }) {
   const fetchReminders = async () => {
     setLoading(true);
     try {
-      // Fetch both regular customers and monthly finance customers
-      const [customersResponse, monthlyCustomersResponse] = await Promise.all([
-        fetch(`${API_URL}/customers`),
-        fetch(`${API_URL}/monthly-finance/customers`)
+      // Fetch monthly finance customers and vaddi entries
+      const [monthlyCustomersResponse, vaddiEntriesResponse] = await Promise.all([
+        fetch(`${API_URL}/monthly-finance/customers`),
+        fetch(`${API_URL}/vaddi-entries`)
       ]);
 
-      const customers = await customersResponse.json();
       const monthlyCustomers = await monthlyCustomersResponse.json();
+      const vaddiEntries = await vaddiEntriesResponse.json();
 
       const monthly = [];
       const interest = [];
@@ -75,35 +75,38 @@ function PaymentReminders({ onClose }) {
         }
       }
 
-      // Process Interest/Vaddi loans
-      for (const customer of customers) {
-        if (!customer.loans || customer.loans.length === 0) continue;
+      // Process Interest/Vaddi entries (from vaddi_entries collection)
+      for (const entry of vaddiEntries) {
+        // Skip settled entries
+        if (entry.settled || entry.paid) continue;
 
-        for (const loan of customer.loans) {
-          if (loan.loan_type !== 'Vaddi' || loan.balance <= 0 || loan.status === 'closed') continue;
+        const loanDay = entry.day || 1; // Day of month for this entry
 
-          const loanStartDate = new Date(loan.start_date);
-          const loanStartDay = loanStartDate.getDate();
+        // Interest is due on the same day each month
+        if (loanDay === targetDay) {
+          const principalAmount = entry.principal_amount || entry.amount || 0;
+          const interestRate = entry.interest_rate || 0;
+          const monthlyInterest = Math.round((principalAmount * interestRate) / 100);
 
-          // Interest is due on the same day each month as start date
-          if (loanStartDay === targetDay) {
-            const monthlyInterest = (loan.loan_amount * (loan.interest_rate || 0)) / 100;
-            interest.push({
-              customerId: customer.id,
-              customerName: customer.name,
-              customerPhone: customer.phone,
-              loanId: loan.loan_id,
-              loanName: loan.loan_name || 'Interest Loan',
-              loanAmount: loan.loan_amount,
-              balance: loan.balance,
-              interestRate: loan.interest_rate,
-              monthlyInterest: monthlyInterest,
-              loanDate: loan.start_date,
-              dueDate: selectedDate
-            });
-          }
+          interest.push({
+            customerId: entry.id,
+            customerName: entry.name,
+            customerPhone: entry.phone,
+            loanId: entry.id,
+            loanName: entry.collateral_type || 'Interest Loan',
+            loanAmount: principalAmount,
+            balance: principalAmount,
+            interestRate: interestRate,
+            monthlyInterest: monthlyInterest,
+            loanDate: entry.loan_date,
+            dueDate: selectedDate,
+            day: entry.day
+          });
         }
       }
+
+      // Sort interest entries by day
+      interest.sort((a, b) => (a.day || 1) - (b.day || 1));
 
       setReminders({ monthly, interest });
     } catch (error) {
@@ -140,21 +143,19 @@ function PaymentReminders({ onClose }) {
     const dueDate = new Date(loan.dueDate);
     const daysRemaining = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
 
-    const message = `🔔 *கட்டண நினைவூட்டல்*
+    const message = `🔔 *வட்டி கட்டண நினைவூட்டல்*
 
 வணக்கம் ${loan.customerName},
 
-உங்கள் வட்டி கடன் கட்டணம் விரைவில் செலுத்த வேண்டும்!
+உங்கள் மாதாந்திர வட்டி கட்டணம் விரைவில் செலுத்த வேண்டும்!
 
 💰 கடன் விவரங்கள்:
-• கடன் தொகை: ${formatCurrency(loan.loanAmount)}
-• கடன் தேதி: ${formatDateTamil(loan.loanDate)}
-• கட்டண தேதி: ${formatDateTamil(loan.dueDate)}
-• செலுத்த வேண்டியது: வட்டி அல்லது அசல்
+• அசல் தொகை: ${formatCurrency(loan.loanAmount)}
+• கட்டண தேதி: ${formatDateTamil(loan.dueDate)} (Day ${loan.day || '-'})
 
-⏰ இன்னும் ${daysRemaining} நாட்களில் உங்கள் கட்டணம் வரும்!
+⏰ இன்னும் ${daysRemaining} நாட்களில் உங்கள் வட்டி கட்டணம் வரும்!
 
-தயவுசெய்து உங்கள் கட்டணத்தை சரியான நேரத்தில் செலுத்தவும்.
+தயவுசெய்து உங்கள் வட்டியை சரியான நேரத்தில் செலுத்தவும்.
 
 நன்றி!
 - ஓம் சாய் முருகன் ஃபைனான்ஸ்
