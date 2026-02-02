@@ -76,33 +76,28 @@ function PaymentReminders({ onClose }) {
       }
 
       // Process Interest/Vaddi entries (from vaddi_entries collection)
+      // Show ALL active entries - no day filter
       for (const entry of vaddiEntries) {
-        // Skip settled entries
-        if (entry.settled || entry.paid) continue;
+        // Skip settled entries (check status field)
+        if (entry.status === 'settled' || entry.principal_returned) continue;
 
-        const loanDay = entry.day || 1; // Day of month for this entry
+        const principalAmount = entry.principal_amount || entry.amount || 0;
+        const interestRate = entry.interest_rate || 0;
+        const monthlyInterest = Math.round((principalAmount * interestRate) / 100);
 
-        // Interest is due on the same day each month
-        if (loanDay === targetDay) {
-          const principalAmount = entry.principal_amount || entry.amount || 0;
-          const interestRate = entry.interest_rate || 0;
-          const monthlyInterest = Math.round((principalAmount * interestRate) / 100);
-
-          interest.push({
-            customerId: entry.id,
-            customerName: entry.name,
-            customerPhone: entry.phone,
-            loanId: entry.id,
-            loanName: entry.collateral_type || 'Interest Loan',
-            loanAmount: principalAmount,
-            balance: principalAmount,
-            interestRate: interestRate,
-            monthlyInterest: monthlyInterest,
-            loanDate: entry.loan_date,
-            dueDate: selectedDate,
-            day: entry.day
-          });
-        }
+        interest.push({
+          customerId: entry.id,
+          customerName: entry.name,
+          customerPhone: entry.phone,
+          loanId: entry.id,
+          loanName: entry.collateral_type || 'Interest Loan',
+          loanAmount: principalAmount,
+          balance: principalAmount,
+          interestRate: interestRate,
+          monthlyInterest: monthlyInterest,
+          loanDate: entry.loan_date,
+          day: entry.day
+        });
       }
 
       // Sort interest entries by day
@@ -138,24 +133,31 @@ function PaymentReminders({ onClose }) {
   };
 
   const generateInterestReminderMessage = (loan) => {
-    // Calculate days remaining
     const today = new Date();
-    const dueDate = new Date(loan.dueDate);
-    const daysRemaining = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+    const todayFormatted = formatDateTamil(today.toISOString());
+    const loanDateFormatted = formatDateTamil(loan.loanDate);
+
+    // Calculate months since loan
+    const loanDate = new Date(loan.loanDate);
+    const monthsDiff = Math.max(1, Math.floor((today - loanDate) / (1000 * 60 * 60 * 24 * 30)));
 
     const message = `🔔 *வட்டி கட்டண நினைவூட்டல்*
 
 வணக்கம் ${loan.customerName},
 
-உங்கள் மாதாந்திர வட்டி கட்டணம் விரைவில் செலுத்த வேண்டும்!
+உங்கள் வட்டி கடன் விவரம்:
+
+📅 கடன் வாங்கிய தேதி: ${loanDateFormatted}
+📅 இன்றைய தேதி: ${todayFormatted}
+⏳ காலம்: ${monthsDiff} மாதம்
 
 💰 கடன் விவரங்கள்:
 • அசல் தொகை: ${formatCurrency(loan.loanAmount)}
-• கட்டண தேதி: ${formatDateTamil(loan.dueDate)} (Day ${loan.day || '-'})
+• வட்டி விகிதம்: ${loan.interestRate}%
+• மாத வட்டி: ${formatCurrency(loan.monthlyInterest)}
+• வட்டி செலுத்தும் நாள்: ${loan.day || '-'}
 
-⏰ இன்னும் ${daysRemaining} நாட்களில் உங்கள் வட்டி கட்டணம் வரும்!
-
-தயவுசெய்து உங்கள் வட்டியை சரியான நேரத்தில் செலுத்தவும்.
+தயவுசெய்து உங்கள் வட்டியை செலுத்தவும்.
 
 நன்றி!
 - ஓம் சாய் முருகன் ஃபைனான்ஸ்
