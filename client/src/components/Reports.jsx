@@ -93,7 +93,7 @@ function Reports({ onClose, language = 'en' }) {
       const vaddiData = await vaddiRes.json();
       const monthlyData = await monthlyRes.json();
 
-      setVaddiEntries(Array.isArray(vaddiData) ? vaddiData.filter(e => !e.settled) : []);
+      setVaddiEntries(Array.isArray(vaddiData) ? vaddiData.filter(e => e.status !== 'settled' && !e.principal_returned) : []);
       setMonthlyCustomers(Array.isArray(monthlyData) ? monthlyData.filter(c => c.status === 'active') : []);
     } catch (error) {
       console.error('Error fetching data:', error);
