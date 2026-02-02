@@ -12,6 +12,7 @@ import GlobalSearch from './GlobalSearch';
 import AllPaymentsDueModal from './AllPaymentsDueModal';
 import PaymentReminders from './PaymentReminders';
 import BulkWhatsApp from './BulkWhatsApp';
+import Reports from './Reports';
 import { jsPDF } from 'jspdf';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
@@ -37,6 +38,7 @@ function Dashboard({ navigateTo }) {
   const [showAllPaymentsDue, setShowAllPaymentsDue] = useState(false);
   const [showPaymentReminders, setShowPaymentReminders] = useState(false);
   const [showBulkWhatsApp, setShowBulkWhatsApp] = useState(false);
+  const [showReports, setShowReports] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMonthlyFinanceMonth, setSelectedMonthlyFinanceMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
@@ -1957,6 +1959,28 @@ function Dashboard({ navigateTo }) {
             onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)'}
           >
             📱 Bulk Messages
+          </button>
+
+          {/* Reports */}
+          <button
+            onClick={() => { setShowSidebar(false); setShowReports(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'}
+          >
+            📊 Reports / அறிக்கைகள்
           </button>
 
           {/* Dark Mode Toggle */}
@@ -4575,6 +4599,10 @@ function Dashboard({ navigateTo }) {
 
       {showBulkWhatsApp && (
         <BulkWhatsApp onClose={() => setShowBulkWhatsApp(false)} />
+      )}
+
+      {showReports && (
+        <Reports onClose={() => setShowReports(false)} language={language} />
       )}
 
       {showGlobalSearch && (
