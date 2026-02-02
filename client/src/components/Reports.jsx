@@ -93,6 +93,12 @@ function Reports({ onClose, language = 'en' }) {
       const vaddiData = await vaddiRes.json();
       const monthlyData = await monthlyRes.json();
 
+      // Debug: Log entries with "Vinoth" to see their status
+      if (Array.isArray(vaddiData)) {
+        const vinothEntries = vaddiData.filter(e => e.name && e.name.toLowerCase().includes('vinoth'));
+        console.log('Vinoth entries:', vinothEntries.map(e => ({ name: e.name, status: e.status, principal_returned: e.principal_returned })));
+      }
+
       setVaddiEntries(Array.isArray(vaddiData) ? vaddiData.filter(e => e.status !== 'settled' && !e.principal_returned) : []);
       setMonthlyCustomers(Array.isArray(monthlyData) ? monthlyData.filter(c => c.status === 'active') : []);
     } catch (error) {
