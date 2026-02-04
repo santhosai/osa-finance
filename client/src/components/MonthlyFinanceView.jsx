@@ -1500,10 +1500,28 @@ Thank you for your payment!
       sendWhatsApp();
     }
     if (choice === 'print' || choice === 'both') {
-      setPrintData({
-        type: 'payment',
-        data: pendingPaymentData
-      });
+      try {
+        if (pendingPaymentData) {
+          setPrintData({
+            type: 'payment',
+            data: {
+              customerName: pendingPaymentData.customerName || 'Customer',
+              phone: pendingPaymentData.phone || '',
+              loanType: pendingPaymentData.loanType || 'Monthly',
+              loanAmount: pendingPaymentData.loanAmount || 0,
+              amountPaid: pendingPaymentData.amountPaid || 0,
+              totalPaid: pendingPaymentData.totalPaid || 0,
+              balance: pendingPaymentData.balance || 0,
+              monthNumber: pendingPaymentData.monthNumber || 1,
+              monthlyAmount: pendingPaymentData.monthlyAmount || 0,
+              date: pendingPaymentData.date || new Date().toISOString()
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Print error:', error);
+        alert('Error opening print: ' + error.message);
+      }
     }
     setShowSendChoice(false);
     setPendingPaymentData(null);
@@ -1868,20 +1886,27 @@ Thank you for your payment!
                   {/* Print button for paid months - same as Weekly */}
                   {payment.paid && (
                     <button
-                      onClick={() => setPrintData({
-                        type: 'payment',
-                        data: {
-                          customerName: customer.name,
-                          phone: customer.phone,
-                          loanType: 'Monthly',
-                          loanAmount: customer.loan_amount,
-                          amountPaid: customer.monthly_amount,
-                          totalPaid: payment.month * customer.monthly_amount,
-                          balance: customer.loan_amount - (payment.month * customer.monthly_amount),
-                          monthNumber: payment.month,
-                          date: payment.date
+                      onClick={() => {
+                        try {
+                          setPrintData({
+                            type: 'payment',
+                            data: {
+                              customerName: customer?.name || 'Customer',
+                              phone: customer?.phone || '',
+                              loanType: 'Monthly',
+                              loanAmount: customer?.loan_amount || 0,
+                              amountPaid: customer?.monthly_amount || 0,
+                              totalPaid: (payment?.month || 0) * (customer?.monthly_amount || 0),
+                              balance: (customer?.loan_amount || 0) - ((payment?.month || 0) * (customer?.monthly_amount || 0)),
+                              monthNumber: payment?.month || 1,
+                              date: payment?.date || new Date().toISOString().split('T')[0]
+                            }
+                          });
+                        } catch (error) {
+                          console.error('Print error:', error);
+                          alert('Error opening print: ' + error.message);
                         }
-                      })}
+                      }}
                       style={{
                         background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                         color: 'white',

@@ -31,6 +31,49 @@ function PrintReceipt({
   const [bluetoothStatus, setBluetoothStatus] = useState('');
   const [isPrinting, setIsPrinting] = useState(false);
 
+  // Safety check - if no data, show error and close
+  if (!data) {
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2000,
+        padding: '20px'
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '20px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '18px', marginBottom: '15px', color: '#dc2626' }}>
+            ⚠️ No print data available
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '10px 20px',
+              background: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const formatCurrency = (amount) => `₹${(Number(amount) || 0).toLocaleString('en-IN')}`;
   const formatForThermal = (amount) => {
     if (!amount) return '0';
