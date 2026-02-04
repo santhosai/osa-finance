@@ -1883,25 +1883,24 @@ Thank you for your payment!
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {/* Print button for paid months - same as Weekly */}
+                  {/* Print button for paid months */}
                   {payment.paid && (
                     <button
                       onClick={() => {
-                        const printDataObj = {
-                          customerName: customer?.name || 'Customer',
-                          phone: customer?.phone || '',
-                          loanType: 'Monthly',
-                          loanAmount: customer?.loan_amount || 0,
-                          amountPaid: customer?.monthly_amount || 0,
-                          totalPaid: (payment?.month || 0) * (customer?.monthly_amount || 0),
-                          balance: (customer?.loan_amount || 0) - ((payment?.month || 0) * (customer?.monthly_amount || 0)),
-                          monthNumber: payment?.month || 1,
-                          date: payment?.date || new Date().toISOString().split('T')[0]
-                        };
-                        console.log('Print data:', printDataObj);
                         setPrintData({
                           type: 'payment',
-                          data: printDataObj
+                          data: {
+                            customerName: customer?.name || 'Customer',
+                            phone: customer?.phone || '',
+                            loanType: 'Monthly',
+                            loanAmount: customer?.loan_amount || 0,
+                            amountPaid: customer?.monthly_amount || 0,
+                            totalPaid: (payment?.month || 0) * (customer?.monthly_amount || 0),
+                            balance: (customer?.loan_amount || 0) - ((payment?.month || 0) * (customer?.monthly_amount || 0)),
+                            monthNumber: payment?.month || 1,
+                            monthlyAmount: customer?.monthly_amount || 0,
+                            date: payment?.date || new Date().toISOString().split('T')[0]
+                          }
                         });
                       }}
                       style={{
