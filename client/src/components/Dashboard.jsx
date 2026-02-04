@@ -1277,15 +1277,18 @@ function Dashboard({ navigateTo }) {
   const printMonthlyReceipt = (customer) => {
     const paymentDay = customer.start_date ? new Date(customer.start_date).getDate() : '-';
     setPrintData({
-      customerName: customer.customer_name || customer.name,
-      phone: customer.phone,
-      loanType: 'Monthly Finance',
-      amountPaid: customer.monthly_amount,
-      loanAmount: customer.loan_amount,
-      balance: customer.balance,
-      monthlyAmount: customer.monthly_amount,
-      paymentDay: paymentDay,
-      date: new Date().toISOString()
+      type: 'payment',
+      data: {
+        customerName: customer.customer_name || customer.name,
+        phone: customer.phone,
+        loanType: 'Monthly Finance',
+        amountPaid: customer.monthly_amount,
+        loanAmount: customer.loan_amount,
+        balance: customer.balance,
+        monthlyAmount: customer.monthly_amount,
+        paymentDay: paymentDay,
+        date: new Date().toISOString()
+      }
     });
   };
 
