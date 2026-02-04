@@ -5439,11 +5439,13 @@ function Dashboard({ navigateTo }) {
                     <div
                       onClick={() => {
                         setShowLoansGivenModal(false);
-                        if (loan.loan_type !== 'Vaddi') {
+                        if (loan.loan_type === 'Vaddi') {
+                          navigateTo('vaddi-list');
+                        } else {
                           navigateTo('loan-details', loan.id);
                         }
                       }}
-                      style={{ flex: 1, cursor: loan.loan_type !== 'Vaddi' ? 'pointer' : 'default' }}
+                      style={{ flex: 1, cursor: 'pointer' }}
                     >
                       <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{loan.customer_name}</div>
                       <div style={{ fontSize: '11px', color: '#64748b' }}>
