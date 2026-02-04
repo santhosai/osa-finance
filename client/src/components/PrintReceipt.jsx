@@ -45,127 +45,125 @@ function PrintReceipt({
   const handlePrint = () => {
     const printContent = printRef.current.innerHTML;
 
-    // Create a hidden iframe for printing (works better on mobile)
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'absolute';
-    iframe.style.top = '-10000px';
-    iframe.style.left = '-10000px';
-    iframe.style.width = '58mm'; // Thermal printer width
-    iframe.style.height = 'auto';
-    document.body.appendChild(iframe);
+    // Use window.open for better mobile compatibility
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
 
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(`
+    if (!printWindow) {
+      alert('Please allow popups to print the receipt');
+      return;
+    }
+
+    printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Receipt</title>
+        <title>Receipt - Om Sai Murugan Finance</title>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           @page {
             size: 58mm auto;
             margin: 0;
           }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
           body {
             font-family: 'Courier New', Courier, monospace;
-            padding: 5px;
-            width: 58mm;
-            font-size: 11px;
-            line-height: 1.3;
+            padding: 10px;
+            font-size: 12px;
+            line-height: 1.4;
             color: #000;
             background: #fff;
           }
           .receipt {
-            padding: 8px;
+            padding: 10px;
             background: #fff;
+            max-width: 300px;
+            margin: 0 auto;
           }
           .header {
             text-align: center;
-            border-bottom: 1px dashed #000;
-            padding-bottom: 8px;
-            margin-bottom: 8px;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
           }
           .company-name {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: bold;
             text-transform: uppercase;
           }
-          .tagline { font-size: 9px; margin-top: 3px; }
+          .tagline { font-size: 10px; margin-top: 4px; }
           .receipt-type {
-            font-size: 10px;
+            font-size: 11px;
             background: #000;
             color: #fff;
-            padding: 2px 6px;
-            margin-top: 6px;
+            padding: 3px 8px;
+            margin-top: 8px;
             display: inline-block;
           }
-          .details { margin: 8px 0; }
+          .details { margin: 10px 0; }
           .row {
             display: flex;
             justify-content: space-between;
-            padding: 2px 0;
-            font-size: 10px;
+            padding: 3px 0;
+            font-size: 11px;
           }
           .row span:first-child { font-weight: normal; }
           .row span:last-child { font-weight: bold; text-align: right; }
           .row.highlight {
             background: #eee;
-            padding: 4px 2px;
+            padding: 5px 3px;
             font-weight: bold;
-            margin: 3px -2px;
+            margin: 4px -3px;
           }
           .divider {
             border-top: 1px dashed #000;
-            margin: 8px 0;
+            margin: 10px 0;
           }
           .total-section {
-            border-top: 1px solid #000;
-            border-bottom: 1px solid #000;
-            padding: 6px 0;
-            margin: 8px 0;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 8px 0;
+            margin: 10px 0;
           }
           .total-row {
             display: flex;
             justify-content: space-between;
-            font-size: 12px;
+            font-size: 14px;
             font-weight: bold;
           }
           .footer {
             text-align: center;
-            font-size: 9px;
-            margin-top: 10px;
-            padding-top: 8px;
+            font-size: 10px;
+            margin-top: 12px;
+            padding-top: 10px;
             border-top: 1px dashed #000;
           }
           .signature {
-            margin-top: 20px;
+            margin-top: 25px;
             border-top: 1px solid #000;
-            padding-top: 3px;
-            font-size: 9px;
+            padding-top: 4px;
+            font-size: 10px;
           }
-          .contact { margin-top: 8px; font-size: 10px; }
+          .contact { margin-top: 10px; font-size: 11px; }
         </style>
       </head>
       <body>
         ${printContent}
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              window.onafterprint = function() { window.close(); };
+            }, 300);
+          };
+        </script>
       </body>
       </html>
     `);
-    doc.close();
-
-    // Wait for content to load then print
-    iframe.onload = function() {
-      setTimeout(() => {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        // Remove iframe after printing
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-        }, 1000);
-      }, 250);
-    };
+    printWindow.document.close();
   };
 
   // Generate ESC/POS formatted text for thermal printer
