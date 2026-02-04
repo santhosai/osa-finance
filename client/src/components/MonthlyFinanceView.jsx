@@ -1887,25 +1887,22 @@ Thank you for your payment!
                   {payment.paid && (
                     <button
                       onClick={() => {
-                        try {
-                          setPrintData({
-                            type: 'payment',
-                            data: {
-                              customerName: customer?.name || 'Customer',
-                              phone: customer?.phone || '',
-                              loanType: 'Monthly',
-                              loanAmount: customer?.loan_amount || 0,
-                              amountPaid: customer?.monthly_amount || 0,
-                              totalPaid: (payment?.month || 0) * (customer?.monthly_amount || 0),
-                              balance: (customer?.loan_amount || 0) - ((payment?.month || 0) * (customer?.monthly_amount || 0)),
-                              monthNumber: payment?.month || 1,
-                              date: payment?.date || new Date().toISOString().split('T')[0]
-                            }
-                          });
-                        } catch (error) {
-                          console.error('Print error:', error);
-                          alert('Error opening print: ' + error.message);
-                        }
+                        const printDataObj = {
+                          customerName: customer?.name || 'Customer',
+                          phone: customer?.phone || '',
+                          loanType: 'Monthly',
+                          loanAmount: customer?.loan_amount || 0,
+                          amountPaid: customer?.monthly_amount || 0,
+                          totalPaid: (payment?.month || 0) * (customer?.monthly_amount || 0),
+                          balance: (customer?.loan_amount || 0) - ((payment?.month || 0) * (customer?.monthly_amount || 0)),
+                          monthNumber: payment?.month || 1,
+                          date: payment?.date || new Date().toISOString().split('T')[0]
+                        };
+                        console.log('Print data:', printDataObj);
+                        setPrintData({
+                          type: 'payment',
+                          data: printDataObj
+                        });
                       }}
                       style={{
                         background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
@@ -1965,9 +1962,9 @@ Thank you for your payment!
       </div>
 
       {/* Print Receipt Modal - same as Weekly */}
-      {printData && (
+      {printData && printData.data && (
         <PrintReceipt
-          type={printData.type}
+          type={printData.type || 'payment'}
           data={printData.data}
           onClose={() => setPrintData(null)}
         />

@@ -33,6 +33,7 @@ function PrintReceipt({
 
   // Safety check - if no data, show error and close
   if (!data) {
+    console.error('PrintReceipt: No data received. Type:', type);
     return (
       <div style={{
         position: 'fixed',
@@ -56,6 +57,9 @@ function PrintReceipt({
           <div style={{ fontSize: '18px', marginBottom: '15px', color: '#dc2626' }}>
             ⚠️ No print data available
           </div>
+          <div style={{ fontSize: '12px', marginBottom: '15px', color: '#6b7280' }}>
+            Type: {type || 'undefined'}
+          </div>
           <button
             onClick={onClose}
             style={{
@@ -73,6 +77,8 @@ function PrintReceipt({
       </div>
     );
   }
+
+  console.log('PrintReceipt: Data received', { type, data });
 
   const formatCurrency = (amount) => `₹${(Number(amount) || 0).toLocaleString('en-IN')}`;
   const formatForThermal = (amount) => {
