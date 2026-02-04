@@ -1861,38 +1861,72 @@ Thank you for your payment!
                     Due: {formatDate(payment.date)} | {formatCurrency(payment.amount)}
                   </div>
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', cursor: loading ? 'not-allowed' : 'pointer', gap: '8px' }}>
-                  {processingMonth === index ? (
-                    <div style={{
-                      width: '24px',
-                      height: '24px',
-                      border: '3px solid #e2e8f0',
-                      borderTopColor: '#10b981',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }} />
-                  ) : (
-                    <input
-                      type="checkbox"
-                      checked={payment.paid}
-                      onChange={() => handlePaymentToggle(index)}
-                      disabled={loading || payment.paid}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {/* Print button for paid months - same as Weekly */}
+                  {payment.paid && (
+                    <button
+                      onClick={() => setPrintReceiptData({
+                        customerName: customer.name,
+                        phone: customer.phone,
+                        loanType: 'Monthly',
+                        loanAmount: customer.loan_amount,
+                        amountPaid: customer.monthly_amount,
+                        totalPaid: payment.month * customer.monthly_amount,
+                        balance: customer.loan_amount - (payment.month * customer.monthly_amount),
+                        monthNumber: payment.month,
+                        date: payment.date
+                      })}
                       style={{
+                        background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      title="Print Receipt"
+                    >
+                      🖨️ Print
+                    </button>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: loading ? 'not-allowed' : 'pointer', gap: '8px' }}>
+                    {processingMonth === index ? (
+                      <div style={{
                         width: '24px',
                         height: '24px',
-                        cursor: loading || payment.paid ? 'not-allowed' : 'pointer',
-                        accentColor: '#10b981'
-                      }}
-                    />
-                  )}
-                  <span style={{
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: processingMonth === index ? '#6366f1' : (payment.paid ? '#10b981' : '#ef4444')
-                  }}>
-                    {processingMonth === index ? 'Saving...' : (payment.paid ? 'Paid' : 'Unpaid')}
-                  </span>
-                </label>
+                        border: '3px solid #e2e8f0',
+                        borderTopColor: '#10b981',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={payment.paid}
+                        onChange={() => handlePaymentToggle(index)}
+                        disabled={loading || payment.paid}
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          cursor: loading || payment.paid ? 'not-allowed' : 'pointer',
+                          accentColor: '#10b981'
+                        }}
+                      />
+                    )}
+                    <span style={{
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: processingMonth === index ? '#6366f1' : (payment.paid ? '#10b981' : '#ef4444')
+                    }}>
+                      {processingMonth === index ? 'Saving...' : (payment.paid ? 'Paid' : 'Unpaid')}
+                    </span>
+                  </label>
+                </div>
               </div>
             ))}
           </div>
