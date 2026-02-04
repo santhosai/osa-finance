@@ -1962,7 +1962,7 @@ Thank you for your payment!
       </div>
 
       {/* Print Receipt Modal - same as Weekly */}
-      {printData && printData.data && (
+      {printData && (
         <PrintReceipt
           type={printData.type || 'payment'}
           data={printData.data}
