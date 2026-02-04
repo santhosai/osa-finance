@@ -1283,7 +1283,7 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
   const [loading, setLoading] = useState(false);
   const [processingMonth, setProcessingMonth] = useState(null); // Track which month is being processed
   const isProcessingRef = useRef(false); // Ref for immediate check (faster than state)
-  const [printReceiptData, setPrintReceiptData] = useState(null); // For thermal print receipt
+  const [printData, setPrintData] = useState(null); // For print receipt - same as Weekly
   const [showSendChoice, setShowSendChoice] = useState(false); // Show WhatsApp/Print choice modal
   const [pendingPaymentData, setPendingPaymentData] = useState(null); // Store payment data for choice modal
   const [showEditModal, setShowEditModal] = useState(false); // Show edit modal
@@ -1500,7 +1500,10 @@ Thank you for your payment!
       sendWhatsApp();
     }
     if (choice === 'print' || choice === 'both') {
-      setPrintReceiptData(pendingPaymentData);
+      setPrintData({
+        type: 'payment',
+        data: pendingPaymentData
+      });
     }
     setShowSendChoice(false);
     setPendingPaymentData(null);
@@ -1865,16 +1868,19 @@ Thank you for your payment!
                   {/* Print button for paid months - same as Weekly */}
                   {payment.paid && (
                     <button
-                      onClick={() => setPrintReceiptData({
-                        customerName: customer.name,
-                        phone: customer.phone,
-                        loanType: 'Monthly',
-                        loanAmount: customer.loan_amount,
-                        amountPaid: customer.monthly_amount,
-                        totalPaid: payment.month * customer.monthly_amount,
-                        balance: customer.loan_amount - (payment.month * customer.monthly_amount),
-                        monthNumber: payment.month,
-                        date: payment.date
+                      onClick={() => setPrintData({
+                        type: 'payment',
+                        data: {
+                          customerName: customer.name,
+                          phone: customer.phone,
+                          loanType: 'Monthly',
+                          loanAmount: customer.loan_amount,
+                          amountPaid: customer.monthly_amount,
+                          totalPaid: payment.month * customer.monthly_amount,
+                          balance: customer.loan_amount - (payment.month * customer.monthly_amount),
+                          monthNumber: payment.month,
+                          date: payment.date
+                        }
                       })}
                       style={{
                         background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
@@ -1933,12 +1939,12 @@ Thank you for your payment!
         </div>
       </div>
 
-      {/* Thermal Print Receipt Modal */}
-      {printReceiptData && (
+      {/* Print Receipt Modal - same as Weekly */}
+      {printData && (
         <PrintReceipt
-          type="payment"
-          data={printReceiptData}
-          onClose={() => setPrintReceiptData(null)}
+          type={printData.type}
+          data={printData.data}
+          onClose={() => setPrintData(null)}
         />
       )}
 
