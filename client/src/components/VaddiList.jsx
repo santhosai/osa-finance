@@ -2813,6 +2813,7 @@ Thank you for your payment!
       {/* Thermal Print Receipt Modal */}
       {printReceiptData && (
         <PrintReceipt
+          type="payment"
           data={printReceiptData}
           onClose={() => setPrintReceiptData(null)}
         />
