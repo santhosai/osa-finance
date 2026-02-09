@@ -99,7 +99,17 @@ function Reports({ onClose, language = 'en' }) {
         console.log('Vinoth entries:', vinothEntries.map(e => ({ name: e.name, status: e.status, principal_returned: e.principal_returned })));
       }
 
-      setVaddiEntries(Array.isArray(vaddiData) ? vaddiData.filter(e => e.status !== 'settled' && !e.principal_returned) : []);
+      // Filter vaddi entries: exclude settled entries (status === 'settled' OR principal_returned === true)
+      setVaddiEntries(Array.isArray(vaddiData) ? vaddiData.filter(e => {
+        // If status is explicitly 'settled' (case-insensitive), exclude it
+        if (e.status && e.status.toString().toLowerCase() === 'settled') return false;
+        // If principal_returned is true, exclude it
+        if (e.principal_returned === true) return false;
+        // If principal_amount exists and is 0 or negative, exclude it (fully paid)
+        if (e.principal_amount !== null && e.principal_amount !== undefined && e.principal_amount <= 0) return false;
+        // Otherwise include it (active or no status field)
+        return true;
+      }) : []);
       setMonthlyCustomers(Array.isArray(monthlyData) ? monthlyData.filter(c => c.status === 'active') : []);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -124,11 +134,13 @@ function Reports({ onClose, language = 'en' }) {
   // Group monthly finance by EMI day (from start_date)
   const getMonthlyByDay = () => {
     const grouped = {};
-    monthlyCustomers.forEach(customer => {
-      const day = customer.start_date ? new Date(customer.start_date).getDate() : 1;
-      if (!grouped[day]) grouped[day] = [];
-      grouped[day].push({ ...customer, emiDay: day });
-    });
+    monthlyCustomers
+      .filter(customer => customer.balance > 0) // Exclude fully paid customers
+      .forEach(customer => {
+        const day = customer.start_date ? new Date(customer.start_date).getDate() : 1;
+        if (!grouped[day]) grouped[day] = [];
+        grouped[day].push({ ...customer, emiDay: day });
+      });
     return Object.keys(grouped)
       .sort((a, b) => parseInt(a) - parseInt(b))
       .map(day => ({ day: parseInt(day), customers: grouped[day] }));
@@ -213,8 +225,9 @@ function Reports({ onClose, language = 'en' }) {
     } else {
       if (reportType === 'daywise') {
         const data = getMonthlyByDay();
-        const totalCustomers = monthlyCustomers.length;
-        const totalEMI = monthlyCustomers.reduce((sum, c) => sum + (c.monthly_amount || 0), 0);
+        const activeCustomers = monthlyCustomers.filter(c => c.balance > 0);
+        const totalCustomers = activeCustomers.length;
+        const totalEMI = activeCustomers.reduce((sum, c) => sum + (c.monthly_amount || 0), 0);
         return {
           title: 'MONTHLY EMI DAY-WISE LIST',
           titleTamil: 'மாதாந்திர EMI நாள் பட்டியல்',
@@ -225,11 +238,36 @@ function Reports({ onClose, language = 'en' }) {
           type: 'monthly-daywise'
         };
       } else {
-        const allCustomers = monthlyCustomers.map(c => ({
-          ...c,
-          paid: isMonthlyPaidForMonth(c),
-          emiDay: c.start_date ? new Date(c.start_date).getDate() : 1
-        }));
+        // Filter customers who have payments due in selected month or earlier
+        const [selectedYear, selectedMonthNum] = selectedMonth.split('-').map(Number);
+
+        const allCustomers = monthlyCustomers
+          .filter(c => {
+            // Exclude fully paid customers (balance = 0)
+            if (c.balance <= 0) return false;
+
+            if (!c.start_date) return true; // Show if no start date
+
+            // Calculate first payment due date (1 month after start_date)
+            const startDate = new Date(c.start_date);
+            const firstPaymentDate = new Date(startDate);
+            firstPaymentDate.setMonth(startDate.getMonth() + 1);
+
+            const firstPaymentYear = firstPaymentDate.getFullYear();
+            const firstPaymentMonth = firstPaymentDate.getMonth() + 1;
+
+            // Only show if selected month >= first payment month
+            if (selectedYear > firstPaymentYear) return true;
+            if (selectedYear === firstPaymentYear && selectedMonthNum >= firstPaymentMonth) return true;
+
+            return false; // Don't show if payment not due yet
+          })
+          .map(c => ({
+            ...c,
+            paid: isMonthlyPaidForMonth(c),
+            emiDay: c.start_date ? new Date(c.start_date).getDate() : 1
+          }));
+
         const paidCustomers = allCustomers.filter(c => c.paid);
         const pendingCustomers = allCustomers.filter(c => !c.paid);
         const totalEMI = allCustomers.reduce((sum, c) => sum + (c.monthly_amount || 0), 0);

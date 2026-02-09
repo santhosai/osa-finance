@@ -2054,6 +2054,7 @@ app.post('/api/vaddi-entries', async (req, res) => {
       interest_rate: interest_rate ? parseFloat(interest_rate) : null,
       collateral_type: collateral_type || '',
       signed_acknowledgment: '',
+      status: 'active', // Set default status as active
       createdAt: new Date().toISOString()
     };
 
@@ -3303,12 +3304,15 @@ app.get('/api/daily-customers', async (req, res) => {
         totalOutstanding += loanData.balance || 0;
       }
 
-      customers.push({
-        ...customerData,
-        loans,
-        total_loans: loans.length,
-        total_outstanding: totalOutstanding
-      });
+      // Only include customers with active loans
+      if (loans.length > 0) {
+        customers.push({
+          ...customerData,
+          loans,
+          total_loans: loans.length,
+          total_outstanding: totalOutstanding
+        });
+      }
     }
 
     customers.sort((a, b) => a.name.localeCompare(b.name));
@@ -4691,6 +4695,49 @@ app.put('/api/whatsapp-settings', async (req, res) => {
     res.json({ id: 'whatsapp', ...settings });
   } catch (error) {
     console.error('Error saving whatsapp settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ DASHBOARD NOTES ROUTES ============
+
+// Get dashboard notes
+app.get('/api/dashboard-notes', async (req, res) => {
+  try {
+    const notesDoc = await db.collection('app_settings').doc('dashboard_notes').get();
+
+    if (!notesDoc.exists) {
+      return res.json({ text_note: '', drawing_data: '' });
+    }
+
+    const data = notesDoc.data();
+    res.json({
+      text_note: data.text_note || '',
+      drawing_data: data.drawing_data || '',
+      updated_at: data.updated_at
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard notes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save dashboard notes
+app.post('/api/dashboard-notes', async (req, res) => {
+  try {
+    const { text_note, drawing_data } = req.body;
+
+    const notesData = {
+      text_note: text_note || '',
+      drawing_data: drawing_data || '',
+      updated_at: new Date().toISOString()
+    };
+
+    await db.collection('app_settings').doc('dashboard_notes').set(notesData, { merge: true });
+
+    res.json({ id: 'dashboard_notes', ...notesData });
+  } catch (error) {
+    console.error('Error saving dashboard notes:', error);
     res.status(500).json({ error: error.message });
   }
 });

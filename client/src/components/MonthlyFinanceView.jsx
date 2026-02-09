@@ -1372,22 +1372,23 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
         throw new Error('Failed to record payment');
       }
 
-      // Calculate new balance
-      const newBalance = customer.balance - customer.monthly_amount;
-
-      // Refresh data
+      // Refresh data first to get updated balance
       await onUpdate();
 
-      // Store payment data and show choice modal
+      // Fetch updated customer data to get the actual new balance
+      const updatedCustomerResponse = await fetch(`${API_URL}/monthly-finance/customers/${customer.id}`);
+      const updatedCustomer = await updatedCustomerResponse.json();
+
+      // Store payment data with UPDATED balance and show choice modal
       setPendingPaymentData({
-        customerName: customer.name,
-        phone: customer.phone,
+        customerName: updatedCustomer.name,
+        phone: updatedCustomer.phone,
         loanType: 'Monthly Finance',
         amountPaid: customer.monthly_amount,
-        loanAmount: customer.loan_amount,
-        totalPaid: customer.loan_amount - newBalance,
-        balance: newBalance,
-        monthlyAmount: customer.monthly_amount,
+        loanAmount: updatedCustomer.loan_amount,
+        totalPaid: updatedCustomer.loan_amount - updatedCustomer.balance,
+        balance: updatedCustomer.balance,
+        monthlyAmount: updatedCustomer.monthly_amount,
         monthNumber: payment.month,
         date: new Date().toISOString()
       });

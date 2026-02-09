@@ -5,7 +5,7 @@ function PaymentReminders({ onClose }) {
   const [reminders, setReminders] = useState({ monthly: [], interest: [] });
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(
-    new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    new Date().toISOString().split('T')[0]
   );
 
   useEffect(() => {
@@ -76,10 +76,14 @@ function PaymentReminders({ onClose }) {
       }
 
       // Process Interest/Vaddi entries (from vaddi_entries collection)
-      // Show ALL active entries - no day filter
+      // Filter by selected day
       for (const entry of vaddiEntries) {
         // Skip settled entries (check status field)
         if (entry.status === 'settled' || entry.principal_returned) continue;
+
+        // Filter by day - only show entries matching the selected day
+        const entryDay = entry.day || 0;
+        if (entryDay !== targetDay) continue;
 
         const principalAmount = entry.principal_amount || entry.amount || 0;
         const interestRate = entry.interest_rate || 0;
@@ -291,7 +295,7 @@ function PaymentReminders({ onClose }) {
             color: '#475569',
             marginBottom: '8px'
           }}>
-            Select Due Date (Next 2 Days Recommended)
+            Select Date (Choose specific day of the month)
           </label>
           <input
             type="date"

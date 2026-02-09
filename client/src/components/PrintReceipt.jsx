@@ -262,7 +262,9 @@ function PrintReceipt({
     receipt += COMMANDS.ALIGN_CENTER;
     receipt += COMMANDS.BOLD_ON;
     receipt += COMMANDS.DOUBLE_HEIGHT;
-    if (type === 'payment' || type === 'chit_payment') {
+    // Skip showing PAID amount for Vaddi Interest
+    const isVaddiInterest = data.loanType === 'Vaddi Interest';
+    if ((type === 'payment' || type === 'chit_payment') && !isVaddiInterest) {
       receipt += `PAID: Rs ${formatForThermal(data.amountPaid)}\n`;
     } else if (type === 'loan_given') {
       receipt += `GIVEN: Rs ${formatForThermal(data.loanAmount)}\n`;
@@ -282,7 +284,8 @@ function PrintReceipt({
     if (data.totalPaid !== undefined) {
       receipt += `Total Paid: Rs ${formatForThermal(data.totalPaid)}\n`;
     }
-    if (data.balance !== undefined) {
+    // Skip showing balance for Vaddi Interest
+    if (data.balance !== undefined && !isVaddiInterest) {
       receipt += COMMANDS.BOLD_ON;
       receipt += `BALANCE: Rs ${formatForThermal(data.balance)}\n`;
       receipt += COMMANDS.BOLD_OFF;
@@ -479,12 +482,15 @@ function PrintReceipt({
         )}
       </div>
 
-      <div className="total-section">
-        <div className="total-row">
-          <span>Amount Paid:</span>
-          <span>{formatCurrency(data.amountPaid)}</span>
+      {/* Hide Amount Paid for Vaddi Interest */}
+      {data.loanType !== 'Vaddi Interest' && (
+        <div className="total-section">
+          <div className="total-row">
+            <span>Amount Paid:</span>
+            <span>{formatCurrency(data.amountPaid)}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="details">
         {data.loanAmount && (
@@ -499,7 +505,8 @@ function PrintReceipt({
             <span>{formatCurrency(data.totalPaid)}</span>
           </div>
         )}
-        {data.balance !== undefined && (
+        {/* Hide Balance for Vaddi Interest */}
+        {data.balance !== undefined && data.loanType !== 'Vaddi Interest' && (
           <div className="row highlight">
             <span>Balance:</span>
             <span>{formatCurrency(data.balance)}</span>

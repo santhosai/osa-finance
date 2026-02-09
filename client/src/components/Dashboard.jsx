@@ -58,7 +58,7 @@ function Dashboard({ navigateTo }) {
   const [printData, setPrintData] = useState(null); // For print receipt
   const [monthlyPaymentConfirm, setMonthlyPaymentConfirm] = useState(null); // For Monthly Finance payment confirmation
   const [monthlyUndoConfirm, setMonthlyUndoConfirm] = useState(null); // For Monthly Finance undo confirmation
-  const [quickNote, setQuickNote] = useState(() => localStorage.getItem('dashboardQuickNote') || ''); // Quick Note
+  const [quickNote, setQuickNote] = useState(''); // Quick Note - loaded from database
   const [showQuickNote, setShowQuickNote] = useState(true); // Show/hide quick note
   const [noteMode, setNoteMode] = useState('text'); // 'text' or 'draw' for stylus
   const [isDrawing, setIsDrawing] = useState(false);
@@ -135,6 +135,16 @@ function Dashboard({ navigateTo }) {
     fetcher,
     {
       refreshInterval: 15000, // Auto-refresh every 15 seconds for pending payments
+      revalidateOnFocus: true,
+      dedupingInterval: 2000,
+    }
+  );
+
+  // Fetch Dashboard Notes from Firestore
+  const { data: dashboardNotes, mutate: mutateNotes } = useSWR(
+    `${API_URL}/dashboard-notes`,
+    fetcher,
+    {
       revalidateOnFocus: true,
       dedupingInterval: 2000,
     }
@@ -349,6 +359,13 @@ function Dashboard({ navigateTo }) {
     prevPendingCountRef.current = currentCount;
   }, [pendingPayments]);
 
+  // Sync quickNote state with fetched dashboard notes
+  useEffect(() => {
+    if (dashboardNotes && dashboardNotes.text_note !== undefined) {
+      setQuickNote(dashboardNotes.text_note);
+    }
+  }, [dashboardNotes]);
+
   // Fetch weekly payments data when selectedDate or customers change
   const customersLength = customers?.length || 0;
   useEffect(() => {
@@ -510,10 +527,27 @@ function Dashboard({ navigateTo }) {
     window.location.reload();
   };
 
-  // Save Quick Note to localStorage
-  const saveQuickNote = (note) => {
-    setQuickNote(note);
-    localStorage.setItem('dashboardQuickNote', note);
+  // Save Quick Note to Firestore database
+  const saveQuickNote = async (note) => {
+    setQuickNote(note); // Update UI immediately
+
+    try {
+      // Save to database
+      await fetch(`${API_URL}/dashboard-notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text_note: note,
+          drawing_data: dashboardNotes?.drawing_data || ''
+        })
+      });
+
+      // Refresh notes from database
+      mutateNotes();
+    } catch (error) {
+      console.error('Error saving note:', error);
+      // Keep the UI updated even if save fails
+    }
   };
 
   // Canvas drawing functions for stylus support
@@ -533,8 +567,8 @@ function Dashboard({ navigateTo }) {
     context.lineWidth = penSize;
     contextRef.current = context;
 
-    // Load saved drawing if exists
-    const savedDrawing = localStorage.getItem('dashboardQuickDrawing');
+    // Load saved drawing from database if exists
+    const savedDrawing = dashboardNotes?.drawing_data;
     if (savedDrawing) {
       const img = new Image();
       img.onload = () => {
@@ -542,7 +576,7 @@ function Dashboard({ navigateTo }) {
       };
       img.src = savedDrawing;
     }
-  }, [penColor, penSize]);
+  }, [penColor, penSize, dashboardNotes]);
 
   useEffect(() => {
     if (noteMode === 'draw' && showQuickNote) {
@@ -583,24 +617,50 @@ function Dashboard({ navigateTo }) {
     contextRef.current.stroke();
   };
 
-  const stopDrawing = () => {
+  const stopDrawing = async () => {
     if (isDrawing) {
       contextRef.current.closePath();
       setIsDrawing(false);
-      // Save drawing to localStorage
+      // Save drawing to database
       const canvas = canvasRef.current;
       if (canvas) {
         const dataUrl = canvas.toDataURL();
-        localStorage.setItem('dashboardQuickDrawing', dataUrl);
+        try {
+          await fetch(`${API_URL}/dashboard-notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text_note: quickNote,
+              drawing_data: dataUrl
+            })
+          });
+          mutateNotes();
+        } catch (error) {
+          console.error('Error saving drawing:', error);
+        }
       }
     }
   };
 
-  const clearCanvas = () => {
+  const clearCanvas = async () => {
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
     context.clearRect(0, 0, canvas.width, canvas.height);
-    localStorage.removeItem('dashboardQuickDrawing');
+
+    // Clear from database
+    try {
+      await fetch(`${API_URL}/dashboard-notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text_note: quickNote,
+          drawing_data: ''
+        })
+      });
+      mutateNotes();
+    } catch (error) {
+      console.error('Error clearing drawing:', error);
+    }
   };
 
   const updatePenSettings = () => {
@@ -2408,7 +2468,7 @@ function Dashboard({ navigateTo }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '16px' }}>📝</span>
               <span style={{ fontWeight: 600, fontSize: '13px', color: '#92400e' }}>Quick Note</span>
-              {(quickNote || localStorage.getItem('dashboardQuickDrawing')) && !showQuickNote && (
+              {(quickNote || dashboardNotes?.drawing_data) && !showQuickNote && (
                 <span style={{ fontSize: '11px', color: '#b45309', opacity: 0.8 }}>
                   (has content)
                 </span>

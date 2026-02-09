@@ -755,7 +755,6 @@ const VaddiList = ({ navigateTo }) => {
 
 Customer: ${pendingPaymentData.customerName}
 Month: ${pendingPaymentData.interestMonth}
-Interest Paid: Rs.${pendingPaymentData.amountPaid.toLocaleString('en-IN')}
 Principal Amount: Rs.${pendingPaymentData.loanAmount.toLocaleString('en-IN')}
 Date: ${new Date().toLocaleDateString('en-IN')}
 
