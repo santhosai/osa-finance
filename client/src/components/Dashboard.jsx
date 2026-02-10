@@ -1642,6 +1642,49 @@ function Dashboard({ navigateTo }) {
             </button>
           )}
 
+          {/* Test Notification Button */}
+          {localStorage.getItem('userRole') === 'admin' && (
+            <button
+              onClick={async () => {
+                try {
+                  // Test in-app sound + alert
+                  playNotificationSound();
+                  setNewPaymentAlert({
+                    count: 1,
+                    customerName: 'Test Customer',
+                    amount: 1000
+                  });
+                  setTimeout(() => setNewPaymentAlert(null), 5000);
+
+                  // Also send FCM push (for lock screen test)
+                  const res = await fetch(`${API_URL}/test-notification`, { method: 'POST' });
+                  const data = await res.json();
+                  if (data.result?.success) {
+                    alert(`✅ Test notification sent!\n\nSound played + Push sent to ${data.result.successCount} device(s)\n\nNow lock your phone and test again!`);
+                  } else {
+                    alert('✅ In-app sound played!\n\n⚠️ Push notification failed: ' + (data.result?.reason || 'No FCM token registered.\n\nMake sure you clicked "Enable Notifications" first.'));
+                  }
+                } catch (err) {
+                  alert('❌ Error: ' + err.message);
+                }
+                setShowSidebar(false);
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                color: 'white',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 600
+              }}
+            >
+              🔊 Test Notification Sound
+            </button>
+          )}
+
           <button
             onClick={() => { setShowSidebar(false); setShowAllPaymentsDue(true); }}
             style={{
