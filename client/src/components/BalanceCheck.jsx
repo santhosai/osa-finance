@@ -4,6 +4,10 @@ import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 function BalanceCheck() {
+  // Check if QR print mode
+  const urlParams = new URLSearchParams(window.location.search);
+  const isQRMode = urlParams.get('mode') === 'qr';
+
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [customerData, setCustomerData] = useState(null);
@@ -324,6 +328,165 @@ function BalanceCheck() {
       setUploading(false);
     }
   };
+
+  // QR Code Print Mode
+  if (isQRMode) {
+    const portalUrl = 'https://osa-finance.vercel.app/balance-check';
+    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(portalUrl)}&format=png`;
+
+    return (
+      <div style={{
+        width: '100%',
+        maxWidth: '800px',
+        margin: '0 auto',
+        padding: '40px 20px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        background: 'white',
+        minHeight: '100vh'
+      }}>
+        {/* Print Button - hidden in print */}
+        <div style={{ textAlign: 'center', marginBottom: '30px' }} className="no-print">
+          <button
+            onClick={() => window.print()}
+            style={{
+              padding: '12px 40px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '16px',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            🖨️ Print this Sheet
+          </button>
+        </div>
+
+        {/* Printable Content */}
+        <div style={{
+          border: '3px solid #1e293b',
+          borderRadius: '16px',
+          padding: '40px',
+          textAlign: 'center'
+        }}>
+          {/* Business Name */}
+          <div style={{
+            fontSize: '28px',
+            fontWeight: 800,
+            color: '#1e293b',
+            marginBottom: '8px',
+            letterSpacing: '1px'
+          }}>
+            OM SAI MURUGAN FINANCE
+          </div>
+          <div style={{
+            fontSize: '14px',
+            color: '#64748b',
+            marginBottom: '30px',
+            borderBottom: '2px solid #e2e8f0',
+            paddingBottom: '20px'
+          }}>
+            Customer Self-Service Portal
+          </div>
+
+          {/* QR Code */}
+          <div style={{ marginBottom: '24px' }}>
+            <img
+              src={qrApiUrl}
+              alt="Scan to check your loan status"
+              style={{
+                width: '280px',
+                height: '280px',
+                border: '4px solid #1e293b',
+                borderRadius: '12px',
+                padding: '8px',
+                background: 'white'
+              }}
+            />
+          </div>
+
+          {/* Scan Instruction */}
+          <div style={{
+            fontSize: '20px',
+            fontWeight: 700,
+            color: '#1e293b',
+            marginBottom: '8px'
+          }}>
+            📱 Scan this QR Code
+          </div>
+          <div style={{
+            fontSize: '15px',
+            color: '#475569',
+            marginBottom: '24px'
+          }}>
+            Use your phone camera or any QR scanner app
+          </div>
+
+          {/* Instructions Box */}
+          <div style={{
+            background: '#f0f9ff',
+            border: '2px solid #bae6fd',
+            borderRadius: '12px',
+            padding: '20px',
+            textAlign: 'left',
+            marginBottom: '24px'
+          }}>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#0369a1', marginBottom: '12px' }}>
+              How to Use:
+            </div>
+            <div style={{ fontSize: '14px', color: '#334155', lineHeight: '2' }}>
+              1. Scan the QR code above with your phone<br />
+              2. Enter your registered mobile number<br />
+              3. View your loan details & payment history<br />
+              4. Pay directly using UPI and submit transaction ID<br />
+              5. Admin will verify and confirm your payment
+            </div>
+          </div>
+
+          {/* Tamil Instructions */}
+          <div style={{
+            background: '#fef3c7',
+            border: '2px solid #fcd34d',
+            borderRadius: '12px',
+            padding: '20px',
+            textAlign: 'left',
+            marginBottom: '24px'
+          }}>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#92400e', marginBottom: '12px' }}>
+              பயன்படுத்துவது எப்படி:
+            </div>
+            <div style={{ fontSize: '14px', color: '#78350f', lineHeight: '2' }}>
+              1. மேலே உள்ள QR கோடை உங்கள் போனில் ஸ்கேன் செய்யவும்<br />
+              2. உங்கள் பதிவு செய்த மொபைல் எண்ணை உள்ளிடவும்<br />
+              3. உங்கள் கடன் விவரங்கள் & பணம் செலுத்திய வரலாறு பார்க்கவும்<br />
+              4. UPI மூலம் நேரடியாக பணம் செலுத்தி Transaction ID சமர்ப்பிக்கவும்<br />
+              5. Admin சரிபார்த்து உங்கள் பணம் செலுத்தியதை உறுதிப்படுத்துவார்
+            </div>
+          </div>
+
+          {/* URL fallback */}
+          <div style={{
+            fontSize: '13px',
+            color: '#64748b',
+            borderTop: '2px solid #e2e8f0',
+            paddingTop: '16px'
+          }}>
+            Or visit: <strong style={{ color: '#1e293b' }}>osa-finance.vercel.app/balance-check</strong>
+          </div>
+        </div>
+
+        {/* Print styles */}
+        <style>{`
+          @media print {
+            .no-print { display: none !important; }
+            body { margin: 0; padding: 0; }
+            @page { margin: 10mm; }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -1763,14 +1926,28 @@ function BalanceCheck() {
               marginBottom: '20px'
             }}>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#166534', marginBottom: '12px' }}>
-                📱 Pay to this UPI ID:
+                📱 Pay to UPI ID:
               </div>
               <div style={{
                 background: 'white',
-                padding: '12px',
+                padding: '10px',
                 borderRadius: '8px',
                 fontFamily: 'monospace',
-                fontSize: '16px',
+                fontSize: '15px',
+                fontWeight: 700,
+                color: '#1e293b',
+                textAlign: 'center',
+                marginBottom: '6px'
+              }}>
+                santhokam@okicici
+              </div>
+              <div style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', marginBottom: '6px' }}>OR</div>
+              <div style={{
+                background: 'white',
+                padding: '10px',
+                borderRadius: '8px',
+                fontFamily: 'monospace',
+                fontSize: '15px',
                 fontWeight: 700,
                 color: '#1e293b',
                 textAlign: 'center',
@@ -1784,7 +1961,7 @@ function BalanceCheck() {
                                 selectedLoan.loanType === 'weekly' ? selectedLoan.weeklyAmount :
                                 selectedLoan.loanType === 'daily' ? selectedLoan.dailyAmount :
                                 selectedLoan.monthlyInterest;
-                  const upiLink = `upi://pay?pa=8667510724@pthdfc&pn=Om%20Sai%20Murugan%20Finance&am=${amount}&cu=INR&tn=${selectedLoan.loanName}%20Payment`;
+                  const upiLink = `upi://pay?pa=santhokam@okicici&pn=Om%20Sai%20Murugan%20Finance&am=${amount}&cu=INR&tn=${selectedLoan.loanName}%20Payment`;
                   window.open(upiLink, '_blank');
                 }}
                 style={{
