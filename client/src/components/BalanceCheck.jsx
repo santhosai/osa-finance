@@ -1,12 +1,13 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { API_URL } from '../config';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 function BalanceCheck() {
   // Check if QR print mode
-  const urlParams = new URLSearchParams(window.location.search);
-  const isQRMode = urlParams.get('mode') === 'qr';
+  const [searchParams] = useSearchParams();
+  const isQRMode = searchParams.get('mode') === 'qr';
 
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
