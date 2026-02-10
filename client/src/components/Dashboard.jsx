@@ -152,7 +152,9 @@ function Dashboard({ navigateTo }) {
 
   // Track previous pending payments count for notifications
   const prevPendingCountRef = useRef(0);
+  const isInitialLoadRef = useRef(true);
   const notificationAudioRef = useRef(null);
+  const [newPaymentAlert, setNewPaymentAlert] = useState(null); // In-app alert
 
   // Function to enable push notifications manually
   const enablePushNotifications = async () => {
@@ -193,6 +195,11 @@ function Dashboard({ navigateTo }) {
 
   // Request notification permission and register FCM token on mount
   useEffect(() => {
+    // Auto-request browser notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
     const setupNotifications = async () => {
       const userRole = localStorage.getItem('userRole');
 
@@ -292,72 +299,126 @@ function Dashboard({ navigateTo }) {
     setupNotifications();
   }, []);
 
+  // Play notification sound - uses multiple methods for mobile compatibility
+  const playNotificationSound = useCallback(() => {
+    // Method 1: HTML5 Audio with data URI (most reliable on mobile)
+    try {
+      // Generate a short beep sound as base64 WAV
+      const sampleRate = 8000;
+      const duration = 0.3;
+      const frequency = 880;
+      const numSamples = sampleRate * duration;
+      const buffer = new ArrayBuffer(44 + numSamples * 2);
+      const view = new DataView(buffer);
+
+      // WAV header
+      const writeString = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + numSamples * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, numSamples * 2, true);
+
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate;
+        const envelope = Math.min(1, (duration - t) * 10) * Math.min(1, t * 50);
+        const sample = Math.sin(2 * Math.PI * frequency * t) * envelope * 0.5;
+        view.setInt16(44 + i * 2, sample * 32767, true);
+      }
+
+      const blob = new Blob([buffer], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.volume = 1.0;
+
+      // Play 3 beeps
+      let beepCount = 0;
+      const playBeep = () => {
+        beepCount++;
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+        if (beepCount < 3) {
+          setTimeout(playBeep, 400);
+        } else {
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+      };
+      playBeep();
+    } catch (e) {
+      console.error('Sound error:', e);
+    }
+
+    // Vibrate on mobile
+    if (navigator.vibrate) {
+      navigator.vibrate([200, 100, 200, 100, 200]);
+    }
+  }, []);
+
   // Monitor for new pending payments and trigger notifications
   useEffect(() => {
-    if (!pendingPayments || pendingPayments.length === 0) {
-      prevPendingCountRef.current = 0;
-      return;
-    }
+    if (!pendingPayments) return;
 
     const currentCount = pendingPayments.length;
     const prevCount = prevPendingCountRef.current;
 
-    // If we have new pending payments (count increased)
-    if (currentCount > prevCount && prevCount > 0) {
+    // Skip initial load - just record the count
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+      prevPendingCountRef.current = currentCount;
+      return;
+    }
+
+    // If new pending payments arrived (count increased)
+    if (currentCount > prevCount) {
       const newPaymentsCount = currentCount - prevCount;
+      const latestPayment = pendingPayments[0]; // Most recent
 
-      // Play notification sound (when app is active)
-      try {
-        // Create notification sound (beep) - works when tab is active
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+      // Play notification sound (3 beeps)
+      playNotificationSound();
 
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+      // Show in-app alert banner
+      setNewPaymentAlert({
+        count: newPaymentsCount,
+        customerName: latestPayment?.customer_name || 'Customer',
+        amount: latestPayment?.amount || 0
+      });
 
-        oscillator.frequency.value = 800; // Frequency in Hz
-        oscillator.type = 'sine';
+      // Auto-dismiss alert after 10 seconds
+      setTimeout(() => setNewPaymentAlert(null), 10000);
 
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      // Auto-open pending payments modal
+      setShowPendingPayments(true);
 
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
-      } catch (error) {
-        console.error('Error playing notification sound:', error);
-      }
-
-      // Show browser notification with sound and vibration
+      // Show browser notification
       if ('Notification' in window && Notification.permission === 'granted') {
-        const notification = new Notification('🔔 New UPI Payment Request', {
-          body: `${newPaymentsCount} new payment${newPaymentsCount > 1 ? 's' : ''} pending approval\nClick to view details`,
+        const notification = new Notification('🔔 New UPI Payment!', {
+          body: `${latestPayment?.customer_name || 'Customer'} paid ₹${latestPayment?.amount?.toLocaleString('en-IN') || '0'}\nClick to review`,
           icon: '/favicon.ico',
-          badge: '/favicon.ico',
           tag: 'pending-payment',
-          requireInteraction: true, // Keeps notification visible until user interacts
-          silent: false, // Explicitly request sound (browser/OS will play default notification sound)
-          vibrate: [200, 100, 200, 100, 200], // Vibration pattern for mobile devices
-          renotify: true, // Re-alert even if notification with same tag exists
-          timestamp: Date.now(),
+          requireInteraction: true,
+          silent: false,
+          vibrate: [200, 100, 200, 100, 200],
+          renotify: true,
         });
 
-        // Focus window when notification is clicked
         notification.onclick = () => {
           window.focus();
           notification.close();
-          // Scroll to pending payments section
-          const pendingSection = document.querySelector('[data-section="pending-payments"]');
-          if (pendingSection) {
-            pendingSection.scrollIntoView({ behavior: 'smooth' });
-          }
+          setShowPendingPayments(true);
         };
       }
     }
 
-    // Update previous count
     prevPendingCountRef.current = currentCount;
-  }, [pendingPayments]);
+  }, [pendingPayments, playNotificationSound]);
 
   // Sync quickNote state with fetched dashboard notes
   useEffect(() => {
@@ -2154,6 +2215,54 @@ function Dashboard({ navigateTo }) {
 
       {/* Main Content */}
       <div style={{ flex: 1, padding: '0', width: '100%' }}>
+
+        {/* New Payment Alert Banner */}
+        {newPaymentAlert && (
+          <div
+            onClick={() => { setNewPaymentAlert(null); setShowPendingPayments(true); }}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 9999,
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              padding: '14px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              animation: 'slideDown 0.3s ease-out'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '28px' }}>🔔</span>
+              <div>
+                <div style={{ color: 'white', fontWeight: 700, fontSize: '15px' }}>
+                  New Payment Received!
+                </div>
+                <div style={{ color: '#fef3c7', fontSize: '13px' }}>
+                  {newPaymentAlert.customerName} - ₹{newPaymentAlert.amount?.toLocaleString('en-IN')} • Tap to review
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setNewPaymentAlert(null); }}
+              style={{ background: 'none', border: 'none', color: 'white', fontSize: '20px', cursor: 'pointer', padding: '4px' }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        <style>{`
+          @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+        `}</style>
+
         {/* Header */}
         <div style={{
           background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
