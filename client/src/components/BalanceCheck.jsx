@@ -306,15 +306,33 @@ function BalanceCheck() {
 
       await response.json();
 
-      // Success - show success modal with WhatsApp button
+      // Success - auto-send WhatsApp to admin and show success modal
       setShowPaymentModal(false);
       setSelectedLoan(null);
       setPaymentScreenshot(null);
-      setPaymentSuccess({
+
+      const successData = {
         amount: amount,
         customerName: customerData.name,
         loanType: loanType
-      });
+      };
+      setPaymentSuccess(successData);
+
+      // Auto-send WhatsApp notification to admin
+      const message = `🔔 *புதிய பணம் செலுத்தப்பட்டது!*
+
+👤 வாடிக்கையாளர்: ${successData.customerName}
+💰 தொகை: ₹${successData.amount?.toLocaleString('en-IN')}
+📋 வகை: ${loanType === 'weekly' ? 'வாராந்திர கடன்' :
+                loanType === 'monthly' ? 'மாதாந்திர கடன்' :
+                loanType === 'daily' ? 'தினசரி கடன்' :
+                loanType === 'vaddi' ? 'வட்டி கடன்' : loanType}
+⏰ நேரம்: ${new Date().toLocaleString('en-IN')}
+
+தயவுசெய்து ஆப்பில் சரிபார்த்து அனுமதிக்கவும் 🙏`;
+
+      const whatsappUrl = `https://wa.me/918667510724?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
     } catch (error) {
       console.error('Error submitting payment:', error);
       alert(
@@ -2165,53 +2183,31 @@ function BalanceCheck() {
               Customer: <strong>{paymentSuccess.customerName}</strong>
             </p>
 
-            {/* WhatsApp Button - Important! */}
-            <button
-              onClick={() => {
-                const message = `🔔 *புதிய பணம் செலுத்தப்பட்டது!*
-
-👤 வாடிக்கையாளர்: ${paymentSuccess.customerName}
-💰 தொகை: ₹${paymentSuccess.amount?.toLocaleString('en-IN')}
-📋 வகை: ${paymentSuccess.loanType === 'weekly' ? 'வாராந்திர கடன்' :
-                paymentSuccess.loanType === 'monthly' ? 'மாதாந்திர கடன்' :
-                paymentSuccess.loanType === 'daily' ? 'தினசரி கடன்' :
-                paymentSuccess.loanType === 'vaddi' ? 'வட்டி கடன்' : paymentSuccess.loanType}
-⏰ நேரம்: ${new Date().toLocaleString('en-IN')}
-
-தயவுசெய்து ஆப்பில் சரிபார்த்து அனுமதிக்கவும் 🙏`;
-
-                const whatsappUrl = `https://wa.me/918667510724?text=${encodeURIComponent(message)}`;
-                window.open(whatsappUrl, '_blank');
-              }}
-              style={{
-                width: '100%',
-                padding: '16px',
-                background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                fontSize: '16px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px',
-                marginBottom: '12px',
-                boxShadow: '0 4px 15px rgba(37, 211, 102, 0.4)'
-              }}
-            >
-              <span style={{ fontSize: '24px' }}>📱</span>
-              Notify Admin via WhatsApp
-            </button>
+            {/* WhatsApp auto-sent confirmation */}
+            <div style={{
+              width: '100%',
+              padding: '14px',
+              background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+              color: 'white',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              marginBottom: '16px'
+            }}>
+              <span style={{ fontSize: '20px' }}>✅</span>
+              Admin notified via WhatsApp!
+            </div>
 
             <p style={{
-              color: '#f59e0b',
+              color: '#64748b',
               fontSize: '12px',
-              margin: '0 0 16px',
-              fontWeight: 600
+              margin: '0 0 16px'
             }}>
-              ⚠️ Please click above to notify admin instantly!
+              Please send the WhatsApp message that opened. Admin will verify and approve your payment.
             </p>
 
             {/* Done Button */}
