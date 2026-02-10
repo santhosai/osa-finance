@@ -20,6 +20,7 @@ import AdminProfit from './components/AdminProfit';
 import UserCollections from './components/UserCollections';
 import AdminCollections from './components/AdminCollections';
 import ChitDashboard from './components/ChitDashboard';
+import AutoFinanceDashboard from './components/AutoFinanceDashboard';
 import BalanceCheck from './components/BalanceCheck';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -126,6 +127,11 @@ function ChitDashboardWrapper() {
   return <ChitDashboard navigateTo={(path) => navigate(`/${path}`)} />;
 }
 
+function AutoFinanceDashboardWrapper() {
+  const navigate = useNavigate();
+  return <AutoFinanceDashboard navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
 
 // Main app component wrapper
 function AppContent() {
@@ -212,6 +218,22 @@ function AppContent() {
             <Routes>
               <Route path="/chit-dashboard" element={<ChitDashboardWrapper />} />
               <Route path="*" element={<Navigate to="/chit-dashboard" replace />} />
+            </Routes>
+          </div>
+        </LanguageProvider>
+      </ThemeProvider>
+    );
+  }
+
+  // AUTO FINANCE MODULE - Vehicle Loans & EMI
+  if (selectedModule === 'auto-finance') {
+    return (
+      <ThemeProvider>
+        <LanguageProvider>
+          <div className="app">
+            <Routes>
+              <Route path="/auto-finance" element={<AutoFinanceDashboardWrapper />} />
+              <Route path="*" element={<Navigate to="/auto-finance" replace />} />
             </Routes>
           </div>
         </LanguageProvider>

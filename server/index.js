@@ -877,6 +877,48 @@ app.post('/api/pending-payments/:id/approve', async (req, res) => {
       });
 
       paymentResult = { newBalance, paymentData };
+    } else if (pendingPayment.loan_type === 'auto-finance') {
+      // Auto Finance EMI payment
+      const customerDoc = await db.collection('auto_finance_customers').doc(pendingPayment.loan_id).get();
+
+      if (!customerDoc.exists) {
+        throw new Error('Auto finance customer not found');
+      }
+
+      const customerData = customerDoc.data();
+      const newBalance = customerData.balance - pendingPayment.amount;
+      const newPaidEmis = customerData.paid_emis + 1;
+
+      // Count existing payments for EMI number
+      const existingPayments = await db.collection('auto_finance_payments')
+        .where('customer_id', '==', pendingPayment.loan_id)
+        .get();
+
+      const paymentData = {
+        customer_id: pendingPayment.loan_id,
+        emi_number: existingPayments.size + 1,
+        amount: pendingPayment.amount,
+        payment_date: new Date().toISOString().split('T')[0],
+        payment_mode: 'upi',
+        balance_after: newBalance,
+        late_fee: 0,
+        notes: 'Paid via customer portal',
+        whatsapp_sent: false,
+        created_at: new Date().toISOString(),
+        pending_payment_id: id
+      };
+
+      await db.collection('auto_finance_payments').add(paymentData);
+
+      const customerUpdate = { balance: newBalance, paid_emis: newPaidEmis };
+      if (newBalance <= 0 || newPaidEmis >= customerData.tenure_months) {
+        customerUpdate.status = 'closed';
+        customerUpdate.rc_held = false;
+      }
+
+      await db.collection('auto_finance_customers').doc(pendingPayment.loan_id).update(customerUpdate);
+
+      paymentResult = { newBalance, paymentData };
     } else {
       // Regular loan payment (Weekly, Daily, Vaddi)
       const loanDoc = await db.collection('loans').doc(pendingPayment.loan_id).get();
@@ -4738,6 +4780,539 @@ app.post('/api/dashboard-notes', async (req, res) => {
     res.json({ id: 'dashboard_notes', ...notesData });
   } catch (error) {
     console.error('Error saving dashboard notes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===================================================
+// AUTO FINANCE MODULE - Vehicle Loans with EMI
+// ===================================================
+
+// GET /api/auto-finance/customers - List all with payments
+app.get('/api/auto-finance/customers', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    let query = db.collection('auto_finance_customers');
+
+    const snapshot = await query.get();
+    const customers = [];
+
+    for (const doc of snapshot.docs) {
+      const customer = { id: doc.id, ...doc.data() };
+
+      // Filter by phone if provided (for customer portal)
+      if (phone && customer.phone !== phone) continue;
+
+      // Fetch payments
+      const paymentsSnapshot = await db.collection('auto_finance_payments')
+        .where('customer_id', '==', doc.id)
+        .orderBy('created_at', 'asc')
+        .get();
+
+      customer.payments = paymentsSnapshot.docs.map(p => ({ id: p.id, ...p.data() }));
+      customers.push(customer);
+    }
+
+    res.json(customers);
+  } catch (error) {
+    console.error('Error fetching auto finance customers:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/auto-finance/customers/:id - Single customer with details
+app.get('/api/auto-finance/customers/:id', async (req, res) => {
+  try {
+    const doc = await db.collection('auto_finance_customers').doc(req.params.id).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customer = { id: doc.id, ...doc.data() };
+
+    // Fetch payments
+    const paymentsSnapshot = await db.collection('auto_finance_payments')
+      .where('customer_id', '==', doc.id)
+      .orderBy('created_at', 'asc')
+      .get();
+
+    customer.payments = paymentsSnapshot.docs.map(p => ({ id: p.id, ...p.data() }));
+
+    res.json(customer);
+  } catch (error) {
+    console.error('Error fetching auto finance customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/auto-finance/customers - Create customer with auto EMI calculation
+app.post('/api/auto-finance/customers', async (req, res) => {
+  try {
+    const {
+      name, phone, address,
+      aadhaar_number, pan_number,
+      guarantor_name, guarantor_phone, guarantor_aadhaar,
+      vehicle_type, vehicle_make, vehicle_model, vehicle_year,
+      vehicle_reg_number, vehicle_color,
+      vehicle_price, down_payment,
+      interest_rate, tenure_months,
+      document_charge, processing_fee,
+      start_date, loan_given_date,
+      documents, insurance_expiry
+    } = req.body;
+
+    if (!name || !phone) {
+      return res.status(400).json({ error: 'Name and phone are required' });
+    }
+
+    const vPrice = Number(vehicle_price) || 0;
+    const dPayment = Number(down_payment) || 0;
+    const loanAmount = vPrice - dPayment;
+    const rate = Number(interest_rate) || 0;
+    const tenure = Number(tenure_months) || 1;
+
+    if (loanAmount <= 0) {
+      return res.status(400).json({ error: 'Loan amount must be greater than 0' });
+    }
+
+    // Flat Interest Calculation
+    const totalInterest = Math.round(loanAmount * (rate / 100) * (tenure / 12));
+    const totalPayable = loanAmount + totalInterest;
+    const emiAmount = Math.round(totalPayable / tenure);
+
+    const customerData = {
+      name,
+      phone,
+      address: address || '',
+      aadhaar_number: aadhaar_number || '',
+      pan_number: pan_number || '',
+      guarantor_name: guarantor_name || '',
+      guarantor_phone: guarantor_phone || '',
+      guarantor_aadhaar: guarantor_aadhaar || '',
+      vehicle_type: vehicle_type || 'bike',
+      vehicle_make: vehicle_make || '',
+      vehicle_model: vehicle_model || '',
+      vehicle_year: vehicle_year || new Date().getFullYear(),
+      vehicle_reg_number: vehicle_reg_number || '',
+      vehicle_color: vehicle_color || '',
+      rc_held: true,
+      vehicle_price: vPrice,
+      down_payment: dPayment,
+      loan_amount: loanAmount,
+      interest_rate: rate,
+      tenure_months: tenure,
+      total_interest: totalInterest,
+      total_payable: totalPayable,
+      emi_amount: emiAmount,
+      document_charge: Number(document_charge) || 0,
+      processing_fee: Number(processing_fee) || 0,
+      balance: totalPayable,
+      paid_emis: 0,
+      start_date: start_date || new Date().toISOString().split('T')[0],
+      loan_given_date: loan_given_date || new Date().toISOString().split('T')[0],
+      status: 'active',
+      documents: documents || {},
+      insurance_expiry: insurance_expiry || '',
+      created_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('auto_finance_customers').add(customerData);
+
+    // Send push notification
+    sendPushNotification(
+      '🚗 New Auto Finance Loan',
+      `${name} - ₹${loanAmount.toLocaleString('en-IN')} (${vehicle_make} ${vehicle_model})`,
+      { type: 'auto_finance_new', customerId: docRef.id }
+    ).catch(err => console.error('Push notification error:', err));
+
+    res.status(201).json({ id: docRef.id, ...customerData });
+  } catch (error) {
+    console.error('Error creating auto finance customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/auto-finance/customers/:id - Update customer
+app.put('/api/auto-finance/customers/:id', async (req, res) => {
+  try {
+    const docRef = db.collection('auto_finance_customers').doc(req.params.id);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const updateData = { ...req.body, updated_at: new Date().toISOString() };
+
+    // If loan terms changed, recalculate EMI
+    if (req.body.loan_amount !== undefined || req.body.interest_rate !== undefined || req.body.tenure_months !== undefined) {
+      const current = doc.data();
+      const loanAmount = Number(req.body.loan_amount ?? current.loan_amount);
+      const rate = Number(req.body.interest_rate ?? current.interest_rate);
+      const tenure = Number(req.body.tenure_months ?? current.tenure_months);
+
+      updateData.total_interest = Math.round(loanAmount * (rate / 100) * (tenure / 12));
+      updateData.total_payable = loanAmount + updateData.total_interest;
+      updateData.emi_amount = Math.round(updateData.total_payable / tenure);
+    }
+
+    await docRef.update(updateData);
+    const updated = await docRef.get();
+    res.json({ id: updated.id, ...updated.data() });
+  } catch (error) {
+    console.error('Error updating auto finance customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/auto-finance/customers/:id - Delete customer + cascade payments
+app.delete('/api/auto-finance/customers/:id', async (req, res) => {
+  try {
+    const docRef = db.collection('auto_finance_customers').doc(req.params.id);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Delete all payments
+    const paymentsSnapshot = await db.collection('auto_finance_payments')
+      .where('customer_id', '==', req.params.id)
+      .get();
+
+    const batch = db.batch();
+    paymentsSnapshot.docs.forEach(payDoc => batch.delete(payDoc.ref));
+    batch.delete(docRef);
+    await batch.commit();
+
+    res.json({ message: 'Customer and payments deleted', deletedPayments: paymentsSnapshot.size });
+  } catch (error) {
+    console.error('Error deleting auto finance customer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/auto-finance/customers/:id/payments - Record EMI payment
+app.post('/api/auto-finance/customers/:id/payments', async (req, res) => {
+  try {
+    const { amount, payment_date, payment_mode, late_fee, notes } = req.body;
+
+    const customerRef = db.collection('auto_finance_customers').doc(req.params.id);
+    const customerDoc = await customerRef.get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customer = customerDoc.data();
+    const payAmount = Number(amount) || customer.emi_amount;
+
+    if (payAmount > customer.balance) {
+      return res.status(400).json({ error: 'Payment amount exceeds balance' });
+    }
+
+    // Count existing payments for EMI number
+    const existingPayments = await db.collection('auto_finance_payments')
+      .where('customer_id', '==', req.params.id)
+      .get();
+
+    const emiNumber = existingPayments.size + 1;
+    const newBalance = customer.balance - payAmount;
+    const newPaidEmis = customer.paid_emis + 1;
+
+    const paymentData = {
+      customer_id: req.params.id,
+      emi_number: emiNumber,
+      amount: payAmount,
+      payment_date: payment_date || new Date().toISOString().split('T')[0],
+      payment_mode: payment_mode || 'cash',
+      balance_after: newBalance,
+      late_fee: Number(late_fee) || 0,
+      notes: notes || '',
+      whatsapp_sent: false,
+      created_at: new Date().toISOString()
+    };
+
+    const paymentRef = await db.collection('auto_finance_payments').add(paymentData);
+
+    // Update customer balance and paid_emis
+    const customerUpdate = {
+      balance: newBalance,
+      paid_emis: newPaidEmis
+    };
+
+    if (newBalance <= 0 || newPaidEmis >= customer.tenure_months) {
+      customerUpdate.status = 'closed';
+      customerUpdate.rc_held = false; // Release RC on completion
+    }
+
+    await customerRef.update(customerUpdate);
+
+    res.status(201).json({
+      id: paymentRef.id,
+      ...paymentData,
+      customer_name: customer.name,
+      vehicle: `${customer.vehicle_make} ${customer.vehicle_model}`
+    });
+  } catch (error) {
+    console.error('Error recording auto finance payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/auto-finance/customers/:id/undo-payment - Undo last payment
+app.delete('/api/auto-finance/customers/:id/undo-payment', async (req, res) => {
+  try {
+    const customerRef = db.collection('auto_finance_customers').doc(req.params.id);
+    const customerDoc = await customerRef.get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Find the last payment
+    const paymentsSnapshot = await db.collection('auto_finance_payments')
+      .where('customer_id', '==', req.params.id)
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .get();
+
+    if (paymentsSnapshot.empty) {
+      return res.status(400).json({ error: 'No payments to undo' });
+    }
+
+    const lastPayment = paymentsSnapshot.docs[0];
+    const paymentData = lastPayment.data();
+    const customer = customerDoc.data();
+
+    // Restore balance
+    await customerRef.update({
+      balance: customer.balance + paymentData.amount,
+      paid_emis: Math.max(0, customer.paid_emis - 1),
+      status: 'active'
+    });
+
+    await lastPayment.ref.delete();
+
+    res.json({ message: 'Last payment undone', deletedPayment: paymentData });
+  } catch (error) {
+    console.error('Error undoing auto finance payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/auto-finance/customers/:id/emi-schedule - Generate EMI chart
+app.get('/api/auto-finance/customers/:id/emi-schedule', async (req, res) => {
+  try {
+    const customerDoc = await db.collection('auto_finance_customers').doc(req.params.id).get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customer = customerDoc.data();
+
+    // Fetch all payments
+    const paymentsSnapshot = await db.collection('auto_finance_payments')
+      .where('customer_id', '==', req.params.id)
+      .orderBy('created_at', 'asc')
+      .get();
+
+    const payments = paymentsSnapshot.docs.map(p => ({ id: p.id, ...p.data() }));
+    const paidEmiNumbers = new Set(payments.map(p => p.emi_number));
+
+    // Generate schedule
+    const schedule = [];
+    const startDate = new Date(customer.start_date);
+    let runningBalance = customer.total_payable;
+
+    for (let i = 1; i <= customer.tenure_months; i++) {
+      const dueDate = new Date(startDate);
+      dueDate.setMonth(startDate.getMonth() + (i - 1));
+
+      const payment = payments.find(p => p.emi_number === i);
+      const isPaid = paidEmiNumbers.has(i);
+      const isOverdue = !isPaid && new Date() > dueDate;
+
+      if (isPaid && payment) {
+        runningBalance -= payment.amount;
+      }
+
+      schedule.push({
+        emi_number: i,
+        due_date: dueDate.toISOString().split('T')[0],
+        emi_amount: customer.emi_amount,
+        status: isPaid ? 'paid' : isOverdue ? 'overdue' : 'upcoming',
+        paid_amount: payment?.amount || 0,
+        paid_date: payment?.payment_date || null,
+        late_fee: payment?.late_fee || 0,
+        balance_after: isPaid ? (payment?.balance_after ?? runningBalance) : runningBalance
+      });
+    }
+
+    res.json({
+      customer_name: customer.name,
+      vehicle: `${customer.vehicle_make} ${customer.vehicle_model}`,
+      loan_amount: customer.loan_amount,
+      total_payable: customer.total_payable,
+      emi_amount: customer.emi_amount,
+      tenure_months: customer.tenure_months,
+      paid_emis: customer.paid_emis,
+      balance: customer.balance,
+      schedule
+    });
+  } catch (error) {
+    console.error('Error generating EMI schedule:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/auto-finance/customers/:id/foreclose - Foreclosure calculation
+app.post('/api/auto-finance/customers/:id/foreclose', async (req, res) => {
+  try {
+    const { penalty_percent } = req.body;
+    const customerDoc = await db.collection('auto_finance_customers').doc(req.params.id).get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customer = customerDoc.data();
+    const penaltyRate = Number(penalty_percent) || 2; // Default 2% penalty
+
+    // Remaining principal (exclude future interest)
+    const paidPrincipal = (customer.paid_emis / customer.tenure_months) * customer.loan_amount;
+    const remainingPrincipal = customer.loan_amount - paidPrincipal;
+    const penalty = Math.round(remainingPrincipal * (penaltyRate / 100));
+    const foreclosureAmount = Math.round(remainingPrincipal + penalty);
+
+    res.json({
+      customer_name: customer.name,
+      total_payable: customer.total_payable,
+      total_paid: customer.total_payable - customer.balance,
+      current_balance: customer.balance,
+      remaining_principal: Math.round(remainingPrincipal),
+      penalty_percent: penaltyRate,
+      penalty_amount: penalty,
+      foreclosure_amount: foreclosureAmount,
+      savings: customer.balance - foreclosureAmount // How much customer saves
+    });
+  } catch (error) {
+    console.error('Error calculating foreclosure:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/auto-finance/stats - Dashboard statistics
+app.get('/api/auto-finance/stats', async (req, res) => {
+  try {
+    const snapshot = await db.collection('auto_finance_customers').get();
+
+    let totalLoans = 0;
+    let activeLoans = 0;
+    let closedLoans = 0;
+    let totalDisbursed = 0;
+    let totalOutstanding = 0;
+    let monthlyCollectionDue = 0;
+    let collectedThisMonth = 0;
+    let overdueCount = 0;
+    const vehicleCounts = { bike: 0, scooter: 0, car: 0, auto: 0, other: 0 };
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    for (const doc of snapshot.docs) {
+      const c = doc.data();
+      totalLoans++;
+      totalDisbursed += c.loan_amount || 0;
+
+      if (c.status === 'active') {
+        activeLoans++;
+        totalOutstanding += c.balance || 0;
+        monthlyCollectionDue += c.emi_amount || 0;
+
+        // Check if overdue
+        if (c.start_date && c.paid_emis < c.tenure_months) {
+          const startDate = new Date(c.start_date);
+          const nextDueDate = new Date(startDate);
+          nextDueDate.setMonth(startDate.getMonth() + c.paid_emis);
+          if (now > nextDueDate) overdueCount++;
+        }
+      } else {
+        closedLoans++;
+      }
+
+      const vType = (c.vehicle_type || 'other').toLowerCase();
+      if (vehicleCounts[vType] !== undefined) vehicleCounts[vType]++;
+      else vehicleCounts.other++;
+    }
+
+    // Count payments this month
+    const paymentsSnapshot = await db.collection('auto_finance_payments').get();
+    for (const doc of paymentsSnapshot.docs) {
+      const p = doc.data();
+      if (p.payment_date) {
+        const payDate = new Date(p.payment_date);
+        if (payDate.getMonth() === currentMonth && payDate.getFullYear() === currentYear) {
+          collectedThisMonth += p.amount || 0;
+        }
+      }
+    }
+
+    res.json({
+      totalLoans,
+      activeLoans,
+      closedLoans,
+      totalDisbursed,
+      totalOutstanding,
+      monthlyCollectionDue,
+      collectedThisMonth,
+      overdueCount,
+      vehicleCounts
+    });
+  } catch (error) {
+    console.error('Error fetching auto finance stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/auto-finance/overdue - List all overdue EMIs
+app.get('/api/auto-finance/overdue', async (req, res) => {
+  try {
+    const snapshot = await db.collection('auto_finance_customers')
+      .where('status', '==', 'active')
+      .get();
+
+    const overdueList = [];
+    const now = new Date();
+
+    for (const doc of snapshot.docs) {
+      const c = { id: doc.id, ...doc.data() };
+
+      if (!c.start_date || c.paid_emis >= c.tenure_months) continue;
+
+      const startDate = new Date(c.start_date);
+      const nextDueDate = new Date(startDate);
+      nextDueDate.setMonth(startDate.getMonth() + c.paid_emis);
+
+      if (now > nextDueDate) {
+        const daysOverdue = Math.floor((now - nextDueDate) / (1000 * 60 * 60 * 24));
+        const missedEmis = Math.min(
+          Math.floor((now.getTime() - nextDueDate.getTime()) / (1000 * 60 * 60 * 24 * 30)) + 1,
+          c.tenure_months - c.paid_emis
+        );
+
+        overdueList.push({
+          ...c,
+          next_due_date: nextDueDate.toISOString().split('T')[0],
+          days_overdue: daysOverdue,
+          missed_emis: missedEmis,
+          overdue_amount: missedEmis * c.emi_amount
+        });
+      }
+    }
+
+    // Sort by days overdue (most overdue first)
+    overdueList.sort((a, b) => b.days_overdue - a.days_overdue);
+
+    res.json(overdueList);
+  } catch (error) {
+    console.error('Error fetching overdue list:', error);
     res.status(500).json({ error: error.message });
   }
 });

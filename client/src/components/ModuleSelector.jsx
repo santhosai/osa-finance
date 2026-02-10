@@ -19,6 +19,14 @@ function ModuleSelector({ onSelectModule }) {
       subtitle: 'Monthly Collections',
       color: '#7c3aed',
       gradient: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)'
+    },
+    {
+      id: 'auto-finance',
+      icon: '🚗',
+      title: 'Auto Finance',
+      subtitle: 'Vehicle Loans & EMI',
+      color: '#0d9488',
+      gradient: 'linear-gradient(135deg, #0d9488 0%, #065f46 100%)'
     }
   ];
 
@@ -49,7 +57,7 @@ function ModuleSelector({ onSelectModule }) {
           margin: '8px 0 0',
           letterSpacing: '3px'
         }}>
-          FINANCE & CHIT FUND
+          FINANCE MANAGEMENT
         </p>
       </div>
 

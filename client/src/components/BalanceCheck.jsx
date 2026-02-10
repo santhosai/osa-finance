@@ -58,6 +58,10 @@ function BalanceCheck() {
       const monthlyResponse = await fetch(`${API_URL}/monthly-finance/customers`);
       const monthlyCustomers = await monthlyResponse.json();
 
+      // Fetch Auto Finance customers
+      const autoFinanceResponse = await fetch(`${API_URL}/auto-finance/customers?phone=${phoneNumber}`);
+      const autoFinanceCustomers = await autoFinanceResponse.json();
+
       // Fetch all payments for regular loans
       const paymentsResponse = await fetch(`${API_URL}/all-payments`);
       const allPayments = await paymentsResponse.json();
@@ -65,8 +69,9 @@ function BalanceCheck() {
       // Find customer by phone number
       const regularCustomer = customers.find(c => c.phone === phoneNumber);
       const monthlyCustomer = monthlyCustomers.find(c => c.phone === phoneNumber);
+      const hasAutoFinance = Array.isArray(autoFinanceCustomers) && autoFinanceCustomers.length > 0;
 
-      if (!regularCustomer && !monthlyCustomer) {
+      if (!regularCustomer && !monthlyCustomer && !hasAutoFinance) {
         setError('No customer found with this phone number');
         setLoading(false);
         return;
@@ -90,12 +95,13 @@ function BalanceCheck() {
 
       // Prepare data structure
       const data = {
-        name: regularCustomer?.name || monthlyCustomer?.name || 'Customer',
+        name: regularCustomer?.name || monthlyCustomer?.name || (hasAutoFinance ? autoFinanceCustomers[0].name : 'Customer'),
         phone: phoneNumber,
         weeklyLoans: [],
         dailyLoans: [],
         interestLoans: [],
-        monthlyFinanceLoans: []
+        monthlyFinanceLoans: [],
+        autoFinanceLoans: []
       };
 
       // Process regular customer loans
@@ -148,6 +154,28 @@ function BalanceCheck() {
           payments: monthlyLoan.payments || [] // Include payment history
         });
       });
+
+      // Process Auto Finance loans
+      if (hasAutoFinance) {
+        autoFinanceCustomers.forEach(af => {
+          if (af.status === 'closed' || af.balance <= 0) return;
+          data.autoFinanceLoans.push({
+            id: af.id,
+            loanName: `${af.vehicle_make} ${af.vehicle_model}`,
+            vehicleReg: af.vehicle_reg_number,
+            vehicleType: af.vehicle_type,
+            loanAmount: af.loan_amount,
+            totalPayable: af.total_payable,
+            balance: af.balance,
+            emiAmount: af.emi_amount,
+            paidEmis: af.paid_emis,
+            tenureMonths: af.tenure_months,
+            startDate: af.start_date,
+            loanType: 'auto-finance',
+            payments: af.payments || []
+          });
+        });
+      }
 
       setCustomerData(data);
       setLoading(false);
@@ -1782,11 +1810,167 @@ function BalanceCheck() {
               );
             })}
 
+            {/* Auto Finance Loans */}
+            {customerData.autoFinanceLoans && customerData.autoFinanceLoans.length > 0 && customerData.autoFinanceLoans.map((autoLoan, index) => {
+              const loanKey = `auto-${index}`;
+              const isExpanded = expandedLoans[loanKey];
+              const payments = autoLoan.payments || [];
+              const progressPercent = Math.round((autoLoan.paidEmis / autoLoan.tenureMonths) * 100);
+
+              return (
+                <div key={autoLoan.id || index} style={{
+                  background: 'white',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+                  marginBottom: '16px'
+                }}>
+                  {/* Loan Header */}
+                  <div
+                    onClick={() => setExpandedLoans(prev => ({ ...prev, [loanKey]: !prev[loanKey] }))}
+                    style={{
+                      background: 'linear-gradient(135deg, #0d9488 0%, #065f46 100%)',
+                      padding: '16px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', fontWeight: 600 }}>
+                          🚗 Vehicle Loan
+                        </div>
+                        <div style={{ color: 'white', fontSize: '16px', fontWeight: 700, marginTop: '4px' }}>
+                          {autoLoan.loanName}
+                        </div>
+                        {autoLoan.vehicleReg && (
+                          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', marginTop: '2px' }}>
+                            {autoLoan.vehicleReg}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ color: 'white', fontSize: '18px', fontWeight: 700 }}>
+                          {formatCurrency(autoLoan.emiAmount)}
+                        </div>
+                        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px' }}>EMI/month</div>
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div style={{ marginTop: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px' }}>
+                          {autoLoan.paidEmis}/{autoLoan.tenureMonths} EMIs paid
+                        </span>
+                        <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px' }}>{progressPercent}%</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '4px', height: '6px' }}>
+                        <div style={{
+                          background: '#fbbf24',
+                          borderRadius: '4px',
+                          height: '100%',
+                          width: `${progressPercent}%`,
+                          transition: 'width 0.3s'
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Loan Details */}
+                  <div style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ color: '#64748b', fontSize: '13px' }}>Loan Amount</span>
+                      <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(autoLoan.loanAmount)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ color: '#64748b', fontSize: '13px' }}>Total Payable</span>
+                      <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(autoLoan.totalPayable)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+                      <span style={{ color: '#64748b', fontSize: '13px' }}>Balance</span>
+                      <span style={{ fontWeight: 700, color: '#dc2626', fontSize: '16px' }}>{formatCurrency(autoLoan.balance)}</span>
+                    </div>
+
+                    {/* Pay Now Button */}
+                    <button
+                      onClick={() => {
+                        setSelectedLoan({
+                          ...autoLoan,
+                          loanType: 'auto-finance',
+                          monthlyAmount: autoLoan.emiAmount
+                        });
+                        setShowPaymentModal(true);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        background: 'linear-gradient(135deg, #0d9488 0%, #065f46 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        marginTop: '12px'
+                      }}
+                    >
+                      💰 Pay EMI Now
+                    </button>
+
+                    {/* Payment History Toggle */}
+                    {payments.length > 0 && (
+                      <button
+                        onClick={() => setExpandedLoans(prev => ({ ...prev, [loanKey]: !prev[loanKey] }))}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          background: 'transparent',
+                          color: '#0d9488',
+                          border: '1px solid #0d9488',
+                          borderRadius: '8px',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          marginTop: '8px'
+                        }}
+                      >
+                        {isExpanded ? '▲ Hide' : '▼ View'} Payment History ({payments.length})
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Payment History */}
+                  {isExpanded && payments.length > 0 && (
+                    <div style={{ borderTop: '1px solid #e5e7eb', padding: '12px 16px' }}>
+                      {payments.map((payment, pIdx) => (
+                        <div key={pIdx} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px 0',
+                          borderBottom: pIdx < payments.length - 1 ? '1px solid #f1f5f9' : 'none',
+                          fontSize: '13px'
+                        }}>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>EMI #{payment.emi_number}</div>
+                            <div style={{ color: '#64748b', fontSize: '11px' }}>
+                              {new Date(payment.payment_date).toLocaleDateString('en-IN')}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontWeight: 600, color: '#059669' }}>{formatCurrency(payment.amount)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
             {/* No Loans Message */}
             {customerData.monthlyFinanceLoans.length === 0 &&
              customerData.weeklyLoans.length === 0 &&
              customerData.dailyLoans.length === 0 &&
-             customerData.interestLoans.length === 0 && (
+             customerData.interestLoans.length === 0 &&
+             (!customerData.autoFinanceLoans || customerData.autoFinanceLoans.length === 0) && (
               <div style={{
                 background: 'white',
                 borderRadius: '16px',
@@ -1921,6 +2105,7 @@ function BalanceCheck() {
                   {selectedLoan.loanType === 'weekly' && formatCurrency(selectedLoan.weeklyAmount)}
                   {selectedLoan.loanType === 'daily' && formatCurrency(selectedLoan.dailyAmount)}
                   {selectedLoan.loanType === 'interest' && formatCurrency(selectedLoan.monthlyInterest)}
+                  {selectedLoan.loanType === 'auto-finance' && formatCurrency(selectedLoan.emiAmount || selectedLoan.monthlyAmount)}
                 </span>
               </div>
               <div style={{
@@ -1979,6 +2164,7 @@ function BalanceCheck() {
                   const amount = selectedLoan.loanType === 'monthly' ? selectedLoan.monthlyAmount :
                                 selectedLoan.loanType === 'weekly' ? selectedLoan.weeklyAmount :
                                 selectedLoan.loanType === 'daily' ? selectedLoan.dailyAmount :
+                                selectedLoan.loanType === 'auto-finance' ? (selectedLoan.emiAmount || selectedLoan.monthlyAmount) :
                                 selectedLoan.monthlyInterest;
                   const upiLink = `upi://pay?pa=santhokam@okicici&pn=Om%20Sai%20Murugan%20Finance&am=${amount}&cu=INR&tn=${selectedLoan.loanName}%20Payment`;
                   window.open(upiLink, '_blank');
