@@ -2006,13 +2006,13 @@ function AutoFinanceDashboard({ navigateTo }) {
             {/* ── Navigation Buttons ───────────────── */}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px' }}>
               {addStep > 1 ? (
-                <button onClick={() => setAddStep(addStep - 1)} style={btnSecondary}>Previous</button>
+                <button type="button" onClick={() => setAddStep(addStep - 1)} style={btnSecondary}>Previous</button>
               ) : (
-                <button onClick={() => setShowAddModal(false)} style={btnSecondary}>Cancel</button>
+                <button type="button" onClick={() => setShowAddModal(false)} style={btnSecondary}>Cancel</button>
               )}
 
               {addStep < 6 ? (
-                <button onClick={() => {
+                <button type="button" onClick={() => {
                   // Validate required fields per step
                   if (addStep === 1 && (!newCustomer.name || !newCustomer.phone)) {
                     alert('Name and Phone are required');
@@ -2031,7 +2031,7 @@ function AutoFinanceDashboard({ navigateTo }) {
                   Next
                 </button>
               ) : (
-                <button onClick={handleAddCustomer} disabled={submitting}
+                <button type="button" onClick={handleAddCustomer} disabled={submitting}
                   style={{ ...btnPrimary, opacity: submitting ? 0.6 : 1 }}>
                   {submitting ? 'Adding...' : '✅ Confirm & Add'}
                 </button>
