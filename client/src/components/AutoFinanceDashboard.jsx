@@ -9,8 +9,8 @@ const fetcher = (url) => fetch(url).then(res => res.json());
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const formatCurrency = (amt) => {
-  if (!amt && amt !== 0) return '\u20B90';
-  return `\u20B9${Number(amt).toLocaleString('en-IN')}`;
+  if (!amt && amt !== 0) return '₹0';
+  return `₹${Number(amt).toLocaleString('en-IN')}`;
 };
 
 const formatDate = (d) => {
@@ -61,6 +61,8 @@ function AutoFinanceDashboard({ navigateTo }) {
     vehicle_type: 'bike', make: '', model: '', year: '', reg_number: '', color: '',
     vehicle_price: '', down_payment: '', interest_rate: '', tenure_months: '12',
     document_charge: '', processing_fee: '',
+    start_date: new Date().toISOString().split('T')[0],
+    loan_given_date: new Date().toISOString().split('T')[0],
     insurance_expiry: '',
   });
   const [docFiles, setDocFiles] = useState({
@@ -240,13 +242,18 @@ function AutoFinanceDashboard({ navigateTo }) {
         });
         setDocFiles({ aadhaar_front: null, aadhaar_back: null, pan_card: null, rc_book: null, insurance: null, photo: null });
         setDocUrls({});
+        alert('✅ Customer added successfully!');
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to add customer');
+        console.error('Server error:', err);
+        console.error('Status:', res.status);
+        console.error('Request body:', body);
+        alert(err.error || `Failed to add customer (${res.status})`);
       }
     } catch (e) {
-      console.error(e);
-      alert('Error adding customer');
+      console.error('Add customer error:', e);
+      console.error('Error details:', e.message, e.stack);
+      alert(`Error adding customer: ${e.message || 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }
@@ -444,12 +451,12 @@ function AutoFinanceDashboard({ navigateTo }) {
   const buildWhatsAppMessage = (d) => {
     return encodeURIComponent(
       `\uD83D\uDE97 *\u0BB5\u0BBE\u0B95\u0BA9 \u0B95\u0B9F\u0BA9\u0BCD - EMI \u0BAA\u0BA3\u0BAE\u0BCD \u0B9A\u0BC6\u0BB2\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1*\n\n` +
-      `\uD83D\uDC64 \u0BB5\u0BBE\u0B9F\u0BBF\u0B95\u0BCD\u0B95\u0BC8\u0BAF\u0BBE\u0BB3\u0BB0\u0BCD: ${d.name}\n` +
+      `👤 \u0BB5\u0BBE\u0B9F\u0BBF\u0B95\u0BCD\u0B95\u0BC8\u0BAF\u0BBE\u0BB3\u0BB0\u0BCD: ${d.name}\n` +
       `\uD83C\uDFCD\uFE0F \u0BB5\u0BBE\u0B95\u0BA9\u0BAE\u0BCD: ${d.vehicle_make} ${d.vehicle_model}\n` +
-      `\uD83D\uDCCB EMI \u0B8E\u0BA3\u0BCD: ${d.emi_number}/${d.tenure_months}\n` +
-      `\uD83D\uDCB0 \u0BA4\u0BCA\u0B95\u0BC8: \u20B9${Number(d.amount).toLocaleString('en-IN')}\n` +
+      `📋 EMI \u0B8E\u0BA3\u0BCD: ${d.emi_number}/${d.tenure_months}\n` +
+      `\uD83D\uDCB0 \u0BA4\u0BCA\u0B95\u0BC8: ₹${Number(d.amount).toLocaleString('en-IN')}\n` +
       `\uD83D\uDCC5 \u0BA4\u0BC7\u0BA4\u0BBF: ${d.date}\n` +
-      `\uD83D\uDCB3 \u0B87\u0BB0\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1: \u20B9${Number(d.balance).toLocaleString('en-IN')}\n\n` +
+      `\uD83D\uDCB3 \u0B87\u0BB0\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1: ₹${Number(d.balance).toLocaleString('en-IN')}\n\n` +
       `\u0BA8\u0BA9\u0BCD\u0BB1\u0BBF! - Om Sai Murugan Finance`
     );
   };
@@ -458,9 +465,9 @@ function AutoFinanceDashboard({ navigateTo }) {
   const buildOverdueReminder = (c) => {
     return encodeURIComponent(
       `\uD83D\uDE97 *\u0BB5\u0BBE\u0B95\u0BA9 \u0B95\u0B9F\u0BA9\u0BCD - EMI \u0BA8\u0BBF\u0BB2\u0BC1\u0BB5\u0BC8 \u0BA4\u0BCA\u0B95\u0BC8 \u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1*\n\n` +
-      `\uD83D\uDC64 ${c.name}\n` +
+      `👤 ${c.name}\n` +
       `\uD83C\uDFCD\uFE0F ${c.make || ''} ${c.model || ''}\n` +
-      `\u26A0\uFE0F \u0BA8\u0BBF\u0BB2\u0BC1\u0BB5\u0BC8\u0BA4\u0BCD \u0BA4\u0BCA\u0B95\u0BC8: \u20B9${Number(c.overdue_amount || 0).toLocaleString('en-IN')}\n` +
+      `⚠️ \u0BA8\u0BBF\u0BB2\u0BC1\u0BB5\u0BC8\u0BA4\u0BCD \u0BA4\u0BCA\u0B95\u0BC8: ₹${Number(c.overdue_amount || 0).toLocaleString('en-IN')}\n` +
       `\uD83D\uDCC5 \u0B95\u0B9F\u0BA8\u0BCD\u0BA4 \u0BA8\u0BBE\u0B9F\u0BCD\u0B95\u0BB3\u0BCD: ${c.days_overdue || 0}\n\n` +
       `\u0BA4\u0BAF\u0BB5\u0BC1\u0B9A\u0BC6\u0BAF\u0BCD\u0BA4\u0BC1 \u0B89\u0B9F\u0BA9\u0BC7 \u0B9A\u0BC6\u0BB2\u0BC1\u0BA4\u0BCD\u0BA4\u0BB5\u0BC1\u0BAE\u0BCD.\n- Om Sai Murugan Finance`
     );
@@ -522,7 +529,7 @@ function AutoFinanceDashboard({ navigateTo }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button onClick={() => { setSelectedCustomer(null); setCustomerPayments([]); setCustomerDocs({}); }}
               style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: '8px', padding: '8px 14px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
-              \u2190 Back
+              ← Back
             </button>
             <div style={{
               padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700,
@@ -533,7 +540,7 @@ function AutoFinanceDashboard({ navigateTo }) {
           </div>
           <h2 style={{ margin: '12px 0 2px', fontSize: '20px' }}>{sc.name}</h2>
           <div style={{ fontSize: '13px', opacity: 0.85 }}>
-            {VEHICLE_ICONS[sc.vehicle_type] || '\uD83D\uDE97'} {sc.make} {sc.model} &middot; {sc.reg_number}
+            {VEHICLE_ICONS[sc.vehicle_type] || '🚗'} {sc.make} {sc.model} &middot; {sc.reg_number}
           </div>
         </div>
 
@@ -565,7 +572,7 @@ function AutoFinanceDashboard({ navigateTo }) {
           <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <h4 style={{ margin: '0 0 8px', color: '#0d9488', fontSize: '13px' }}>Vehicle Info</h4>
             <div style={{ fontSize: '13px', lineHeight: 1.8, color: '#374151' }}>
-              <div style={{ fontSize: '28px', textAlign: 'center', marginBottom: '6px' }}>{VEHICLE_ICONS[sc.vehicle_type] || '\uD83D\uDE97'}</div>
+              <div style={{ fontSize: '28px', textAlign: 'center', marginBottom: '6px' }}>{VEHICLE_ICONS[sc.vehicle_type] || '🚗'}</div>
               <div><strong>Type:</strong> {(sc.vehicle_type || '').charAt(0).toUpperCase() + (sc.vehicle_type || '').slice(1)}</div>
               <div><strong>Make / Model:</strong> {sc.make} {sc.model}</div>
               {sc.year && <div><strong>Year:</strong> {sc.year}</div>}
@@ -604,19 +611,19 @@ function AutoFinanceDashboard({ navigateTo }) {
               setPaymentForm({ amount: String(sc.emi_amount || ''), date: new Date().toISOString().split('T')[0], mode: 'Cash', late_fee: '', notes: '' });
               setShowPaymentModal(true);
             }} style={{ padding: '10px 6px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
-              \uD83D\uDCB0 Payment
+              💰 Payment
             </button>
             {/* EMI Schedule */}
             <button onClick={() => { loadEmiSchedule(); setShowEmiSchedule(true); }}
               style={{ padding: '10px 6px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
-              \uD83D\uDCC5 EMI Schedule
+              📅 EMI Schedule
             </button>
             {/* WhatsApp */}
             <button onClick={() => {
               const msg = encodeURIComponent(`Hi ${sc.name}, your EMI of ${formatCurrency(sc.emi_amount)} is due. Please pay at your earliest. - Om Sai Murugan Finance`);
               window.open(`https://wa.me/${sc.phone?.replace(/\D/g, '')}?text=${msg}`, '_blank');
             }} style={{ padding: '10px 6px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
-              \uD83D\uDCF1 WhatsApp
+              📱 WhatsApp
             </button>
             {/* Print */}
             <button onClick={() => {
@@ -631,22 +638,22 @@ function AutoFinanceDashboard({ navigateTo }) {
               });
               setShowPrintReceipt(true);
             }} style={{ padding: '10px 6px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
-              \uD83D\uDDA8\uFE0F Print
+              🖨️ Print
             </button>
             {/* Foreclosure */}
             <button onClick={() => { setForeclosureResult(null); setForeclosurePenalty('2'); setShowForeclosure(true); }}
               style={{ padding: '10px 6px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
-              \uD83D\uDD10 Foreclose
+              🔐 Foreclose
             </button>
             {/* Edit */}
             <button onClick={openEdit}
               style={{ padding: '10px 6px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
-              \u270F\uFE0F Edit
+              ✏️ Edit
             </button>
             {/* Delete */}
             <button onClick={() => setShowDeleteConfirm(true)}
               style={{ padding: '10px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', gridColumn: 'span 3' }}>
-              \uD83D\uDDD1\uFE0F Delete Customer
+              🗑️ Delete Customer
             </button>
           </div>
 
@@ -825,10 +832,10 @@ function AutoFinanceDashboard({ navigateTo }) {
         {showWhatsApp && whatsAppData && (
           <div style={modalOverlay} onClick={() => setShowWhatsApp(false)}>
             <div style={modalBox} onClick={e => e.stopPropagation()}>
-              <h3 style={{ margin: '0 0 12px', color: '#22c55e', fontSize: '16px' }}>\u2705 Payment Recorded!</h3>
+              <h3 style={{ margin: '0 0 12px', color: '#22c55e', fontSize: '16px' }}>✅ Payment Recorded!</h3>
 
               <div style={{ background: '#f0fdf4', borderRadius: '10px', padding: '14px', marginBottom: '14px', fontSize: '13px', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                {`\uD83D\uDE97 \u0BB5\u0BBE\u0B95\u0BA9 \u0B95\u0B9F\u0BA9\u0BCD - EMI \u0BAA\u0BA3\u0BAE\u0BCD \u0B9A\u0BC6\u0BB2\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1\n\n\uD83D\uDC64 \u0BB5\u0BBE\u0B9F\u0BBF\u0B95\u0BCD\u0B95\u0BC8\u0BAF\u0BBE\u0BB3\u0BB0\u0BCD: ${whatsAppData.name}\n\uD83C\uDFCD\uFE0F \u0BB5\u0BBE\u0B95\u0BA9\u0BAE\u0BCD: ${whatsAppData.vehicle_make} ${whatsAppData.vehicle_model}\n\uD83D\uDCCB EMI \u0B8E\u0BA3\u0BCD: ${whatsAppData.emi_number}/${whatsAppData.tenure_months}\n\uD83D\uDCB0 \u0BA4\u0BCA\u0B95\u0BC8: ${formatCurrency(whatsAppData.amount)}\n\uD83D\uDCC5 \u0BA4\u0BC7\u0BA4\u0BBF: ${whatsAppData.date}\n\uD83D\uDCB3 \u0B87\u0BB0\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1: ${formatCurrency(whatsAppData.balance)}\n\n\u0BA8\u0BA9\u0BCD\u0BB1\u0BBF! - Om Sai Murugan Finance`}
+                {`\uD83D\uDE97 \u0BB5\u0BBE\u0B95\u0BA9 \u0B95\u0B9F\u0BA9\u0BCD - EMI \u0BAA\u0BA3\u0BAE\u0BCD \u0B9A\u0BC6\u0BB2\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1\n\n👤 \u0BB5\u0BBE\u0B9F\u0BBF\u0B95\u0BCD\u0B95\u0BC8\u0BAF\u0BBE\u0BB3\u0BB0\u0BCD: ${whatsAppData.name}\n\uD83C\uDFCD\uFE0F \u0BB5\u0BBE\u0B95\u0BA9\u0BAE\u0BCD: ${whatsAppData.vehicle_make} ${whatsAppData.vehicle_model}\n📋 EMI \u0B8E\u0BA3\u0BCD: ${whatsAppData.emi_number}/${whatsAppData.tenure_months}\n\uD83D\uDCB0 \u0BA4\u0BCA\u0B95\u0BC8: ${formatCurrency(whatsAppData.amount)}\n\uD83D\uDCC5 \u0BA4\u0BC7\u0BA4\u0BBF: ${whatsAppData.date}\n\uD83D\uDCB3 \u0B87\u0BB0\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1: ${formatCurrency(whatsAppData.balance)}\n\n\u0BA8\u0BA9\u0BCD\u0BB1\u0BBF! - Om Sai Murugan Finance`}
               </div>
 
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -967,7 +974,7 @@ function AutoFinanceDashboard({ navigateTo }) {
         {showDeleteConfirm && (
           <div style={modalOverlay} onClick={() => setShowDeleteConfirm(false)}>
             <div style={{ ...modalBox, maxWidth: '380px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-              <div style={{ fontSize: '48px', marginBottom: '10px' }}>\u26A0\uFE0F</div>
+              <div style={{ fontSize: '48px', marginBottom: '10px' }}>⚠️</div>
               <h3 style={{ margin: '0 0 8px', color: '#dc2626' }}>Delete Customer?</h3>
               <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '20px' }}>
                 This will permanently delete <strong>{sc.name}</strong> and all associated data.
@@ -1081,12 +1088,12 @@ function AutoFinanceDashboard({ navigateTo }) {
         {showOverdue && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h2 style={{ margin: 0, fontSize: '16px', color: '#dc2626' }}>\u26A0\uFE0F Overdue Customers</h2>
+              <h2 style={{ margin: 0, fontSize: '16px', color: '#dc2626' }}>⚠️ Overdue Customers</h2>
               <button onClick={() => setShowOverdue(false)} style={{ ...btnSecondary, padding: '6px 14px', fontSize: '12px' }}>Back</button>
             </div>
             {overdueList.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: '#22c55e', fontSize: '15px' }}>
-                \u2705 No overdue customers!
+                ✅ No overdue customers!
               </div>
             ) : (
               overdueList.map(c => (
@@ -1099,7 +1106,7 @@ function AutoFinanceDashboard({ navigateTo }) {
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '14px', color: '#1f2937' }}>{c.name}</div>
                       <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                        {VEHICLE_ICONS[c.vehicle_type] || '\uD83D\uDE97'} {c.make} {c.model} - {c.reg_number}
+                        {VEHICLE_ICONS[c.vehicle_type] || '🚗'} {c.make} {c.model} - {c.reg_number}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -1276,7 +1283,7 @@ function AutoFinanceDashboard({ navigateTo }) {
                 {!searchTerm && vehicleFilter === 'all' && (
                   <button onClick={() => { setShowAddModal(true); setAddStep(1); }}
                     style={{ ...btnPrimary, marginTop: '14px' }}>
-                    \u2795 Add Customer
+                    ➕ Add Customer
                   </button>
                 )}
               </div>
@@ -1297,7 +1304,7 @@ function AutoFinanceDashboard({ navigateTo }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '20px' }}>{VEHICLE_ICONS[c.vehicle_type] || '\uD83D\uDE97'}</span>
+                          <span style={{ fontSize: '20px' }}>{VEHICLE_ICONS[c.vehicle_type] || '🚗'}</span>
                           <div>
                             <div style={{ fontWeight: 700, fontSize: '14px', color: '#1f2937' }}>{c.name}</div>
                             <div style={{ fontSize: '11px', color: '#6b7280' }}>{c.phone}</div>
@@ -1606,7 +1613,7 @@ function AutoFinanceDashboard({ navigateTo }) {
                         }}
                         style={{ fontSize: '12px', flex: 1 }} />
                       {docUrls[doc.key] && (
-                        <span style={{ color: '#22c55e', fontSize: '16px' }}>\u2705</span>
+                        <span style={{ color: '#22c55e', fontSize: '16px' }}>✅</span>
                       )}
                     </div>
                   </div>
@@ -1651,7 +1658,7 @@ function AutoFinanceDashboard({ navigateTo }) {
 
                   <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '12px', marginBottom: '10px' }}>
                     <h5 style={{ margin: '0 0 6px', color: '#0d9488' }}>Vehicle</h5>
-                    <div>{VEHICLE_ICONS[newCustomer.vehicle_type] || '\uD83D\uDE97'} <strong>{newCustomer.make} {newCustomer.model}</strong></div>
+                    <div>{VEHICLE_ICONS[newCustomer.vehicle_type] || '🚗'} <strong>{newCustomer.make} {newCustomer.model}</strong></div>
                     {newCustomer.year && <div><strong>Year:</strong> {newCustomer.year}</div>}
                     <div><strong>Reg:</strong> {newCustomer.reg_number}</div>
                     {newCustomer.color && <div><strong>Color:</strong> {newCustomer.color}</div>}
@@ -1679,7 +1686,7 @@ function AutoFinanceDashboard({ navigateTo }) {
                     <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '12px', marginBottom: '10px' }}>
                       <h5 style={{ margin: '0 0 6px', color: '#0d9488' }}>Documents Uploaded</h5>
                       {Object.keys(docUrls).map(k => (
-                        <div key={k} style={{ color: '#22c55e', fontSize: '12px' }}>\u2705 {k.replace(/_/g, ' ')}</div>
+                        <div key={k} style={{ color: '#22c55e', fontSize: '12px' }}>✅ {k.replace(/_/g, ' ')}</div>
                       ))}
                     </div>
                   )}
@@ -1717,7 +1724,7 @@ function AutoFinanceDashboard({ navigateTo }) {
               ) : (
                 <button onClick={handleAddCustomer} disabled={submitting}
                   style={{ ...btnPrimary, opacity: submitting ? 0.6 : 1 }}>
-                  {submitting ? 'Adding...' : '\u2705 Confirm & Add'}
+                  {submitting ? 'Adding...' : '✅ Confirm & Add'}
                 </button>
               )}
             </div>
