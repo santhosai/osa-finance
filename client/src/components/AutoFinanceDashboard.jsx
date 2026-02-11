@@ -19,10 +19,10 @@ const formatDate = (d) => {
 };
 
 const VEHICLE_ICONS = {
-  bike: '\uD83C\uDFCD\uFE0F',
-  scooter: '\uD83D\uDEF5',
-  car: '\uD83D\uDE97',
-  auto: '\uD83D\uDEFA',
+  bike: '🏍️',
+  scooter: '🛵',
+  car: '🚗',
+  auto: '🛺',
 };
 
 const ADMIN_PHONE = '918667510724';
@@ -160,9 +160,7 @@ function AutoFinanceDashboard({ navigateTo }) {
     const dp = parseFloat(newCustomer.down_payment) || 0;
     const rate = parseFloat(newCustomer.interest_rate) || 0;
     const months = parseInt(newCustomer.tenure_months) || 12;
-    const docCharge = parseFloat(newCustomer.document_charge) || 0;
-    const procFee = parseFloat(newCustomer.processing_fee) || 0;
-    const principal = price - dp + docCharge + procFee;
+    const principal = price - dp;
     const totalInterest = principal * (rate / 100) * (months / 12);
     const totalPayable = principal + totalInterest;
     const emi = months > 0 ? totalPayable / months : 0;
@@ -193,13 +191,29 @@ function AutoFinanceDashboard({ navigateTo }) {
 
       const emiCalc = calculateEmi();
       const body = {
-        ...newCustomer,
+        name: newCustomer.name,
+        phone: newCustomer.phone,
+        address: newCustomer.address,
+        aadhaar_number: newCustomer.aadhaar || '',
+        pan_number: newCustomer.pan || '',
+        guarantor_name: newCustomer.guarantor_name || '',
+        guarantor_phone: newCustomer.guarantor_phone || '',
+        guarantor_aadhaar: newCustomer.guarantor_aadhaar || '',
+        vehicle_type: newCustomer.vehicle_type || 'bike',
+        vehicle_make: newCustomer.make || '',
+        vehicle_model: newCustomer.model || '',
+        vehicle_year: parseInt(newCustomer.year) || new Date().getFullYear(),
+        vehicle_reg_number: newCustomer.reg_number || '',
+        vehicle_color: newCustomer.color || '',
         vehicle_price: parseFloat(newCustomer.vehicle_price) || 0,
         down_payment: parseFloat(newCustomer.down_payment) || 0,
         interest_rate: parseFloat(newCustomer.interest_rate) || 0,
         tenure_months: parseInt(newCustomer.tenure_months) || 12,
         document_charge: parseFloat(newCustomer.document_charge) || 0,
         processing_fee: parseFloat(newCustomer.processing_fee) || 0,
+        start_date: newCustomer.start_date || '',
+        loan_given_date: newCustomer.loan_given_date || '',
+        insurance_expiry: newCustomer.insurance_expiry || '',
         loan_amount: emiCalc.principal,
         total_interest: emiCalc.totalInterest,
         total_payable: emiCalc.totalPayable,
@@ -1001,30 +1015,30 @@ function AutoFinanceDashboard({ navigateTo }) {
         boxShadow: '2px 0 10px rgba(0,0,0,0.3)',
       }}>
         <div style={{ padding: '14px', borderBottom: '1px solid #334155' }}>
-          <h3 style={{ color: '#14b8a6', margin: 0, fontSize: '16px' }}>\uD83D\uDE97 AUTO FINANCE</h3>
+          <h3 style={{ color: '#14b8a6', margin: 0, fontSize: '16px' }}>🚗 AUTO FINANCE</h3>
           <p style={{ color: '#94a3b8', margin: '3px 0 0', fontSize: '10px' }}>OM SAI MURUGAN</p>
         </div>
         <div style={{ padding: '6px 0' }}>
           <button onClick={() => { setShowSidebar(false); setShowOverdue(false); setShowReports(false); }}
             style={sidebarBtn}>
-            \uD83C\uDFE0 Dashboard
+            🏠 Dashboard
           </button>
           <button onClick={() => { setShowSidebar(false); setShowAddModal(true); setAddStep(1); }}
             style={sidebarBtn}>
-            \u2795 Add Customer
+            ➕ Add Customer
           </button>
           <button onClick={() => { setShowSidebar(false); setShowOverdue(true); setShowReports(false); }}
             style={sidebarBtn}>
-            \u26A0\uFE0F Overdue ({overdueList.length})
+            ⚠️ Overdue ({overdueList.length})
           </button>
           <button onClick={() => { setShowSidebar(false); setShowReports(true); setShowOverdue(false); loadReports(); }}
             style={sidebarBtn}>
-            \uD83D\uDCCA Reports
+            📊 Reports
           </button>
           <div style={{ borderTop: '1px solid #334155', margin: '10px 0' }} />
           <button onClick={() => navigateTo('/')}
             style={{ ...sidebarBtn, color: '#f59e0b' }}>
-            \u2190 Module Selector
+            ← Module Selector
           </button>
         </div>
       </div>
@@ -1043,9 +1057,9 @@ function AutoFinanceDashboard({ navigateTo }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
           <button onClick={() => setShowSidebar(true)}
             style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer', fontSize: '18px' }}>
-            \u2630
+            ☰
           </button>
-          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>\uD83D\uDE97 Auto Finance</h1>
+          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>🚗 Auto Finance</h1>
         </div>
         <input
           type="text"
@@ -1364,12 +1378,12 @@ function AutoFinanceDashboard({ navigateTo }) {
             </div>
 
             <h3 style={{ margin: '0 0 4px', color: '#0d9488', fontSize: '16px' }}>
-              {addStep === 1 && '\uD83D\uDC64 Personal Details'}
-              {addStep === 2 && '\uD83E\uDD1D Guarantor Details'}
-              {addStep === 3 && '\uD83D\uDE97 Vehicle Details'}
-              {addStep === 4 && '\uD83D\uDCB0 Loan Details'}
-              {addStep === 5 && '\uD83D\uDCC4 Documents'}
-              {addStep === 6 && '\u2705 Review & Confirm'}
+              {addStep === 1 && '👤 Personal Details'}
+              {addStep === 2 && '🤝 Guarantor Details'}
+              {addStep === 3 && '🚗 Vehicle Details'}
+              {addStep === 4 && '💰 Loan Details'}
+              {addStep === 5 && '📄 Documents'}
+              {addStep === 6 && '✅ Review & Confirm'}
             </h3>
             <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: 0, marginBottom: '14px' }}>Step {addStep} of 6</p>
 
