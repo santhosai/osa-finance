@@ -4804,13 +4804,17 @@ app.get('/api/auto-finance/customers', async (req, res) => {
       // Filter by phone if provided (for customer portal)
       if (phone && customer.phone !== phone) continue;
 
-      // Fetch payments
+      // Fetch payments (no orderBy to avoid index requirement)
       const paymentsSnapshot = await db.collection('auto_finance_payments')
         .where('customer_id', '==', doc.id)
-        .orderBy('created_at', 'asc')
         .get();
 
-      customer.payments = paymentsSnapshot.docs.map(p => ({ id: p.id, ...p.data() }));
+      // Sort payments in memory by date
+      const payments = paymentsSnapshot.docs
+        .map(p => ({ id: p.id, ...p.data() }))
+        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+
+      customer.payments = payments;
       customers.push(customer);
     }
 
@@ -4831,13 +4835,15 @@ app.get('/api/auto-finance/customers/:id', async (req, res) => {
 
     const customer = { id: doc.id, ...doc.data() };
 
-    // Fetch payments
+    // Fetch payments (no orderBy to avoid index requirement)
     const paymentsSnapshot = await db.collection('auto_finance_payments')
       .where('customer_id', '==', doc.id)
-      .orderBy('created_at', 'asc')
       .get();
 
-    customer.payments = paymentsSnapshot.docs.map(p => ({ id: p.id, ...p.data() }));
+    // Sort payments in memory
+    customer.payments = paymentsSnapshot.docs
+      .map(p => ({ id: p.id, ...p.data() }))
+      .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
 
     res.json(customer);
   } catch (error) {
@@ -5123,13 +5129,15 @@ app.get('/api/auto-finance/customers/:id/emi-schedule', async (req, res) => {
 
     const customer = customerDoc.data();
 
-    // Fetch all payments
+    // Fetch all payments (no orderBy to avoid index requirement)
     const paymentsSnapshot = await db.collection('auto_finance_payments')
       .where('customer_id', '==', req.params.id)
-      .orderBy('created_at', 'asc')
       .get();
 
-    const payments = paymentsSnapshot.docs.map(p => ({ id: p.id, ...p.data() }));
+    // Sort payments in memory
+    const payments = paymentsSnapshot.docs
+      .map(p => ({ id: p.id, ...p.data() }))
+      .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
     const paidEmiNumbers = new Set(payments.map(p => p.emi_number));
 
     // Generate schedule
