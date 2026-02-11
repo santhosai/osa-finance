@@ -5,7 +5,8 @@ import db, { messaging } from './firestore.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ⚡ DEPLOYMENT v4.0.1 - Jan 27, 2025 - UNIFIED LOAN SYSTEM (Weekly + Monthly + Edit)
+// ⚡ DEPLOYMENT v4.1.0 - Feb 11, 2026 - AUTO FINANCE MODULE ADDED
+// Finance (Weekly/Monthly) + Chit Fund + Auto Finance (Vehicle Loans with EMI)
 // CONFIRMED: NO phone uniqueness check - Duplicate phones ARE ALLOWED
 // Using Firestore (NOT SQLite) - NO UNIQUE constraint on phone field
 // NEW: Supports both Weekly (10 weeks) and Monthly (5 months) loan types
