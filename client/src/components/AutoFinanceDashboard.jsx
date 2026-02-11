@@ -1010,7 +1010,27 @@ function AutoFinanceDashboard({ navigateTo }) {
                 </>
               )}
 
-              <div style={{ marginTop: '14px', textAlign: 'right' }}>
+              <div style={{ marginTop: '14px', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button onClick={() => {
+                  // Generate CSV
+                  const headers = 'EMI Number,Due Date,Amount,Status,Days Overdue\n';
+                  const rows = emiScheduleData.map(emi =>
+                    `${emi.emi_number || ''},${emi.due_date || ''},${emi.amount || ''},${emi.status || ''},${emi.days_overdue || ''}`
+                  ).join('\n');
+                  const csv = headers + rows;
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `EMI_Schedule_${sc.customer_id || sc.name}_${new Date().toISOString().split('T')[0]}.csv`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                }} style={{ ...btnPrimary, background: '#22c55e' }}>
+                  📥 Download CSV
+                </button>
+                <button onClick={() => window.print()} style={{ ...btnPrimary, background: '#8b5cf6' }}>
+                  🖨️ Print
+                </button>
                 <button onClick={() => setShowEmiSchedule(false)} style={btnSecondary}>Close</button>
               </div>
             </div>
