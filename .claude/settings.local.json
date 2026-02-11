@@ -40,7 +40,10 @@
       "Bash(xcopy \"c:\\\\Users\\\\SanthoshKumarShakkar\\\\Desktop\\\\Financeapplication\\\\client\" \"c:\\\\Users\\\\SanthoshKumarShakkar\\\\Desktop\\\\RaviShankarTracker\\\\client\"\" /E /I /H /Y /EXCLUDE:c:\\\\Users\\\\SanthoshKumarShakkar\\\\Desktop\\\\Financeapplication\\\\.gitignore 2>nul || echo \"Copying client... \")",
       "Bash(xcopy:*)",
       "Bash(powershell -ExecutionPolicy Bypass -File \"c:\\\\Users\\\\SanthoshKumarShakkar\\\\Desktop\\\\RaviShankarTracker\\\\replace-names.ps1\")",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(ls -la \"c:\\\\Users\\\\SanthoshKumarShakkar\\\\Desktop\\\\Financeapplication\\\\client\\\\public\"\" 2>&1 || echo \"Public folder not found \")",
+      "Bash(python3:*)",
+      "Bash(where:*)"
     ],
     "deny": [],
     "ask": [],

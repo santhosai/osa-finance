@@ -78,6 +78,7 @@ function AutoFinanceDashboard({ navigateTo }) {
   const [customerPayments, setCustomerPayments] = useState([]);
   const [customerDocs, setCustomerDocs] = useState({});
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailTab, setDetailTab] = useState('overview'); // overview, loan, documents, history
 
   // Payment modal
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -735,9 +736,35 @@ function AutoFinanceDashboard({ navigateTo }) {
 
           {loadingDetail && <div style={{ textAlign: 'center', padding: '20px', color: '#6b7280' }}>Loading...</div>}
 
-          {/* ── Customer Info Card ────────────────────────────── */}
-          <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-            <h4 style={{ margin: '0 0 8px', color: '#0d9488', fontSize: '13px' }}>Customer Info</h4>
+          {/* ── Tabs ──────────────────────────────────────────── */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', overflowX: 'auto' }}>
+            {[
+              { id: 'overview', icon: '📊', label: 'Overview' },
+              { id: 'loan', icon: '💰', label: 'Loan Details' },
+              { id: 'documents', icon: '📄', label: 'Documents' },
+              { id: 'history', icon: '📜', label: 'Payment History' },
+            ].map(tab => (
+              <button key={tab.id} type="button"
+                onClick={() => setDetailTab(tab.id)}
+                style={{
+                  flex: 1, minWidth: '100px', padding: '10px 8px', borderRadius: '8px',
+                  border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+                  background: detailTab === tab.id ? 'linear-gradient(135deg, #0d9488, #14b8a6)' : '#fff',
+                  color: detailTab === tab.id ? '#fff' : '#6b7280',
+                  boxShadow: detailTab === tab.id ? '0 2px 8px rgba(13,148,136,0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
+                  transition: 'all 0.2s',
+                }}>
+                {tab.icon} {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── OVERVIEW TAB ───────────────────────────────────── */}
+          {detailTab === 'overview' && (
+            <>
+              {/* ── Customer Info Card ────────────────────────────── */}
+              <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                <h4 style={{ margin: '0 0 8px', color: '#0d9488', fontSize: '13px' }}>Customer Info</h4>
             <div style={{ fontSize: '13px', lineHeight: 1.8, color: '#374151' }}>
               {sc.customer_id && <div><strong>Customer ID:</strong> <span style={{ color: '#0d9488', fontWeight: 600 }}>{sc.customer_id}</span></div>}
               <div><strong>Phone:</strong> <a href={`tel:${sc.phone}`} style={{ color: '#0d9488' }}>{sc.phone}</a></div>
@@ -840,12 +867,156 @@ function AutoFinanceDashboard({ navigateTo }) {
               ✏️ Edit
             </button>
             {/* Delete */}
-            <button onClick={() => setShowDeleteConfirm(true)}
+            <button type="button" onClick={() => setShowDeleteConfirm(true)}
               style={{ padding: '10px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', gridColumn: 'span 3' }}>
               🗑️ Delete Customer
             </button>
           </div>
+            </>
+          )}
 
+          {/* ── LOAN DETAILS TAB ────────────────────────────────── */}
+          {detailTab === 'loan' && (
+            <>
+              {/* ── Loan Summary Card ─────────────────────────────── */}
+              <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                <h4 style={{ margin: '0 0 8px', color: '#0d9488', fontSize: '13px' }}>Loan Summary</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px', marginBottom: '12px' }}>
+                  <div style={{ background: '#f0fdfa', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '4px' }}>Vehicle Price</div>
+                    <div style={{ fontWeight: 700, color: '#0d9488' }}>{formatCurrency(sc.vehicle_price || 0)}</div>
+                  </div>
+                  <div style={{ background: '#f0fdfa', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '4px' }}>Down Payment</div>
+                    <div style={{ fontWeight: 700, color: '#0d9488' }}>{formatCurrency(sc.down_payment || 0)}</div>
+                  </div>
+                  <div style={{ background: '#f0fdfa', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '4px' }}>Loan Amount</div>
+                    <div style={{ fontWeight: 700, color: '#0d9488' }}>{formatCurrency(sc.loan_amount)}</div>
+                  </div>
+                  <div style={{ background: '#f0fdfa', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '4px' }}>Interest Rate</div>
+                    <div style={{ fontWeight: 700, color: '#0d9488' }}>{sc.interest_rate}% per year</div>
+                  </div>
+                  <div style={{ background: '#f0fdfa', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '4px' }}>Tenure</div>
+                    <div style={{ fontWeight: 700, color: '#0d9488' }}>{sc.tenure_months} months</div>
+                  </div>
+                  <div style={{ background: '#f0fdfa', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '4px' }}>Total Interest</div>
+                    <div style={{ fontWeight: 700, color: '#f59e0b' }}>{formatCurrency(sc.total_interest || 0)}</div>
+                  </div>
+                  <div style={{ background: '#f0fdfa', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '4px' }}>Monthly EMI</div>
+                    <div style={{ fontWeight: 700, color: '#3b82f6', fontSize: '16px' }}>{formatCurrency(sc.emi_amount)}</div>
+                  </div>
+                  <div style={{ background: '#f0fdfa', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '4px' }}>Total Payable</div>
+                    <div style={{ fontWeight: 700, color: '#0d9488', fontSize: '16px' }}>{formatCurrency(sc.total_payable)}</div>
+                  </div>
+                  <div style={{ background: '#dcfce7', padding: '10px', borderRadius: '8px', border: '2px solid #22c55e' }}>
+                    <div style={{ color: '#065f46', fontSize: '11px', marginBottom: '4px' }}>EMIs Paid</div>
+                    <div style={{ fontWeight: 700, color: '#059669', fontSize: '16px' }}>{paidEmis} / {totalEmis}</div>
+                  </div>
+                  <div style={{ background: (sc.balance || 0) > 0 ? '#fee2e2' : '#dcfce7', padding: '10px', borderRadius: '8px', border: `2px solid ${(sc.balance || 0) > 0 ? '#ef4444' : '#22c55e'}` }}>
+                    <div style={{ color: (sc.balance || 0) > 0 ? '#7f1d1d' : '#065f46', fontSize: '11px', marginBottom: '4px' }}>Balance</div>
+                    <div style={{ fontWeight: 700, color: (sc.balance || 0) > 0 ? '#dc2626' : '#059669', fontSize: '16px' }}>{formatCurrency(sc.balance)}</div>
+                  </div>
+                </div>
+                {/* Progress bar */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#6b7280', marginBottom: '4px' }}>
+                    <span>Loan Progress</span>
+                    <span>{Math.round(progressPct)}% Complete</span>
+                  </div>
+                  <div style={{ background: '#e5e7eb', borderRadius: '6px', height: '12px', overflow: 'hidden' }}>
+                    <div style={{ width: `${progressPct}%`, height: '100%', background: 'linear-gradient(90deg, #0d9488, #14b8a6)', borderRadius: '6px', transition: 'width 0.3s' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Charges */}
+              {(sc.document_charge > 0 || sc.processing_fee > 0) && (
+                <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                  <h4 style={{ margin: '0 0 8px', color: '#0d9488', fontSize: '13px' }}>Additional Charges</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px' }}>
+                    {sc.document_charge > 0 && (
+                      <div>
+                        <div style={{ color: '#6b7280', fontSize: '11px' }}>Document Charge</div>
+                        <div style={{ fontWeight: 700 }}>{formatCurrency(sc.document_charge)}</div>
+                      </div>
+                    )}
+                    {sc.processing_fee > 0 && (
+                      <div>
+                        <div style={{ color: '#6b7280', fontSize: '11px' }}>Processing Fee</div>
+                        <div style={{ fontWeight: 700 }}>{formatCurrency(sc.processing_fee)}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Loan Dates */}
+              <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                <h4 style={{ margin: '0 0 8px', color: '#0d9488', fontSize: '13px' }}>Important Dates</h4>
+                <div style={{ fontSize: '13px', lineHeight: 1.8 }}>
+                  {sc.loan_given_date && <div><strong>Loan Disbursed:</strong> {formatDate(sc.loan_given_date)}</div>}
+                  {sc.start_date && <div><strong>First EMI Due:</strong> {formatDate(sc.start_date)}</div>}
+                  {sc.insurance_expiry && <div><strong>Insurance Expiry:</strong> {formatDate(sc.insurance_expiry)}</div>}
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                <button type="button" onClick={() => { loadEmiSchedule(); setShowEmiSchedule(true); }}
+                  style={{ padding: '12px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                  📅 View EMI Schedule
+                </button>
+                <button type="button" onClick={() => { setForeclosureResult(null); setForeclosurePenalty('2'); setShowForeclosure(true); }}
+                  style={{ padding: '12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                  🔐 Calculate Foreclosure
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── DOCUMENTS TAB ────────────────────────────────────── */}
+          {detailTab === 'documents' && (
+            <>
+              {customerDocs && Object.keys(customerDocs).length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                  {Object.entries(customerDocs).map(([key, url]) => (
+                    url && (
+                      <div key={key} style={{ background: '#fff', borderRadius: '12px', padding: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                        <div onClick={() => setPreviewDoc(url)}
+                          style={{
+                            width: '100%', paddingBottom: '100%', borderRadius: '8px',
+                            background: `url(${url}) center/cover no-repeat`, border: '2px solid #e5e7eb',
+                            position: 'relative', cursor: 'pointer', marginBottom: '8px',
+                          }} />
+                        <div style={{ fontSize: '12px', color: '#374151', fontWeight: 600, textAlign: 'center', textTransform: 'capitalize' }}>
+                          {key.replace(/_/g, ' ')}
+                        </div>
+                        <button type="button" onClick={() => window.open(url, '_blank')}
+                          style={{ width: '100%', marginTop: '8px', padding: '8px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                          📥 Download
+                        </button>
+                      </div>
+                    )
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>📄</div>
+                  <div style={{ fontSize: '14px' }}>No documents uploaded</div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── PAYMENT HISTORY TAB ──────────────────────────────── */}
+          {detailTab === 'history' && (
+            <>
           {/* ── Payment History Table ─────────────────────────── */}
           <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <h4 style={{ margin: '0 0 10px', color: '#0d9488', fontSize: '13px' }}>Payment History</h4>
@@ -878,29 +1049,7 @@ function AutoFinanceDashboard({ navigateTo }) {
               </div>
             )}
           </div>
-
-          {/* ── Documents ─────────────────────────────────────── */}
-          {customerDocs && Object.keys(customerDocs).length > 0 && (
-            <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-              <h4 style={{ margin: '0 0 10px', color: '#0d9488', fontSize: '13px' }}>Documents</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {Object.entries(customerDocs).map(([key, url]) => (
-                  url && (
-                    <div key={key} onClick={() => setPreviewDoc(url)}
-                      style={{ cursor: 'pointer', textAlign: 'center' }}>
-                      <div style={{
-                        width: '100%', paddingBottom: '100%', borderRadius: '8px',
-                        background: `url(${url}) center/cover no-repeat`, border: '1px solid #e5e7eb',
-                        position: 'relative',
-                      }} />
-                      <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>
-                        {key.replace(/_/g, ' ')}
-                      </div>
-                    </div>
-                  )
-                ))}
-              </div>
-            </div>
+            </>
           )}
         </div>
 
@@ -1242,6 +1391,10 @@ function AutoFinanceDashboard({ navigateTo }) {
           <button onClick={() => { setShowSidebar(false); setShowAddModal(true); setAddStep(1); }}
             style={sidebarBtn}>
             ➕ Add Customer
+          </button>
+          <button onClick={() => { setShowSidebar(false); setShowOverdue(false); setShowReports(false); setShowReminders(false); }}
+            style={sidebarBtn}>
+            👥 All Customers
           </button>
           <button onClick={() => { setShowSidebar(false); setShowOverdue(true); setShowReports(false); }}
             style={sidebarBtn}>
