@@ -130,6 +130,13 @@ function AutoFinanceDashboard({ navigateTo }) {
   // Document preview
   const [previewDoc, setPreviewDoc] = useState(null);
 
+  // Quick EMI Lookup
+  const [showQuickLookup, setShowQuickLookup] = useState(false);
+  const [lookupSearch, setLookupSearch] = useState('');
+  const [lookupResult, setLookupResult] = useState(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupSchedule, setLookupSchedule] = useState([]);
+
   // ── Fetch detail when customer selected ─────────────────────────────────
   useEffect(() => {
     if (!selectedCustomer) return;
@@ -463,6 +470,48 @@ function AutoFinanceDashboard({ navigateTo }) {
       alert(`Error updating customer: ${e.message || 'Unknown error'}`);
     } finally {
       setEditSubmitting(false);
+    }
+  };
+
+  // ── Quick EMI Lookup ────────────────────────────────────────────────────
+  const handleQuickLookup = async () => {
+    if (!lookupSearch.trim()) {
+      alert('Please enter mobile number or customer ID');
+      return;
+    }
+
+    setLookupLoading(true);
+    setLookupResult(null);
+    setLookupSchedule([]);
+
+    try {
+      // Search by mobile number first
+      const byPhoneRes = await fetch(`${API_URL}/auto-finance/customers?phone=${lookupSearch.trim()}`);
+      const byPhone = await byPhoneRes.json();
+
+      let customer = null;
+      if (Array.isArray(byPhone) && byPhone.length > 0) {
+        customer = byPhone[0];
+      } else {
+        // If not found by phone, search by customer ID
+        const allCustomers = await fetch(`${API_URL}/auto-finance/customers`).then(r => r.json());
+        customer = (allCustomers || []).find(c => c.customer_id === lookupSearch.trim().toUpperCase());
+      }
+
+      if (customer) {
+        setLookupResult(customer);
+        // Fetch EMI schedule
+        const scheduleRes = await fetch(`${API_URL}/auto-finance/customers/${customer.id}/emi-schedule`);
+        const schedule = await scheduleRes.json();
+        setLookupSchedule(Array.isArray(schedule) ? schedule : []);
+      } else {
+        alert('Customer not found');
+      }
+    } catch (e) {
+      console.error('Lookup error:', e);
+      alert('Error searching customer');
+    } finally {
+      setLookupLoading(false);
     }
   };
 
@@ -1032,6 +1081,118 @@ function AutoFinanceDashboard({ navigateTo }) {
           </div>
         )}
 
+        {/* ── Quick EMI Lookup Modal ────────────────────────── */}
+        {showQuickLookup && (
+          <div style={modalOverlay} onClick={() => setShowQuickLookup(false)}>
+            <div style={{ ...modalBox, maxWidth: '500px', maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+              <h3 style={{ margin: '0 0 14px', color: '#0d9488', fontSize: '16px' }}>🔍 Quick EMI Lookup</h3>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={labelStyle}>Mobile Number or Customer ID</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={lookupSearch}
+                    onChange={e => setLookupSearch(e.target.value)}
+                    onKeyPress={e => e.key === 'Enter' && handleQuickLookup()}
+                    placeholder="Enter mobile or ID (e.g., AF001)"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button onClick={handleQuickLookup} disabled={lookupLoading}
+                    style={{ ...btnPrimary, padding: '0 20px', opacity: lookupLoading ? 0.6 : 1 }}>
+                    {lookupLoading ? 'Searching...' : 'Search'}
+                  </button>
+                </div>
+              </div>
+
+              {lookupResult && (
+                <>
+                  {/* Customer Info */}
+                  <div style={{ background: '#f0fdfa', borderRadius: '10px', padding: '12px', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '16px', color: '#0d9488' }}>
+                          {lookupResult.name}
+                          {lookupResult.customer_id && <span style={{ marginLeft: '8px', fontSize: '11px', background: '#0d9488', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>{lookupResult.customer_id}</span>}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{lookupResult.phone}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#374151' }}>
+                      {VEHICLE_ICONS[lookupResult.vehicle_type] || '🚗'} {lookupResult.vehicle_make} {lookupResult.vehicle_model} • {lookupResult.vehicle_reg_number}
+                    </div>
+                  </div>
+
+                  {/* Loan Summary */}
+                  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', marginBottom: '14px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px' }}>
+                      <div>
+                        <div style={{ color: '#6b7280', fontSize: '11px' }}>Loan Amount</div>
+                        <div style={{ fontWeight: 700, color: '#0d9488' }}>{formatCurrency(lookupResult.loan_amount)}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#6b7280', fontSize: '11px' }}>EMI Amount</div>
+                        <div style={{ fontWeight: 700, color: '#0d9488' }}>{formatCurrency(lookupResult.emi_amount)}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#6b7280', fontSize: '11px' }}>Paid EMIs</div>
+                        <div style={{ fontWeight: 700 }}>{lookupResult.paid_emis || 0}/{lookupResult.tenure_months}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#6b7280', fontSize: '11px' }}>Balance</div>
+                        <div style={{ fontWeight: 700, color: '#ef4444' }}>{formatCurrency(lookupResult.balance)}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* EMI Schedule */}
+                  <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#0d9488' }}>📅 EMI Schedule</h4>
+                  {lookupSchedule.length > 0 ? (
+                    <div style={{ maxHeight: '300px', overflow: 'auto', marginBottom: '14px' }}>
+                      <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                            <th style={{ padding: '8px', textAlign: 'left', fontWeight: 600 }}>EMI #</th>
+                            <th style={{ padding: '8px', textAlign: 'left', fontWeight: 600 }}>Due Date</th>
+                            <th style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>Amount</th>
+                            <th style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lookupSchedule.map(emi => (
+                            <tr key={emi.emi_number} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                              <td style={{ padding: '8px' }}>{emi.emi_number}</td>
+                              <td style={{ padding: '8px' }}>{formatDate(emi.due_date)}</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(emi.amount)}</td>
+                              <td style={{ padding: '8px', textAlign: 'center' }}>
+                                {emi.status === 'paid' && <span style={{ color: '#22c55e', fontSize: '16px' }}>✅</span>}
+                                {emi.status === 'overdue' && <span style={{ color: '#ef4444', fontSize: '16px' }}>⚠️</span>}
+                                {emi.status === 'upcoming' && <span style={{ color: '#9ca3af', fontSize: '16px' }}>⏳</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ color: '#6b7280', fontSize: '13px', marginBottom: '14px', textAlign: 'center', padding: '20px' }}>
+                      No EMI schedule available
+                    </div>
+                  )}
+
+                  <button onClick={() => window.print()} style={{ ...btnPrimary, width: '100%' }}>
+                    🖨️ Print Schedule
+                  </button>
+                </>
+              )}
+
+              <div style={{ marginTop: '14px', textAlign: 'right' }}>
+                <button onClick={() => setShowQuickLookup(false)} style={btnSecondary}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Document Preview Modal ────────────────────────── */}
         {previewDoc && (
           <div style={{ ...modalOverlay, background: 'rgba(0,0,0,0.85)' }} onClick={() => setPreviewDoc(null)}>
@@ -1082,6 +1243,10 @@ function AutoFinanceDashboard({ navigateTo }) {
           <button onClick={() => { setShowSidebar(false); setShowReports(true); setShowOverdue(false); loadReports(); }}
             style={sidebarBtn}>
             📊 Reports
+          </button>
+          <button onClick={() => { setShowSidebar(false); setShowQuickLookup(true); setLookupSearch(''); setLookupResult(null); }}
+            style={sidebarBtn}>
+            🔍 Quick Lookup
           </button>
           <div style={{ borderTop: '1px solid #334155', margin: '10px 0' }} />
           <button onClick={() => navigateTo('/')}
