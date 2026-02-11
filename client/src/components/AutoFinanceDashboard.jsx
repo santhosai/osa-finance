@@ -524,34 +524,49 @@ function AutoFinanceDashboard({ navigateTo }) {
   const loadReminders = async () => {
     setRemindersLoading(true);
     try {
-      const allCustomers = await fetch(`${API_URL}/auto-finance/customers`).then(r => r.json());
+      const response = await fetch(`${API_URL}/auto-finance/customers`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const allCustomers = await response.json();
       const now = new Date();
       const reminders = [];
 
       for (const customer of allCustomers || []) {
-        if (customer.status !== 'active') continue;
+        try {
+          if (customer.status !== 'active') continue;
 
-        const paidEmis = customer.paid_emis || 0;
-        const totalEmis = customer.tenure_months || 0;
-        if (paidEmis >= totalEmis) continue; // Loan completed
+          const paidEmis = customer.paid_emis || 0;
+          const totalEmis = customer.tenure_months || 0;
+          if (paidEmis >= totalEmis) continue; // Loan completed
 
-        // Calculate next EMI due date
-        const startDate = new Date(customer.start_date || customer.created_at);
-        const nextEmiNumber = paidEmis + 1;
-        const nextDueDate = new Date(startDate);
-        nextDueDate.setMonth(startDate.getMonth() + nextEmiNumber - 1);
+          // Calculate next EMI due date
+          const startDateStr = customer.start_date || customer.loan_given_date || customer.created_at;
+          if (!startDateStr) continue; // Skip if no date available
 
-        const daysUntilDue = Math.ceil((nextDueDate - now) / (1000 * 60 * 60 * 24));
+          const startDate = new Date(startDateStr);
+          if (isNaN(startDate.getTime())) continue; // Skip if invalid date
 
-        // Include if due within 7 days or overdue
-        if (daysUntilDue <= 7) {
-          reminders.push({
-            ...customer,
-            nextEmiNumber,
-            nextDueDate: nextDueDate.toISOString().split('T')[0],
-            daysUntilDue,
-            isOverdue: daysUntilDue < 0,
-          });
+          const nextEmiNumber = paidEmis + 1;
+          const nextDueDate = new Date(startDate);
+          nextDueDate.setMonth(startDate.getMonth() + nextEmiNumber - 1);
+
+          const daysUntilDue = Math.ceil((nextDueDate - now) / (1000 * 60 * 60 * 24));
+
+          // Include if due within 7 days or overdue
+          if (daysUntilDue <= 7) {
+            reminders.push({
+              ...customer,
+              nextEmiNumber,
+              nextDueDate: nextDueDate.toISOString().split('T')[0],
+              daysUntilDue,
+              isOverdue: daysUntilDue < 0,
+            });
+          }
+        } catch (customerError) {
+          console.error('Error processing customer:', customer.id, customerError);
+          // Continue with next customer
         }
       }
 
@@ -560,7 +575,9 @@ function AutoFinanceDashboard({ navigateTo }) {
       setRemindersList(reminders);
     } catch (e) {
       console.error('Load reminders error:', e);
-      alert('Error loading reminders');
+      console.error('Error details:', e.message);
+      setRemindersList([]);
+      alert(`Error loading reminders: ${e.message}`);
     } finally {
       setRemindersLoading(false);
     }
@@ -1658,7 +1675,7 @@ function AutoFinanceDashboard({ navigateTo }) {
               <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>Loading customers...</div>
             ) : filteredCustomers.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                <div style={{ fontSize: '40px', marginBottom: '10px' }}>\uD83D\uDE97</div>
+                <div style={{ fontSize: '40px', marginBottom: '10px' }}>🚗</div>
                 <div style={{ color: '#6b7280', fontSize: '14px' }}>
                   {searchTerm || vehicleFilter !== 'all' ? 'No matching customers found' : 'No customers yet. Add your first!'}
                 </div>
