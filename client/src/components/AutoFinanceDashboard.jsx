@@ -1251,7 +1251,7 @@ function AutoFinanceDashboard({ navigateTo }) {
             style={sidebarBtn}>
             📊 Reports
           </button>
-          <button onClick={() => { setShowSidebar(false); setShowQuickLookup(true); setLookupSearch(''); setLookupResult(null); }}
+          <button onClick={() => { setShowSidebar(false); setShowQuickLookup(true); setShowReports(false); setShowOverdue(false); setShowReminders(false); setLookupSearch(''); setLookupResult(null); }}
             style={sidebarBtn}>
             🔍 Quick Lookup
           </button>
