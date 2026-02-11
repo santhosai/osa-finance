@@ -184,6 +184,16 @@ function AutoFinanceDashboard({ navigateTo }) {
 
   // ── Submit new customer ─────────────────────────────────────────────────
   const handleAddCustomer = async () => {
+    // Validate required fields
+    if (!newCustomer.name || !newCustomer.phone) {
+      alert('Name and Phone are required!');
+      return;
+    }
+    if (!newCustomer.vehicle_price || !newCustomer.down_payment) {
+      alert('Vehicle Price and Down Payment are required!');
+      return;
+    }
+
     setSubmitting(true);
     try {
       let documentUrls = { ...docUrls };
@@ -721,7 +731,7 @@ function AutoFinanceDashboard({ navigateTo }) {
         {showPaymentModal && (
           <div style={modalOverlay} onClick={() => setShowPaymentModal(false)}>
             <div style={modalBox} onClick={e => e.stopPropagation()}>
-              <h3 style={{ margin: '0 0 16px', color: '#0d9488', fontSize: '16px' }}>\uD83D\uDCB0 Mark Payment</h3>
+              <h3 style={{ margin: '0 0 16px', color: '#0d9488', fontSize: '16px' }}>💰 Mark Payment</h3>
 
               <div style={{ marginBottom: '12px' }}>
                 <label style={labelStyle}>Amount *</label>
