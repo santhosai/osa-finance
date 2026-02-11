@@ -137,6 +137,11 @@ function AutoFinanceDashboard({ navigateTo }) {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupSchedule, setLookupSchedule] = useState([]);
 
+  // Payment Reminders
+  const [showReminders, setShowReminders] = useState(false);
+  const [remindersList, setRemindersList] = useState([]);
+  const [remindersLoading, setRemindersLoading] = useState(false);
+
   // ── Fetch detail when customer selected ─────────────────────────────────
   useEffect(() => {
     if (!selectedCustomer) return;
@@ -512,6 +517,83 @@ function AutoFinanceDashboard({ navigateTo }) {
       alert('Error searching customer');
     } finally {
       setLookupLoading(false);
+    }
+  };
+
+  // ── Payment Reminders ───────────────────────────────────────────────────
+  const loadReminders = async () => {
+    setRemindersLoading(true);
+    try {
+      const allCustomers = await fetch(`${API_URL}/auto-finance/customers`).then(r => r.json());
+      const now = new Date();
+      const reminders = [];
+
+      for (const customer of allCustomers || []) {
+        if (customer.status !== 'active') continue;
+
+        const paidEmis = customer.paid_emis || 0;
+        const totalEmis = customer.tenure_months || 0;
+        if (paidEmis >= totalEmis) continue; // Loan completed
+
+        // Calculate next EMI due date
+        const startDate = new Date(customer.start_date || customer.created_at);
+        const nextEmiNumber = paidEmis + 1;
+        const nextDueDate = new Date(startDate);
+        nextDueDate.setMonth(startDate.getMonth() + nextEmiNumber - 1);
+
+        const daysUntilDue = Math.ceil((nextDueDate - now) / (1000 * 60 * 60 * 24));
+
+        // Include if due within 7 days or overdue
+        if (daysUntilDue <= 7) {
+          reminders.push({
+            ...customer,
+            nextEmiNumber,
+            nextDueDate: nextDueDate.toISOString().split('T')[0],
+            daysUntilDue,
+            isOverdue: daysUntilDue < 0,
+          });
+        }
+      }
+
+      // Sort by due date (overdue first)
+      reminders.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
+      setRemindersList(reminders);
+    } catch (e) {
+      console.error('Load reminders error:', e);
+      alert('Error loading reminders');
+    } finally {
+      setRemindersLoading(false);
+    }
+  };
+
+  const sendReminder = (customer) => {
+    const daysText = customer.isOverdue
+      ? `${Math.abs(customer.daysUntilDue)} நாட்கள் தாமதம்`
+      : `${customer.daysUntilDue} நாட்களில் செலுத்த வேண்டும்`;
+
+    const msg =
+      `🚗 *வாகன கடன் - EMI நினைவூட்டல்*\n\n` +
+      `👤 ${customer.name}\n` +
+      `🏍️ வாகனம்: ${customer.vehicle_make} ${customer.vehicle_model}\n` +
+      `📋 EMI எண்: ${customer.nextEmiNumber}/${customer.tenure_months}\n` +
+      `💰 தொகை: ₹${Number(customer.emi_amount).toLocaleString('en-IN')}\n` +
+      `📅 செலுத்த வேண்டிய தேதி: ${formatDate(customer.nextDueDate)}\n` +
+      `⏰ ${daysText}\n\n` +
+      `தயவுசெய்து உடனே செலுத்தவும். நன்றி!\n- Om Sai Murugan Finance`;
+
+    window.open(`https://wa.me/${customer.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  const sendAllReminders = () => {
+    if (remindersList.length === 0) {
+      alert('No reminders to send');
+      return;
+    }
+    const confirmed = confirm(`Send ${remindersList.length} WhatsApp reminders?`);
+    if (confirmed) {
+      remindersList.forEach((customer, index) => {
+        setTimeout(() => sendReminder(customer), index * 1000);
+      });
     }
   };
 
@@ -1248,6 +1330,10 @@ function AutoFinanceDashboard({ navigateTo }) {
             style={sidebarBtn}>
             🔍 Quick Lookup
           </button>
+          <button onClick={() => { setShowSidebar(false); setShowReminders(true); setShowReports(false); setShowOverdue(false); loadReminders(); }}
+            style={sidebarBtn}>
+            🔔 Reminders
+          </button>
           <div style={{ borderTop: '1px solid #334155', margin: '10px 0' }} />
           <button onClick={() => navigateTo('/')}
             style={{ ...sidebarBtn, color: '#f59e0b' }}>
@@ -1402,8 +1488,98 @@ function AutoFinanceDashboard({ navigateTo }) {
           </>
         )}
 
-        {/* ═══════ MAIN DASHBOARD (when not showing overdue/reports) ═══ */}
-        {!showOverdue && !showReports && (
+        {/* ═══════ REMINDERS SECTION ════════════════════════════════════ */}
+        {showReminders && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', color: '#f59e0b' }}>🔔 Payment Reminders</h2>
+              {remindersList.length > 0 && (
+                <button onClick={sendAllReminders}
+                  style={{ ...btnPrimary, fontSize: '12px', padding: '6px 12px' }}>
+                  📱 Send All ({remindersList.length})
+                </button>
+              )}
+            </div>
+
+            {remindersLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>Loading reminders...</div>
+            ) : remindersList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#22c55e' }}>
+                ✅ No pending reminders! All EMIs are on track.
+              </div>
+            ) : (
+              <div>
+                {remindersList.map(customer => (
+                  <div key={customer.id} style={{
+                    background: '#fff', borderRadius: '12px', padding: '14px',
+                    marginBottom: '10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                    borderLeft: customer.isOverdue ? '4px solid #ef4444' : '4px solid #f59e0b',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '18px' }}>{VEHICLE_ICONS[customer.vehicle_type] || '🚗'}</span>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '14px', color: '#1f2937' }}>
+                              {customer.name}
+                              {customer.customer_id && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#0d9488', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>{customer.customer_id}</span>}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#6b7280' }}>{customer.phone}</div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          {customer.vehicle_make} {customer.vehicle_model} • {customer.vehicle_reg_number}
+                        </div>
+                      </div>
+                      {customer.isOverdue && (
+                        <span style={{ background: '#fee2e2', color: '#dc2626', fontSize: '10px', fontWeight: 700, padding: '4px 8px', borderRadius: '6px' }}>
+                          OVERDUE
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px', fontSize: '12px' }}>
+                      <div>
+                        <div style={{ color: '#6b7280', fontSize: '10px' }}>EMI #</div>
+                        <div style={{ fontWeight: 700 }}>{customer.nextEmiNumber}/{customer.tenure_months}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#6b7280', fontSize: '10px' }}>Amount</div>
+                        <div style={{ fontWeight: 700, color: '#0d9488' }}>{formatCurrency(customer.emi_amount)}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#6b7280', fontSize: '10px' }}>Due Date</div>
+                        <div style={{ fontWeight: 700, color: customer.isOverdue ? '#ef4444' : '#f59e0b' }}>
+                          {formatDate(customer.nextDueDate)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: '12px', marginBottom: '10px', color: customer.isOverdue ? '#dc2626' : '#f59e0b', fontWeight: 600 }}>
+                      {customer.isOverdue
+                        ? `⚠️ ${Math.abs(customer.daysUntilDue)} days overdue`
+                        : `⏰ Due in ${customer.daysUntilDue} days`}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => sendReminder(customer)}
+                        style={{ flex: 1, padding: '8px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                        📱 Send Reminder
+                      </button>
+                      <button onClick={() => window.open(`tel:${customer.phone}`)}
+                        style={{ padding: '8px 16px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                        📞
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ═══════ MAIN DASHBOARD (when not showing overdue/reports/reminders) ═══ */}
+        {!showOverdue && !showReports && !showReminders && (
           <>
             {/* ── Summary Cards ─────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
