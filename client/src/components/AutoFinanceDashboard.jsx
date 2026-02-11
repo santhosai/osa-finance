@@ -316,6 +316,7 @@ function AutoFinanceDashboard({ navigateTo }) {
         setPrintData({
           type: 'auto_finance_payment',
           data: {
+            customerID: selectedCustomer.customer_id || '',
             customerName: selectedCustomer.name,
             phone: selectedCustomer.phone,
             vehicleName: `${selectedCustomer.make} ${selectedCustomer.model}`,
@@ -548,7 +549,14 @@ function AutoFinanceDashboard({ navigateTo }) {
               {(sc.status || 'active').toUpperCase()}
             </div>
           </div>
-          <h2 style={{ margin: '12px 0 2px', fontSize: '20px' }}>{sc.name}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', marginBottom: '2px' }}>
+            <h2 style={{ margin: 0, fontSize: '20px' }}>{sc.name}</h2>
+            {sc.customer_id && (
+              <span style={{ fontSize: '12px', background: 'rgba(255,255,255,0.2)', padding: '3px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                {sc.customer_id}
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: '13px', opacity: 0.85 }}>
             {VEHICLE_ICONS[sc.vehicle_type] || '🚗'} {sc.make} {sc.model} &middot; {sc.reg_number}
           </div>
@@ -562,6 +570,7 @@ function AutoFinanceDashboard({ navigateTo }) {
           <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <h4 style={{ margin: '0 0 8px', color: '#0d9488', fontSize: '13px' }}>Customer Info</h4>
             <div style={{ fontSize: '13px', lineHeight: 1.8, color: '#374151' }}>
+              {sc.customer_id && <div><strong>Customer ID:</strong> <span style={{ color: '#0d9488', fontWeight: 600 }}>{sc.customer_id}</span></div>}
               <div><strong>Phone:</strong> <a href={`tel:${sc.phone}`} style={{ color: '#0d9488' }}>{sc.phone}</a></div>
               {sc.aadhaar && <div><strong>Aadhaar:</strong> {sc.aadhaar}</div>}
               {sc.pan && <div><strong>PAN:</strong> {sc.pan}</div>}
@@ -640,6 +649,7 @@ function AutoFinanceDashboard({ navigateTo }) {
               setPrintData({
                 type: 'auto_finance_payment',
                 data: {
+                  customerID: sc.customer_id || '',
                   customerName: sc.name, phone: sc.phone,
                   vehicleName: `${sc.make} ${sc.model}`, vehicleReg: sc.reg_number,
                   emiNumber: paidEmis, amount: sc.emi_amount, balance: sc.balance,
@@ -1316,7 +1326,9 @@ function AutoFinanceDashboard({ navigateTo }) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ fontSize: '20px' }}>{VEHICLE_ICONS[c.vehicle_type] || '🚗'}</span>
                           <div>
-                            <div style={{ fontWeight: 700, fontSize: '14px', color: '#1f2937' }}>{c.name}</div>
+                            <div style={{ fontWeight: 700, fontSize: '14px', color: '#1f2937' }}>{c.name}
+                              {c.customer_id && <span style={{ marginLeft: '8px', fontSize: '10px', color: '#fff', background: '#0d9488', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>{c.customer_id}</span>}
+                            </div>
                             <div style={{ fontSize: '11px', color: '#6b7280' }}>{c.phone}</div>
                           </div>
                         </div>

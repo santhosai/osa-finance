@@ -4875,12 +4875,27 @@ app.post('/api/auto-finance/customers', async (req, res) => {
       return res.status(400).json({ error: 'Loan amount must be greater than 0' });
     }
 
+    // Generate unique customer ID (AF001, AF002, etc.)
+    const allCustomers = await db.collection('auto_finance_customers').get();
+    let maxNumber = 0;
+    allCustomers.docs.forEach(doc => {
+      const data = doc.data();
+      if (data.customer_id && data.customer_id.startsWith('AF')) {
+        const num = parseInt(data.customer_id.substring(2));
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    });
+    const customerID = `AF${String(maxNumber + 1).padStart(3, '0')}`;
+
     // Flat Interest Calculation
     const totalInterest = Math.round(loanAmount * (rate / 100) * (tenure / 12));
     const totalPayable = loanAmount + totalInterest;
     const emiAmount = Math.round(totalPayable / tenure);
 
     const customerData = {
+      customer_id: customerID,
       name,
       phone,
       address: address || '',
