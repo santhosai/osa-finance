@@ -406,17 +406,17 @@ function AutoFinanceDashboard({ navigateTo }) {
       name: selectedCustomer.name || '',
       phone: selectedCustomer.phone || '',
       address: selectedCustomer.address || '',
-      aadhaar: selectedCustomer.aadhaar || '',
-      pan: selectedCustomer.pan || '',
+      aadhaar: selectedCustomer.aadhaar_number || '',
+      pan: selectedCustomer.pan_number || '',
       guarantor_name: selectedCustomer.guarantor_name || '',
       guarantor_phone: selectedCustomer.guarantor_phone || '',
       guarantor_aadhaar: selectedCustomer.guarantor_aadhaar || '',
       vehicle_type: selectedCustomer.vehicle_type || 'bike',
-      make: selectedCustomer.make || '',
-      model: selectedCustomer.model || '',
-      year: selectedCustomer.year || '',
-      reg_number: selectedCustomer.reg_number || '',
-      color: selectedCustomer.color || '',
+      make: selectedCustomer.vehicle_make || '',
+      model: selectedCustomer.vehicle_model || '',
+      year: String(selectedCustomer.vehicle_year || ''),
+      reg_number: selectedCustomer.vehicle_reg_number || '',
+      color: selectedCustomer.vehicle_color || '',
     });
     setShowEditModal(true);
   };
@@ -424,10 +424,28 @@ function AutoFinanceDashboard({ navigateTo }) {
   const handleEditSubmit = async () => {
     setEditSubmitting(true);
     try {
+      // Map frontend field names to server field names
+      const body = {
+        name: editForm.name,
+        phone: editForm.phone,
+        address: editForm.address || '',
+        aadhaar_number: editForm.aadhaar || '',
+        pan_number: editForm.pan || '',
+        guarantor_name: editForm.guarantor_name || '',
+        guarantor_phone: editForm.guarantor_phone || '',
+        guarantor_aadhaar: editForm.guarantor_aadhaar || '',
+        vehicle_type: editForm.vehicle_type || 'bike',
+        vehicle_make: editForm.make || '',
+        vehicle_model: editForm.model || '',
+        vehicle_year: parseInt(editForm.year) || new Date().getFullYear(),
+        vehicle_reg_number: editForm.reg_number || '',
+        vehicle_color: editForm.color || '',
+      };
+
       const res = await fetch(`${API_URL}/auto-finance/customers/${selectedCustomer.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         mutate();
@@ -435,11 +453,14 @@ function AutoFinanceDashboard({ navigateTo }) {
         const updated = (updatedCustomers || []).find(c => c.id === selectedCustomer.id);
         if (updated) setSelectedCustomer(updated);
         setShowEditModal(false);
+        alert('✅ Customer updated successfully!');
       } else {
-        alert('Update failed');
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Update failed');
       }
-    } catch {
-      alert('Error updating customer');
+    } catch (e) {
+      console.error('Edit customer error:', e);
+      alert(`Error updating customer: ${e.message || 'Unknown error'}`);
     } finally {
       setEditSubmitting(false);
     }
@@ -945,7 +966,7 @@ function AutoFinanceDashboard({ navigateTo }) {
         {showEditModal && (
           <div style={modalOverlay} onClick={() => setShowEditModal(false)}>
             <div style={modalBox} onClick={e => e.stopPropagation()}>
-              <h3 style={{ margin: '0 0 14px', color: '#6366f1', fontSize: '16px' }}>\u270F\uFE0F Edit Customer</h3>
+              <h3 style={{ margin: '0 0 14px', color: '#6366f1', fontSize: '16px' }}>✏️ Edit Customer</h3>
               {[
                 { key: 'name', label: 'Name' },
                 { key: 'phone', label: 'Phone' },
