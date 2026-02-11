@@ -963,7 +963,7 @@ function AutoFinanceDashboard({ navigateTo }) {
         {showEmiSchedule && (
           <div style={modalOverlay} onClick={() => setShowEmiSchedule(false)}>
             <div style={{ ...modalBox, maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
-              <h3 style={{ margin: '0 0 4px', color: '#0d9488', fontSize: '16px' }}>\uD83D\uDCC5 EMI Schedule</h3>
+              <h3 style={{ margin: '0 0 4px', color: '#0d9488', fontSize: '16px' }}>📅 EMI Schedule</h3>
               <p style={{ margin: '0 0 12px', fontSize: '12px', color: '#6b7280' }}>
                 {sc.make} {sc.model} - {sc.reg_number}
               </p>
