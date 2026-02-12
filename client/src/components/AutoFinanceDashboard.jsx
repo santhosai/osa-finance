@@ -5,6 +5,7 @@ import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import PrintReceipt from './PrintReceipt';
 import VercelMonitorModal from './VercelMonitorModal';
+import CustomerQRGenerator from './CustomerQRGenerator';
 
 const fetcher = (url) => fetch(url).then(res => res.json());
 
@@ -146,6 +147,9 @@ function AutoFinanceDashboard({ navigateTo }) {
 
   // Vercel Monitor
   const [showVercelMonitor, setShowVercelMonitor] = useState(false);
+
+  // Customer QR Generator
+  const [showQRGenerator, setShowQRGenerator] = useState(false);
 
   // ── Fetch detail when customer selected ─────────────────────────────────
   useEffect(() => {
@@ -1420,6 +1424,10 @@ function AutoFinanceDashboard({ navigateTo }) {
             style={sidebarBtn}>
             ▲ Vercel Monitor
           </button>
+          <button type="button" onClick={() => { setShowSidebar(false); setShowQRGenerator(true); }}
+            style={sidebarBtn}>
+            📱 Customer QR Code
+          </button>
           <div style={{ borderTop: '1px solid #334155', margin: '10px 0' }} />
           <button onClick={() => navigateTo('/')}
             style={{ ...sidebarBtn, color: '#f59e0b' }}>
@@ -2317,6 +2325,11 @@ function AutoFinanceDashboard({ navigateTo }) {
       {/* ── Vercel Monitor Modal ────────────────────────── */}
       {showVercelMonitor && (
         <VercelMonitorModal onClose={() => setShowVercelMonitor(false)} />
+      )}
+
+      {/* ── Customer QR Generator Modal ──────────────────── */}
+      {showQRGenerator && (
+        <CustomerQRGenerator onClose={() => setShowQRGenerator(false)} />
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import AddCustomerModal from './AddCustomerModal';
 import PaymentsThisWeekModal from './PaymentsThisWeekModal';
 import DatabaseMonitorModal from './DatabaseMonitorModal';
 import VercelMonitorModal from './VercelMonitorModal';
+import CustomerQRGenerator from './CustomerQRGenerator';
 import SendWishes from './SendWishes';
 import PrintReceipt from './PrintReceipt';
 import PrintReports from './PrintReports';
@@ -32,6 +33,7 @@ function Dashboard({ navigateTo }) {
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showDatabaseMonitorModal, setShowDatabaseMonitorModal] = useState(false);
   const [showVercelMonitor, setShowVercelMonitor] = useState(false);
+  const [showQRGenerator, setShowQRGenerator] = useState(false);
   const [showQuickRefModal, setShowQuickRefModal] = useState(false);
   const [showSendWishes, setShowSendWishes] = useState(false);
   const [showPrintReports, setShowPrintReports] = useState(false);
@@ -2194,6 +2196,28 @@ function Dashboard({ navigateTo }) {
                 transition: 'left 0.3s'
               }}></span>
             </span>
+          </button>
+
+          {/* Customer QR Code */}
+          <button
+            type="button"
+            onClick={() => { setShowSidebar(false); setShowQRGenerator(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background 0.3s'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)'}
+          >
+            📱 Customer QR Code
           </button>
 
           {/* Backup to Excel */}
@@ -4514,6 +4538,12 @@ function Dashboard({ navigateTo }) {
       {showVercelMonitor && (
         <VercelMonitorModal
           onClose={() => setShowVercelMonitor(false)}
+        />
+      )}
+
+      {showQRGenerator && (
+        <CustomerQRGenerator
+          onClose={() => setShowQRGenerator(false)}
         />
       )}
 
