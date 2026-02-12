@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import AddCustomerModal from './AddCustomerModal';
 import PaymentsThisWeekModal from './PaymentsThisWeekModal';
 import DatabaseMonitorModal from './DatabaseMonitorModal';
+import VercelMonitorModal from './VercelMonitorModal';
 import SendWishes from './SendWishes';
 import PrintReceipt from './PrintReceipt';
 import PrintReports from './PrintReports';
@@ -30,6 +31,7 @@ function Dashboard({ navigateTo }) {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentsThisWeekModal, setShowPaymentsThisWeekModal] = useState(false);
   const [showDatabaseMonitorModal, setShowDatabaseMonitorModal] = useState(false);
+  const [showVercelMonitor, setShowVercelMonitor] = useState(false);
   const [showQuickRefModal, setShowQuickRefModal] = useState(false);
   const [showSendWishes, setShowSendWishes] = useState(false);
   const [showPrintReports, setShowPrintReports] = useState(false);
@@ -2597,6 +2599,37 @@ function Dashboard({ navigateTo }) {
           <span style={{ color: 'white', fontSize: '16px' }}>→</span>
         </div>
 
+        {/* Vercel Monitor Quick Link */}
+        <div
+          onClick={() => setShowVercelMonitor(true)}
+          style={{
+            background: isDarkMode
+              ? 'linear-gradient(135deg, #0e7490 0%, #155e75 100%)'
+              : 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)',
+            padding: '10px 16px',
+            margin: '10px 10px 0 10px',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            cursor: 'pointer'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>▲</span>
+            <div>
+              <div style={{ color: 'white', fontSize: '12px', fontWeight: 600 }}>
+                Vercel Bandwidth Monitor
+              </div>
+              <div style={{ color: 'white', fontSize: '10px', opacity: 0.85 }}>
+                Track bandwidth usage & limits
+              </div>
+            </div>
+          </div>
+          <span style={{ color: 'white', fontSize: '16px' }}>→</span>
+        </div>
+
         {/* Quick Note Section with Stylus Support */}
         <div style={{
           background: isDarkMode
@@ -4475,6 +4508,12 @@ function Dashboard({ navigateTo }) {
           stats={stats}
           onClose={() => setShowDatabaseMonitorModal(false)}
           onRefresh={handleRefresh}
+        />
+      )}
+
+      {showVercelMonitor && (
+        <VercelMonitorModal
+          onClose={() => setShowVercelMonitor(false)}
         />
       )}
 
