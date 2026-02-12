@@ -4,6 +4,7 @@ import { API_URL } from '../config';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import PrintReceipt from './PrintReceipt';
+import VercelMonitorModal from './VercelMonitorModal';
 
 const fetcher = (url) => fetch(url).then(res => res.json());
 
@@ -142,6 +143,9 @@ function AutoFinanceDashboard({ navigateTo }) {
   const [showReminders, setShowReminders] = useState(false);
   const [remindersList, setRemindersList] = useState([]);
   const [remindersLoading, setRemindersLoading] = useState(false);
+
+  // Vercel Monitor
+  const [showVercelMonitor, setShowVercelMonitor] = useState(false);
 
   // ── Fetch detail when customer selected ─────────────────────────────────
   useEffect(() => {
@@ -1412,6 +1416,10 @@ function AutoFinanceDashboard({ navigateTo }) {
             style={sidebarBtn}>
             🔔 Reminders
           </button>
+          <button type="button" onClick={() => { setShowSidebar(false); setShowVercelMonitor(true); }}
+            style={sidebarBtn}>
+            ▲ Vercel Monitor
+          </button>
           <div style={{ borderTop: '1px solid #334155', margin: '10px 0' }} />
           <button onClick={() => navigateTo('/')}
             style={{ ...sidebarBtn, color: '#f59e0b' }}>
@@ -2304,6 +2312,11 @@ function AutoFinanceDashboard({ navigateTo }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Vercel Monitor Modal ────────────────────────── */}
+      {showVercelMonitor && (
+        <VercelMonitorModal onClose={() => setShowVercelMonitor(false)} />
       )}
     </div>
   );

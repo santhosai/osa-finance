@@ -43,7 +43,8 @@
       "Bash(timeout:*)",
       "Bash(ls -la \"c:\\\\Users\\\\SanthoshKumarShakkar\\\\Desktop\\\\Financeapplication\\\\client\\\\public\"\" 2>&1 || echo \"Public folder not found \")",
       "Bash(python3:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": [],
