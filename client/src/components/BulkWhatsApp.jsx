@@ -8,6 +8,7 @@ function BulkWhatsApp({ onClose }) {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sentCustomers, setSentCustomers] = useState(new Set());
 
   useEffect(() => {
     fetchAllCustomers();
@@ -105,6 +106,24 @@ function BulkWhatsApp({ onClose }) {
     setImagePreview(null);
   };
 
+  const sendToIndividual = (customer) => {
+    if (!message.trim()) {
+      alert('Please enter a message first');
+      return;
+    }
+
+    const cleanPhone = customer.phone.replace(/\D/g, '');
+    const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+
+    // Mark as sent
+    setSentCustomers(prev => {
+      const newSet = new Set(prev);
+      newSet.add(customer.id);
+      return newSet;
+    });
+  };
+
   const sendBulkMessages = () => {
     if (!message.trim()) {
       alert('Please enter a message');
@@ -130,6 +149,13 @@ function BulkWhatsApp({ onClose }) {
         const cleanPhone = customer.phone.replace(/\D/g, '');
         const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
+
+        // Mark as sent
+        setSentCustomers(prev => {
+          const newSet = new Set(prev);
+          newSet.add(customer.id);
+          return newSet;
+        });
       }, index * 1000); // Stagger by 1 second
     });
 
@@ -224,8 +250,21 @@ function BulkWhatsApp({ onClose }) {
             fontWeight: 600,
             color: '#0369a1'
           }}>
-            {loading ? 'Loading customers...' : `${customers.length} customer(s) will receive the message`}
+            {loading ? 'Loading customers...' : `${customers.length} customer(s) total`}
           </div>
+          {sentCustomers.size > 0 && (
+            <div style={{
+              fontSize: '13px',
+              fontWeight: 600,
+              color: '#10b981',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
+              <span style={{ fontSize: '16px' }}>✓</span>
+              {sentCustomers.size} sent
+            </div>
+          )}
         </div>
 
         {/* Content - Scrollable */}
@@ -457,11 +496,37 @@ function BulkWhatsApp({ onClose }) {
                         {customer.phone} • {customer.type}
                       </div>
                     </div>
-                    <div style={{
-                      fontSize: '18px'
-                    }}>
-                      ✅
-                    </div>
+                    {sentCustomers.has(customer.id) ? (
+                      <div style={{
+                        fontSize: '20px',
+                        color: '#10b981'
+                      }}>
+                        ✓
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => sendToIndividual(customer)}
+                        disabled={sending || !message.trim()}
+                        style={{
+                          padding: '8px 12px',
+                          background: sending || !message.trim()
+                            ? '#9ca3af'
+                            : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: sending || !message.trim() ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        📱 Send
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -522,12 +587,35 @@ function BulkWhatsApp({ onClose }) {
           padding: '10px 20px',
           background: '#f0f9ff',
           borderTop: '1px solid #bae6fd',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           fontSize: '11px',
           color: '#0369a1',
-          textAlign: 'center',
           lineHeight: '1.5'
         }}>
-          ℹ️ Multiple WhatsApp tabs will open. Messages will be pre-filled, but you'll need to manually send each one and attach images if selected.
+          <div style={{ flex: 1 }}>
+            ℹ️ Click individual 📱 Send buttons to send one-by-one, or use "Send to All" for bulk sending.
+          </div>
+          {sentCustomers.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setSentCustomers(new Set())}
+              style={{
+                padding: '4px 10px',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '10px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                marginLeft: '10px'
+              }}
+            >
+              Reset Status ({sentCustomers.size})
+            </button>
+          )}
         </div>
       </div>
     </div>
