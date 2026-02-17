@@ -206,6 +206,8 @@ function BackupData({ onClose }) {
       weeklyCustomers.forEach(customer => {
         if (customer.loans) {
           customer.loans.forEach(loan => {
+            // Skip closed/settled loans with 0 balance
+            if (loan.status === 'closed' || loan.balance <= 0) return;
             weeklyCount++;
             weeklySheet.addRow({
               sno: weeklyCount,
@@ -249,6 +251,8 @@ function BackupData({ onClose }) {
 
       let monthlyCount = 0;
       monthlyCustomers.forEach(c => {
+        // Skip closed/settled with 0 balance
+        if (c.status === 'closed' || c.balance <= 0) return;
         monthlyCount++;
         monthlySheet.addRow({
           sno: monthlyCount,
@@ -292,6 +296,8 @@ function BackupData({ onClose }) {
       dailyCustomers.forEach(customer => {
         if (customer.loans) {
           customer.loans.forEach(loan => {
+            // Skip closed/settled loans with 0 balance
+            if (loan.status === 'closed' || loan.balance <= 0) return;
             dailyCount++;
             dailySheet.addRow({
               sno: dailyCount,
@@ -329,7 +335,9 @@ function BackupData({ onClose }) {
       vaddiSheet.getColumn('principal').numFmt = currencyFormat;
 
       let vaddiCount = 0;
-      vaddiEntries.forEach(e => {
+      // Filter out settled/closed vaddi entries
+      const activeVaddiEntries = vaddiEntries.filter(e => e.status !== 'settled' && e.status !== 'closed');
+      activeVaddiEntries.forEach(e => {
         vaddiCount++;
         vaddiSheet.addRow({
           sno: vaddiCount,
@@ -392,16 +400,16 @@ function BackupData({ onClose }) {
       summarySheet.getColumn('totalAmount').numFmt = currencyFormat;
 
       const weeklyTotal = weeklyCustomers.reduce((sum, c) => {
-        return sum + (c.loans ? c.loans.reduce((s, l) => s + (Number(l.loan_amount) || 0), 0) : 0);
+        return sum + (c.loans ? c.loans.filter(l => l.status !== 'closed' && l.balance > 0).reduce((s, l) => s + (Number(l.loan_amount) || 0), 0) : 0);
       }, 0);
 
-      const monthlyTotal = monthlyCustomers.reduce((sum, c) => sum + (Number(c.loan_amount) || 0), 0);
+      const monthlyTotal = monthlyCustomers.filter(c => c.status !== 'closed' && c.balance > 0).reduce((sum, c) => sum + (Number(c.loan_amount) || 0), 0);
 
       const dailyTotal = dailyCustomers.reduce((sum, c) => {
-        return sum + (c.loans ? c.loans.reduce((s, l) => s + (Number(l.asked_amount) || 0), 0) : 0);
+        return sum + (c.loans ? c.loans.filter(l => l.status !== 'closed' && l.balance > 0).reduce((s, l) => s + (Number(l.asked_amount) || 0), 0) : 0);
       }, 0);
 
-      const vaddiTotal = vaddiEntries.reduce((sum, e) => sum + (Number(e.principal_amount || e.amount) || 0), 0);
+      const vaddiTotal = activeVaddiEntries.reduce((sum, e) => sum + (Number(e.principal_amount || e.amount) || 0), 0);
 
       summarySheet.addRow({ sno: 1, category: 'Weekly Finance Loans', count: weeklyCount, totalAmount: weeklyTotal });
       summarySheet.addRow({ sno: 2, category: 'Monthly Finance Customers', count: monthlyCount, totalAmount: monthlyTotal });
