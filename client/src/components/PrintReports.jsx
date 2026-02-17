@@ -3,7 +3,6 @@ import { jsPDF } from 'jspdf';
 import { API_URL } from '../config';
 
 function PrintReports({ onClose }) {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedType, setSelectedType] = useState('all');
   const [printSize, setPrintSize] = useState('mobile'); // 'mobile' or 'a4'
   const [data, setData] = useState([]);
@@ -18,6 +17,14 @@ function PrintReports({ onClose }) {
     { id: 'vaddi', label: 'Vaddi (Interest)', icon: '💰' }
   ];
 
+  // Section order and config for grouping
+  const sectionConfig = [
+    { type: 'Weekly', label: 'WEEKLY FINANCE', icon: '📅', color: '#3b82f6', pdfColor: [59, 130, 246] },
+    { type: 'Monthly', label: 'MONTHLY FINANCE', icon: '📆', color: '#8b5cf6', pdfColor: [139, 92, 246] },
+    { type: 'Daily', label: 'DAILY FINANCE', icon: '☀️', color: '#f59e0b', pdfColor: [245, 158, 11] },
+    { type: 'Vaddi', label: 'VADDI / INTEREST', icon: '💰', color: '#10b981', pdfColor: [16, 185, 129] }
+  ];
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -30,7 +37,7 @@ function PrintReports({ onClose }) {
         customers.forEach(c => {
           if (c.loans) {
             c.loans.forEach(loan => {
-              if (loan.loan_type === 'Weekly' && loan.status === 'active') {
+              if (loan.loan_type === 'Weekly' && loan.status === 'active' && loan.balance > 0) {
                 allData.push({
                   type: 'Weekly',
                   name: c.name,
@@ -52,7 +59,7 @@ function PrintReports({ onClose }) {
         const res = await fetch(`${API_URL}/monthly-finance/customers`);
         const customers = await res.json();
         customers.forEach(c => {
-          if (c.status === 'active') {
+          if (c.status === 'active' && c.balance > 0) {
             const paid = c.loan_amount - c.balance;
             const monthsPaid = Math.floor(paid / c.monthly_amount);
             const monthsRemaining = c.total_months - monthsPaid;
@@ -77,7 +84,7 @@ function PrintReports({ onClose }) {
         customers.forEach(c => {
           if (c.loans) {
             c.loans.forEach(loan => {
-              if (loan.status === 'active') {
+              if (loan.status === 'active' && loan.balance > 0) {
                 const daysRemaining = Math.ceil(loan.balance / loan.daily_amount);
                 allData.push({
                   type: 'Daily',
@@ -100,14 +107,15 @@ function PrintReports({ onClose }) {
         const res = await fetch(`${API_URL}/vaddi-entries`);
         const entries = await res.json();
         entries.forEach(e => {
-          if (e.status !== 'closed') {
+          const principal = e.principal_amount || e.amount || 0;
+          if (e.status !== 'closed' && principal > 0) {
             allData.push({
               type: 'Vaddi',
               name: e.name,
               phone: e.phone,
-              loanAmount: e.principal_amount || e.amount,
-              balance: e.principal_amount || e.amount, // Principal doesn't reduce in vaddi
-              paid: 0, // Interest payments don't reduce principal
+              loanAmount: principal,
+              balance: principal,
+              paid: 0,
               emi: '-',
               remaining: '-',
               emiType: 'interest'
@@ -116,7 +124,7 @@ function PrintReports({ onClose }) {
         });
       }
 
-      // Sort by name
+      // Sort each type by name
       allData.sort((a, b) => a.name.localeCompare(b.name));
       setData(allData);
     } catch (err) {
@@ -131,36 +139,80 @@ function PrintReports({ onClose }) {
   // jsPDF cannot render ₹ (Unicode) with built-in fonts, so use Rs. for PDF output
   const formatCurrencyPDF = (amount) => `Rs.${(Number(amount) || 0).toLocaleString('en-IN')}`;
 
+  // Group data by type
+  const getGroupedData = () => {
+    const groups = {};
+    data.forEach(item => {
+      if (!groups[item.type]) groups[item.type] = [];
+      groups[item.type].push(item);
+    });
+    return groups;
+  };
+
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
-
     const isMobile = printSize === 'mobile';
     const pageWidth = isMobile ? '80mm' : '210mm';
     const fontSize = isMobile ? '10px' : '12px';
     const headerSize = isMobile ? '14px' : '18px';
 
-    const tableRows = data.map((item, idx) => `
-      <tr>
-        <td>${idx + 1}</td>
-        <td>${item.name}</td>
-        <td>${item.type}</td>
-        <td style="text-align: right;">${formatCurrency(item.loanAmount)}</td>
-        <td style="text-align: right;">${formatCurrency(item.paid)}</td>
-        <td style="text-align: right;">${formatCurrency(item.balance)}</td>
-        <td style="text-align: center;">${item.remaining}${item.emiType !== 'interest' ? ` ${item.emiType}` : ''}</td>
-        <td>${item.phone || '-'}</td>
-      </tr>
-    `).join('');
-
+    const grouped = getGroupedData();
     const totalLoan = data.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
     const totalPaid = data.reduce((sum, d) => sum + (d.paid || 0), 0);
     const totalBalance = data.reduce((sum, d) => sum + (d.balance || 0), 0);
+
+    // Build section HTML for each type
+    let sectionsHTML = '';
+    for (const section of sectionConfig) {
+      const items = grouped[section.type];
+      if (!items || items.length === 0) continue;
+
+      const sectionLoan = items.reduce((s, d) => s + (d.loanAmount || 0), 0);
+      const sectionPaid = items.reduce((s, d) => s + (d.paid || 0), 0);
+      const sectionBalance = items.reduce((s, d) => s + (d.balance || 0), 0);
+
+      const rows = items.map((item, idx) => `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>${item.name}</td>
+          <td style="text-align: right;">${formatCurrency(item.loanAmount)}</td>
+          <td style="text-align: right;">${formatCurrency(item.paid)}</td>
+          <td style="text-align: right;">${formatCurrency(item.balance)}</td>
+          <td style="text-align: center;">${item.remaining !== '-' ? `${item.remaining} ${item.emiType}` : '-'}</td>
+          <td>${item.phone || '-'}</td>
+        </tr>
+      `).join('');
+
+      sectionsHTML += `
+        <div class="section-header" style="background: ${section.color};">
+          ${section.icon} ${section.label} (${items.length} customers)
+          <span style="float: right;">Balance: ${formatCurrency(sectionBalance)}</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Loan Amt</th>
+              <th>Paid</th>
+              <th>Balance</th>
+              <th>Left</th>
+              <th>Phone</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="section-summary">
+          Loan: ${formatCurrency(sectionLoan)} | Paid: ${formatCurrency(sectionPaid)} | Balance: ${formatCurrency(sectionBalance)}
+        </div>
+      `;
+    }
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Customer Report - ${selectedType === 'all' ? 'All Loans' : loanTypes.find(t => t.id === selectedType)?.label}</title>
+        <title>Report - ${selectedType === 'all' ? 'All Loans' : loanTypes.find(t => t.id === selectedType)?.label}</title>
         <style>
           @page { size: ${isMobile ? '80mm auto' : 'A4'}; margin: ${isMobile ? '5mm' : '15mm'}; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -171,23 +223,42 @@ function PrintReports({ onClose }) {
             max-width: ${pageWidth};
           }
           h1 { font-size: ${headerSize}; text-align: center; margin-bottom: 5px; }
-          h2 { font-size: ${isMobile ? '12px' : '14px'}; text-align: center; color: #666; margin-bottom: 10px; font-weight: normal; }
-          table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+          h2 { font-size: ${isMobile ? '12px' : '14px'}; text-align: center; color: #666; margin-bottom: 15px; font-weight: normal; }
+          .section-header {
+            color: white;
+            padding: ${isMobile ? '4px 6px' : '8px 12px'};
+            font-weight: bold;
+            font-size: ${isMobile ? '10px' : '13px'};
+            margin-top: 15px;
+            border-radius: 4px 4px 0 0;
+          }
+          table { width: 100%; border-collapse: collapse; margin: 0 0 5px 0; }
           th, td {
-            padding: ${isMobile ? '4px 2px' : '8px 6px'};
+            padding: ${isMobile ? '3px 2px' : '6px 5px'};
             border: 1px solid #ddd;
-            font-size: ${isMobile ? '9px' : '11px'};
+            font-size: ${isMobile ? '8px' : '11px'};
           }
           th { background: #1e293b; color: white; font-weight: bold; }
           tr:nth-child(even) { background: #f8fafc; }
-          .summary {
-            margin-top: 15px;
-            padding: 10px;
-            background: #ecfdf5;
+          .section-summary {
+            text-align: right;
+            font-size: ${isMobile ? '8px' : '10px'};
+            color: #555;
+            padding: 4px 8px;
+            background: #f0fdf4;
+            border: 1px solid #ddd;
+            border-top: none;
+            margin-bottom: 10px;
+          }
+          .grand-summary {
+            margin-top: 20px;
+            padding: 12px;
+            background: #1e293b;
+            color: white;
             border-radius: 8px;
             text-align: center;
+            font-size: ${isMobile ? '9px' : '12px'};
           }
-          .summary-row { display: flex; justify-content: space-between; margin: 5px 0; }
           .footer { text-align: center; margin-top: 15px; font-size: ${isMobile ? '8px' : '10px'}; color: #666; }
         </style>
       </head>
@@ -195,34 +266,15 @@ function PrintReports({ onClose }) {
         <h1>OM SAI MURUGAN FINANCE</h1>
         <h2>${selectedType === 'all' ? 'All Active Loans' : loanTypes.find(t => t.id === selectedType)?.label} - ${new Date().toLocaleDateString('en-IN')}</h2>
 
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Loan</th>
-              <th>Paid</th>
-              <th>Balance</th>
-              <th>Left</th>
-              <th>Phone</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${tableRows}
-          </tbody>
-        </table>
+        ${sectionsHTML}
 
-        <div class="summary">
-          <strong>Summary</strong><br>
-          Total Customers: ${data.length} |
-          Total Loan: ${formatCurrency(totalLoan)} |
-          Total Paid: ${formatCurrency(totalPaid)} |
-          Total Balance: ${formatCurrency(totalBalance)}
+        <div class="grand-summary">
+          <strong>GRAND TOTAL</strong><br>
+          ${data.length} Customers | Loan: ${formatCurrency(totalLoan)} | Paid: ${formatCurrency(totalPaid)} | Balance: ${formatCurrency(totalBalance)}
         </div>
 
         <div class="footer">
-          Generated on ${new Date().toLocaleString('en-IN')} | 📞 8667510724
+          Generated on ${new Date().toLocaleString('en-IN')} | Ph: 8667510724
         </div>
 
         <script>
@@ -239,7 +291,7 @@ function PrintReports({ onClose }) {
 
   const handleDownloadPDF = () => {
     const doc = new jsPDF({
-      orientation: printSize === 'mobile' ? 'portrait' : 'portrait',
+      orientation: 'portrait',
       unit: 'mm',
       format: printSize === 'mobile' ? [80, 297] : 'a4'
     });
@@ -248,6 +300,11 @@ function PrintReports({ onClose }) {
     const pageWidth = isMobile ? 80 : 210;
     const margin = isMobile ? 3 : 15;
     const contentWidth = pageWidth - (margin * 2);
+
+    const grouped = getGroupedData();
+    const totalLoan = data.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
+    const totalPaid = data.reduce((sum, d) => sum + (d.paid || 0), 0);
+    const totalBalance = data.reduce((sum, d) => sum + (d.balance || 0), 0);
 
     // Title
     doc.setFontSize(isMobile ? 12 : 16);
@@ -260,89 +317,126 @@ function PrintReports({ onClose }) {
     const subtitle = `${selectedType === 'all' ? 'All Active Loans' : loanTypes.find(t => t.id === selectedType)?.label} - ${new Date().toLocaleDateString('en-IN')}`;
     doc.text(subtitle, pageWidth / 2, margin + 10, { align: 'center' });
 
-    // Summary
-    const totalLoan = data.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
-    const totalPaid = data.reduce((sum, d) => sum + (d.paid || 0), 0);
-    const totalBalance = data.reduce((sum, d) => sum + (d.balance || 0), 0);
-
-    doc.setFontSize(isMobile ? 7 : 9);
-    doc.text(`Total: ${data.length} customers | Loan: ${formatCurrencyPDF(totalLoan)} | Paid: ${formatCurrencyPDF(totalPaid)} | Balance: ${formatCurrencyPDF(totalBalance)}`, pageWidth / 2, margin + 16, { align: 'center' });
-
-    // Table headers
-    let y = margin + 22;
-    doc.setFillColor(30, 41, 59);
-    doc.rect(margin, y, contentWidth, isMobile ? 5 : 7, 'F');
-    doc.setTextColor(255, 255, 255);
+    // Grand summary
     doc.setFontSize(isMobile ? 6 : 8);
-    doc.setFont('helvetica', 'bold');
+    doc.text(`${data.length} customers | Loan: ${formatCurrencyPDF(totalLoan)} | Paid: ${formatCurrencyPDF(totalPaid)} | Balance: ${formatCurrencyPDF(totalBalance)}`, pageWidth / 2, margin + 15, { align: 'center' });
 
-    if (isMobile) {
-      // Mobile: Columns positioned carefully to avoid overlap
-      // #(4mm) | Name(8-28mm) | Type(30-40mm) | Balance(42-58mm) | Phone(60-74mm)
-      doc.text('#', margin + 2, y + 3.5);
-      doc.text('Name', margin + 8, y + 3.5);
-      doc.text('Type', margin + 30, y + 3.5);
-      doc.text('Balance', margin + 50, y + 3.5, { align: 'right' });
-      doc.text('Phone', margin + 62, y + 3.5);
-    } else {
-      // A4: Better spaced columns
-      doc.text('#', margin + 5, y + 5);
-      doc.text('Name', margin + 15, y + 5);
-      doc.text('Type', margin + 55, y + 5);
-      doc.text('Loan Amt', margin + 90, y + 5, { align: 'right' });
-      doc.text('Paid', margin + 115, y + 5, { align: 'right' });
-      doc.text('Balance', margin + 140, y + 5, { align: 'right' });
-      doc.text('Left', margin + 158, y + 5);
-      doc.text('Phone', margin + 172, y + 5);
-    }
+    let y = margin + 20;
 
-    y += isMobile ? 5 : 7;
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'normal');
-
-    // Table rows
-    data.forEach((item, idx) => {
-      // Check if we need a new page
-      const rowHeight = isMobile ? 5 : 6;
-      if (y + rowHeight > (isMobile ? 290 : 280)) {
+    // Helper: check if we need a new page
+    const checkNewPage = (needed) => {
+      if (y + needed > (isMobile ? 290 : 280)) {
         doc.addPage();
         y = margin;
       }
+    };
 
-      // Alternate row background
-      if (idx % 2 === 0) {
-        doc.setFillColor(248, 250, 252);
-        doc.rect(margin, y, contentWidth, rowHeight, 'F');
-      }
+    // Helper: draw section header
+    const drawSectionHeader = (section, count, sectionBalance) => {
+      checkNewPage(isMobile ? 14 : 18);
 
+      // Section header bar
+      doc.setFillColor(...section.pdfColor);
+      doc.rect(margin, y, contentWidth, isMobile ? 5 : 7, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(isMobile ? 6 : 9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${section.label} (${count})`, margin + 2, y + (isMobile ? 3.5 : 5));
+      doc.text(`Bal: ${formatCurrencyPDF(sectionBalance)}`, margin + contentWidth - 2, y + (isMobile ? 3.5 : 5), { align: 'right' });
+      y += isMobile ? 5 : 7;
+
+      // Column headers
+      doc.setFillColor(30, 41, 59);
+      doc.rect(margin, y, contentWidth, isMobile ? 4 : 6, 'F');
+      doc.setTextColor(255, 255, 255);
       doc.setFontSize(isMobile ? 5 : 7);
-      const textY = y + (isMobile ? 3.5 : 4);
 
       if (isMobile) {
-        // Mobile rows - match header positions
-        doc.text(String(idx + 1), margin + 2, textY);
-        doc.text(item.name.substring(0, 10), margin + 8, textY);
-        doc.text(item.type.substring(0, 3), margin + 30, textY);
-        doc.text(formatCurrencyPDF(item.balance), margin + 50, textY, { align: 'right' });
-        doc.text((item.phone || '-').substring(0, 10), margin + 62, textY);
+        doc.text('#', margin + 2, y + 3);
+        doc.text('Name', margin + 7, y + 3);
+        doc.text('Balance', margin + 50, y + 3, { align: 'right' });
+        doc.text('Phone', margin + 62, y + 3);
       } else {
-        // A4 rows - match header positions with right-aligned amounts
-        doc.text(String(idx + 1), margin + 5, textY);
-        doc.text(item.name.substring(0, 18), margin + 15, textY);
-        doc.text(item.type, margin + 55, textY);
-        doc.text(formatCurrencyPDF(item.loanAmount), margin + 90, textY, { align: 'right' });
-        doc.text(formatCurrencyPDF(item.paid), margin + 115, textY, { align: 'right' });
-        doc.text(formatCurrencyPDF(item.balance), margin + 140, textY, { align: 'right' });
-        doc.text(`${item.remaining}${item.emiType !== 'interest' ? ' ' + item.emiType.substring(0, 1) : ''}`, margin + 158, textY);
-        doc.text(item.phone || '-', margin + 172, textY);
+        doc.text('#', margin + 5, y + 4);
+        doc.text('Name', margin + 15, y + 4);
+        doc.text('Loan Amt', margin + 90, y + 4, { align: 'right' });
+        doc.text('Paid', margin + 115, y + 4, { align: 'right' });
+        doc.text('Balance', margin + 140, y + 4, { align: 'right' });
+        doc.text('Left', margin + 155, y + 4);
+        doc.text('Phone', margin + 170, y + 4);
       }
+      y += isMobile ? 4 : 6;
+    };
 
-      y += rowHeight;
-    });
+    // Render each section
+    for (const section of sectionConfig) {
+      const items = grouped[section.type];
+      if (!items || items.length === 0) continue;
+
+      const sectionBalance = items.reduce((s, d) => s + (d.balance || 0), 0);
+      drawSectionHeader(section, items.length, sectionBalance);
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+
+      items.forEach((item, idx) => {
+        const rowHeight = isMobile ? 4 : 5;
+        checkNewPage(rowHeight);
+
+        // Alternate row background
+        if (idx % 2 === 0) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(margin, y, contentWidth, rowHeight, 'F');
+        }
+
+        doc.setFontSize(isMobile ? 5 : 7);
+        const textY = y + (isMobile ? 3 : 3.5);
+
+        if (isMobile) {
+          doc.text(String(idx + 1), margin + 2, textY);
+          doc.text(item.name.substring(0, 12), margin + 7, textY);
+          doc.text(formatCurrencyPDF(item.balance), margin + 50, textY, { align: 'right' });
+          doc.text((item.phone || '-').substring(0, 10), margin + 62, textY);
+        } else {
+          doc.text(String(idx + 1), margin + 5, textY);
+          doc.text(item.name.substring(0, 20), margin + 15, textY);
+          doc.text(formatCurrencyPDF(item.loanAmount), margin + 90, textY, { align: 'right' });
+          doc.text(formatCurrencyPDF(item.paid), margin + 115, textY, { align: 'right' });
+          doc.text(formatCurrencyPDF(item.balance), margin + 140, textY, { align: 'right' });
+          const leftText = item.remaining !== '-' ? `${item.remaining} ${item.emiType.substring(0, 1)}` : '-';
+          doc.text(leftText, margin + 155, textY);
+          doc.text(item.phone || '-', margin + 170, textY);
+        }
+
+        y += rowHeight;
+      });
+
+      // Section subtotal line
+      const sectionLoan = items.reduce((s, d) => s + (d.loanAmount || 0), 0);
+      const sectionPaid = items.reduce((s, d) => s + (d.paid || 0), 0);
+      checkNewPage(5);
+      doc.setFillColor(240, 253, 244);
+      doc.rect(margin, y, contentWidth, isMobile ? 4 : 5, 'F');
+      doc.setFontSize(isMobile ? 5 : 7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(50, 50, 50);
+      const subtotalText = `Subtotal: Loan ${formatCurrencyPDF(sectionLoan)} | Paid ${formatCurrencyPDF(sectionPaid)} | Balance ${formatCurrencyPDF(sectionBalance)}`;
+      doc.text(subtotalText, margin + contentWidth - 2, y + (isMobile ? 3 : 3.5), { align: 'right' });
+      y += isMobile ? 6 : 8;
+    }
+
+    // Grand total
+    checkNewPage(10);
+    doc.setFillColor(30, 41, 59);
+    doc.rect(margin, y, contentWidth, isMobile ? 6 : 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(isMobile ? 6 : 9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`GRAND TOTAL: ${data.length} customers | Loan: ${formatCurrencyPDF(totalLoan)} | Paid: ${formatCurrencyPDF(totalPaid)} | Balance: ${formatCurrencyPDF(totalBalance)}`, pageWidth / 2, y + (isMobile ? 4 : 5.5), { align: 'center' });
+    y += isMobile ? 10 : 14;
 
     // Footer
-    y += 5;
-    doc.setFontSize(isMobile ? 6 : 8);
+    doc.setFontSize(isMobile ? 5 : 7);
     doc.setTextColor(100, 100, 100);
     doc.text(`Generated: ${new Date().toLocaleString('en-IN')} | Ph: 8667510724`, pageWidth / 2, y, { align: 'center' });
 
@@ -350,6 +444,9 @@ function PrintReports({ onClose }) {
     const filename = `Report_${selectedType}_${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(filename);
   };
+
+  // Group data for preview
+  const grouped = getGroupedData();
 
   return (
     <div style={{
@@ -552,7 +649,7 @@ function PrintReports({ onClose }) {
               </button>
             </div>
 
-            {/* Data List */}
+            {/* Data List - Grouped by Type */}
             <div style={{ flex: 1, overflow: 'auto', padding: '8px 16px' }}>
               {loading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
@@ -565,40 +662,57 @@ function PrintReports({ onClose }) {
                   No active loans found
                 </div>
               ) : (
-                data.map((item, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: '10px 12px',
-                      background: idx % 2 === 0 ? '#374151' : 'transparent',
-                      borderRadius: '6px',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ color: 'white', fontWeight: 600, fontSize: '13px' }}>{item.name}</span>
-                      <span style={{
-                        fontSize: '10px',
-                        padding: '2px 6px',
-                        background: item.type === 'Weekly' ? '#3b82f6' :
-                                  item.type === 'Monthly' ? '#8b5cf6' :
-                                  item.type === 'Daily' ? '#f59e0b' : '#10b981',
-                        color: 'white',
-                        borderRadius: '4px'
+                sectionConfig.map(section => {
+                  const items = grouped[section.type];
+                  if (!items || items.length === 0) return null;
+                  const sectionBalance = items.reduce((s, d) => s + (d.balance || 0), 0);
+
+                  return (
+                    <div key={section.type} style={{ marginBottom: '12px' }}>
+                      {/* Section Header */}
+                      <div style={{
+                        padding: '8px 12px',
+                        background: section.color,
+                        borderRadius: '8px 8px 0 0',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
                       }}>
-                        {item.type}
-                      </span>
+                        <span style={{ color: 'white', fontWeight: 700, fontSize: '13px' }}>
+                          {section.icon} {section.label} ({items.length})
+                        </span>
+                        <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: '12px', fontWeight: 600 }}>
+                          {formatCurrency(sectionBalance)}
+                        </span>
+                      </div>
+
+                      {/* Section Items */}
+                      {items.map((item, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            padding: '8px 12px',
+                            background: idx % 2 === 0 ? '#374151' : '#2d3748',
+                            borderRadius: idx === items.length - 1 ? '0 0 8px 8px' : 0
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                            <span style={{ color: 'white', fontWeight: 600, fontSize: '13px' }}>{idx + 1}. {item.name}</span>
+                            <span style={{ color: '#fbbf24', fontWeight: 700, fontSize: '13px' }}>{formatCurrency(item.balance)}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9ca3af' }}>
+                            <span>Loan: {formatCurrency(item.loanAmount)}</span>
+                            <span>Paid: {formatCurrency(item.paid)}</span>
+                            <span>{item.remaining !== '-' ? `${item.remaining} ${item.emiType} left` : 'Interest'}</span>
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '2px' }}>
+                            {item.phone || 'No phone'}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9ca3af' }}>
-                      <span>Loan: {formatCurrency(item.loanAmount)}</span>
-                      <span>Paid: {formatCurrency(item.paid)}</span>
-                      <span>Bal: {formatCurrency(item.balance)}</span>
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>
-                      {item.phone || 'No phone'} | {item.remaining !== '-' ? `${item.remaining} ${item.emiType} left` : 'Interest loan'}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
