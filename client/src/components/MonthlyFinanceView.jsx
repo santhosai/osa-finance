@@ -1507,20 +1507,20 @@ Thank you for your payment!
   const sendReminder = (payment) => {
     if (!customer.phone) return;
 
-    const message = `Payment Reminder - Om Sai Murugan Finance
+    const message = `💰 தவணை நினைவூட்டல் - ஓம் சாய் முருகன் பைனான்ஸ்
 
-Hi ${customer.name},
+வணக்கம் ${customer.name},
 
-${payment.monthName} payment is pending.
+${payment.monthName} மாத தவணை இன்னும் கட்டப்படவில்லை.
 
-Amount Due: Rs.${customer.monthly_amount.toLocaleString('en-IN')}
-Due Date: ${formatDate(payment.date)}
-Total Balance: Rs.${customer.balance.toLocaleString('en-IN')}
+தொகை: Rs.${customer.monthly_amount.toLocaleString('en-IN')}
+கெடு தேதி: ${formatDate(payment.date)}
+மொத்த பாக்கி: Rs.${customer.balance.toLocaleString('en-IN')}
 
-Kindly pay at the earliest.
+உடனடியாக செலுத்தவும்.
 
-- Om Sai Murugan Finance
-Ph: 8667510724`;
+- ஓம் சாய் முருகன் பைனான்ஸ்
+📞 8667510724`;
 
     const cleanPhone = customer.phone.replace(/\D/g, '');
     const phoneWithCountryCode = `91${cleanPhone}`;
