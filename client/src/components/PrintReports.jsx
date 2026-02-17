@@ -108,7 +108,8 @@ function PrintReports({ onClose }) {
         const entries = await res.json();
         entries.forEach(e => {
           const principal = e.principal_amount || e.amount || 0;
-          if (e.status !== 'closed' && principal > 0) {
+          const status = (e.status || '').toLowerCase().trim();
+          if (status !== 'closed' && status !== 'settled' && !e.principalReturned && principal > 0) {
             allData.push({
               type: 'Vaddi',
               name: e.name,

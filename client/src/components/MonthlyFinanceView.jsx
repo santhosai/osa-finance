@@ -1507,20 +1507,33 @@ Thank you for your payment!
   const sendReminder = (payment) => {
     if (!customer.phone) return;
 
-    const message = `💰 தவணை நினைவூட்டல் - ஓம் சாய் முருகன் பைனான்ஸ்
+    // Build payment history table (last 5 months or all if less)
+    const currentMonthIndex = paymentSchedule.findIndex(p => p.month === payment.month);
+    const startIdx = Math.max(0, currentMonthIndex - 4);
+    const historyMonths = paymentSchedule.slice(startIdx, currentMonthIndex + 1);
+    const historyLines = historyMonths.map(p =>
+      `• ${p.monthName}: ${p.paid ? '✅ செலுத்தப்பட்டது' : '❌ நிலுவையில்'}`
+    ).join('\n');
+
+    const message = `🔔 *கட்டண நினைவூட்டல்*
 
 வணக்கம் ${customer.name},
 
-${payment.monthName} மாத தவணை இன்னும் கட்டப்படவில்லை.
+உங்கள் மாதாந்திர நிதி கட்டணம் விரைவில் செலுத்த வேண்டும்!
 
-தொகை: Rs.${customer.monthly_amount.toLocaleString('en-IN')}
-கெடு தேதி: ${formatDate(payment.date)}
-மொத்த பாக்கி: Rs.${customer.balance.toLocaleString('en-IN')}
+💰 கட்டண விவரங்கள்:
+• செலுத்த வேண்டிய தொகை: ₹${customer.monthly_amount.toLocaleString('en-IN')}
+• கடைசி தேதி: ${formatDate(payment.date)}
+• மீதமுள்ள தொகை: ₹${customer.balance.toLocaleString('en-IN')}
 
-உடனடியாக செலுத்தவும்.
+📋 கட்டண வரலாறு:
+${historyLines}
 
-- ஓம் சாய் முருகன் பைனான்ஸ்
-📞 8667510724`;
+தயவுசெய்து உங்கள் கட்டணத்தை சரியான நேரத்தில் செலுத்தவும்.
+
+நன்றி!
+- ஓம் சாய் முருகன் ஃபைனான்ஸ்
+📞 +91 8667510724`;
 
     const cleanPhone = customer.phone.replace(/\D/g, '');
     const phoneWithCountryCode = `91${cleanPhone}`;

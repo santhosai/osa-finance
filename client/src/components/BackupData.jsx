@@ -338,7 +338,7 @@ function BackupData({ onClose }) {
       // Filter out settled/closed vaddi entries
       const activeVaddiEntries = vaddiEntries.filter(e => {
         const status = (e.status || '').toLowerCase().trim();
-        return status !== 'settled' && status !== 'closed';
+        return status !== 'settled' && status !== 'closed' && !e.principalReturned;
       });
       activeVaddiEntries.forEach(e => {
         vaddiCount++;
