@@ -5341,6 +5341,169 @@ app.get('/api/auto-finance/overdue', async (req, res) => {
   }
 });
 
+// Balance Check by Phone - Single optimized API for customer portal
+app.get('/api/balance-check/:phone', async (req, res) => {
+  try {
+    const { phone } = req.params;
+
+    if (!phone || phone.length !== 10) {
+      return res.status(400).json({ error: 'Valid 10-digit phone number is required' });
+    }
+
+    // Run ALL queries in parallel for speed
+    const [customersSnapshot, loansSnapshot, paymentsSnapshot, monthlySnapshot, monthlyPaymentsSnapshot, autoSnapshot, autoPaymentsSnapshot, vaddiSnapshot] = await Promise.all([
+      db.collection('customers').where('phone', '==', phone).get(),
+      db.collection('loans').where('status', '==', 'active').get(),
+      db.collection('payments').get(),
+      db.collection('monthly_finance_customers').where('phone', '==', phone).where('status', '==', 'active').get(),
+      db.collection('monthly_finance_payments').get(),
+      db.collection('auto_finance_customers').get(),
+      db.collection('auto_finance_payments').get(),
+      db.collection('vaddi_entries').get()
+    ]);
+
+    // Check if customer exists anywhere
+    const hasRegular = !customersSnapshot.empty;
+    const hasMonthly = !monthlySnapshot.empty;
+    const autoCustomers = autoSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(c => c.phone === phone && c.status !== 'closed' && c.balance > 0);
+    const hasAutoFinance = autoCustomers.length > 0;
+
+    if (!hasRegular && !hasMonthly && !hasAutoFinance) {
+      return res.status(404).json({ error: 'No customer found with this phone number' });
+    }
+
+    // Get customer name
+    let customerName = 'Customer';
+    if (hasRegular) customerName = customersSnapshot.docs[0].data().name;
+    else if (hasMonthly) customerName = monthlySnapshot.docs[0].data().name;
+    else if (hasAutoFinance) customerName = autoCustomers[0].name || autoCustomers[0].customer_name;
+
+    const result = {
+      name: customerName,
+      phone: phone,
+      weeklyLoans: [],
+      dailyLoans: [],
+      interestLoans: [],
+      monthlyFinanceLoans: [],
+      autoFinanceLoans: []
+    };
+
+    // Process regular customer loans
+    if (hasRegular) {
+      const customerIds = customersSnapshot.docs.map(doc => doc.id);
+
+      // Build payments lookup: loan_id -> payments array
+      const paymentsByLoan = {};
+      paymentsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (!paymentsByLoan[data.loan_id]) paymentsByLoan[data.loan_id] = [];
+        paymentsByLoan[data.loan_id].push({
+          id: doc.id,
+          ...data
+        });
+      });
+      // Sort payments by date
+      Object.keys(paymentsByLoan).forEach(loanId => {
+        paymentsByLoan[loanId].sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
+      });
+
+      // Filter loans belonging to this customer
+      loansSnapshot.docs.forEach(loanDoc => {
+        const loan = loanDoc.data();
+        if (!customerIds.includes(loan.customer_id)) return;
+        if (loan.balance <= 0 || loan.status === 'closed') return;
+
+        const loanInfo = {
+          loanId: loanDoc.id,
+          loanName: loan.loan_name || 'General Loan',
+          loanAmount: loan.loan_amount,
+          balance: loan.balance,
+          startDate: loan.start_date,
+          weeklyAmount: loan.weekly_amount || 0,
+          monthlyAmount: loan.monthly_amount || 0,
+          dailyAmount: loan.daily_amount || 0,
+          interestRate: loan.interest_rate || 0,
+          payments: paymentsByLoan[loanDoc.id] || []
+        };
+
+        if (loan.loan_type === 'Weekly') {
+          result.weeklyLoans.push(loanInfo);
+        } else if (loan.loan_type === 'Daily') {
+          result.dailyLoans.push(loanInfo);
+        } else if (loan.loan_type === 'Vaddi') {
+          loanInfo.monthlyInterest = (loan.loan_amount * (loan.interest_rate || 0)) / 100;
+          result.interestLoans.push(loanInfo);
+        }
+      });
+    }
+
+    // Process monthly finance loans
+    if (hasMonthly) {
+      // Build monthly payments lookup
+      const monthlyPaymentsByCustomer = {};
+      monthlyPaymentsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (!monthlyPaymentsByCustomer[data.customer_id]) monthlyPaymentsByCustomer[data.customer_id] = [];
+        monthlyPaymentsByCustomer[data.customer_id].push({ id: doc.id, ...data });
+      });
+
+      monthlySnapshot.docs.forEach(doc => {
+        const c = doc.data();
+        if (c.balance <= 0) return;
+        result.monthlyFinanceLoans.push({
+          id: doc.id,
+          name: c.name,
+          loanAmount: c.loan_amount,
+          balance: c.balance,
+          monthlyAmount: c.monthly_amount,
+          totalMonths: c.total_months,
+          startDate: c.start_date,
+          loanGivenDate: c.loan_given_date,
+          paymentDay: new Date(c.start_date).getDate(),
+          currentMonth: Math.ceil((new Date() - new Date(c.start_date)) / (1000 * 60 * 60 * 24 * 30)),
+          payments: (monthlyPaymentsByCustomer[doc.id] || []).sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
+        });
+      });
+    }
+
+    // Process auto finance loans
+    if (hasAutoFinance) {
+      // Build auto payments lookup
+      const autoPaymentsByCustomer = {};
+      autoPaymentsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (!autoPaymentsByCustomer[data.customer_id]) autoPaymentsByCustomer[data.customer_id] = [];
+        autoPaymentsByCustomer[data.customer_id].push({ id: doc.id, ...data });
+      });
+
+      autoCustomers.forEach(af => {
+        result.autoFinanceLoans.push({
+          id: af.id,
+          loanName: `${af.vehicle_make || ''} ${af.vehicle_model || ''}`.trim(),
+          vehicleReg: af.vehicle_reg_number,
+          vehicleType: af.vehicle_type,
+          loanAmount: af.loan_amount,
+          totalPayable: af.total_payable,
+          balance: af.balance,
+          emiAmount: af.emi_amount,
+          paidEmis: af.paid_emis,
+          tenureMonths: af.tenure_months,
+          startDate: af.start_date,
+          loanType: 'auto-finance',
+          payments: (autoPaymentsByCustomer[af.id] || []).sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
+        });
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error in balance-check:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

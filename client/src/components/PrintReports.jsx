@@ -128,6 +128,8 @@ function PrintReports({ onClose }) {
   };
 
   const formatCurrency = (amount) => `₹${(Number(amount) || 0).toLocaleString('en-IN')}`;
+  // jsPDF cannot render ₹ (Unicode) with built-in fonts, so use Rs. for PDF output
+  const formatCurrencyPDF = (amount) => `Rs.${(Number(amount) || 0).toLocaleString('en-IN')}`;
 
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
@@ -264,7 +266,7 @@ function PrintReports({ onClose }) {
     const totalBalance = data.reduce((sum, d) => sum + (d.balance || 0), 0);
 
     doc.setFontSize(isMobile ? 7 : 9);
-    doc.text(`Total: ${data.length} customers | Loan: ${formatCurrency(totalLoan)} | Paid: ${formatCurrency(totalPaid)} | Balance: ${formatCurrency(totalBalance)}`, pageWidth / 2, margin + 16, { align: 'center' });
+    doc.text(`Total: ${data.length} customers | Loan: ${formatCurrencyPDF(totalLoan)} | Paid: ${formatCurrencyPDF(totalPaid)} | Balance: ${formatCurrencyPDF(totalBalance)}`, pageWidth / 2, margin + 16, { align: 'center' });
 
     // Table headers
     let y = margin + 22;
@@ -321,16 +323,16 @@ function PrintReports({ onClose }) {
         doc.text(String(idx + 1), margin + 2, textY);
         doc.text(item.name.substring(0, 10), margin + 8, textY);
         doc.text(item.type.substring(0, 3), margin + 30, textY);
-        doc.text(formatCurrency(item.balance), margin + 50, textY, { align: 'right' });
+        doc.text(formatCurrencyPDF(item.balance), margin + 50, textY, { align: 'right' });
         doc.text((item.phone || '-').substring(0, 10), margin + 62, textY);
       } else {
         // A4 rows - match header positions with right-aligned amounts
         doc.text(String(idx + 1), margin + 5, textY);
         doc.text(item.name.substring(0, 18), margin + 15, textY);
         doc.text(item.type, margin + 55, textY);
-        doc.text(formatCurrency(item.loanAmount), margin + 90, textY, { align: 'right' });
-        doc.text(formatCurrency(item.paid), margin + 115, textY, { align: 'right' });
-        doc.text(formatCurrency(item.balance), margin + 140, textY, { align: 'right' });
+        doc.text(formatCurrencyPDF(item.loanAmount), margin + 90, textY, { align: 'right' });
+        doc.text(formatCurrencyPDF(item.paid), margin + 115, textY, { align: 'right' });
+        doc.text(formatCurrencyPDF(item.balance), margin + 140, textY, { align: 'right' });
         doc.text(`${item.remaining}${item.emiType !== 'interest' ? ' ' + item.emiType.substring(0, 1) : ''}`, margin + 158, textY);
         doc.text(item.phone || '-', margin + 172, textY);
       }

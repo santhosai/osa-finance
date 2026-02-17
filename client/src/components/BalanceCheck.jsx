@@ -50,133 +50,20 @@ function BalanceCheck() {
     setCustomerData(null);
 
     try {
-      // Fetch regular customer loans (Weekly, Daily, Interest/Vaddi)
-      const customersResponse = await fetch(`${API_URL}/customers`);
-      const customers = await customersResponse.json();
+      // Single optimized API call - fetches only this customer's data
+      const response = await fetch(`${API_URL}/balance-check/${phoneNumber}`);
 
-      // Fetch Monthly Finance customers
-      const monthlyResponse = await fetch(`${API_URL}/monthly-finance/customers`);
-      const monthlyCustomers = await monthlyResponse.json();
-
-      // Fetch Auto Finance customers
-      const autoFinanceResponse = await fetch(`${API_URL}/auto-finance/customers?phone=${phoneNumber}`);
-      const autoFinanceCustomers = await autoFinanceResponse.json();
-
-      // Fetch all payments for regular loans
-      const paymentsResponse = await fetch(`${API_URL}/all-payments`);
-      const allPayments = await paymentsResponse.json();
-
-      // Find customer by phone number
-      const regularCustomer = customers.find(c => c.phone === phoneNumber);
-      const monthlyCustomer = monthlyCustomers.find(c => c.phone === phoneNumber);
-      const hasAutoFinance = Array.isArray(autoFinanceCustomers) && autoFinanceCustomers.length > 0;
-
-      if (!regularCustomer && !monthlyCustomer && !hasAutoFinance) {
+      if (response.status === 404) {
         setError('No customer found with this phone number');
         setLoading(false);
         return;
       }
 
-      // Build payments lookup: loan_id -> array of payments
-      const paymentsByLoan = {};
-      allPayments.forEach(payment => {
-        if (!paymentsByLoan[payment.loan_id]) {
-          paymentsByLoan[payment.loan_id] = [];
-        }
-        paymentsByLoan[payment.loan_id].push(payment);
-      });
-
-      // Sort payments by date (oldest first)
-      Object.keys(paymentsByLoan).forEach(loanId => {
-        paymentsByLoan[loanId].sort((a, b) =>
-          new Date(a.payment_date) - new Date(b.payment_date)
-        );
-      });
-
-      // Prepare data structure
-      const data = {
-        name: regularCustomer?.name || monthlyCustomer?.name || (hasAutoFinance ? autoFinanceCustomers[0].name : 'Customer'),
-        phone: phoneNumber,
-        weeklyLoans: [],
-        dailyLoans: [],
-        interestLoans: [],
-        monthlyFinanceLoans: [],
-        autoFinanceLoans: []
-      };
-
-      // Process regular customer loans
-      if (regularCustomer && regularCustomer.loans) {
-        for (const loan of regularCustomer.loans) {
-          // Skip closed loans
-          if (loan.balance <= 0 || loan.status === 'closed') continue;
-
-          const loanInfo = {
-            loanId: loan.loan_id, // Include loan ID for payment lookup
-            loanName: loan.loan_name || 'General Loan',
-            loanAmount: loan.loan_amount,
-            balance: loan.balance,
-            startDate: loan.start_date,
-            weeklyAmount: loan.weekly_amount,
-            monthlyAmount: loan.monthly_amount,
-            dailyAmount: loan.daily_amount,
-            interestRate: loan.interest_rate,
-            payments: paymentsByLoan[loan.loan_id] || [] // Include payment history
-          };
-
-          if (loan.loan_type === 'Weekly') {
-            data.weeklyLoans.push(loanInfo);
-          } else if (loan.loan_type === 'Daily') {
-            data.dailyLoans.push(loanInfo);
-          } else if (loan.loan_type === 'Vaddi') {
-            loanInfo.monthlyInterest = (loan.loan_amount * (loan.interest_rate || 0)) / 100;
-            data.interestLoans.push(loanInfo);
-          }
-        }
+      if (!response.ok) {
+        throw new Error('Server error');
       }
 
-      // Process ALL Monthly Finance loans for this customer
-      const monthlyFinanceLoans = monthlyCustomers.filter(
-        mc => mc.phone === phoneNumber && mc.balance > 0
-      );
-
-      monthlyFinanceLoans.forEach(monthlyLoan => {
-        data.monthlyFinanceLoans.push({
-          id: monthlyLoan.id,
-          name: monthlyLoan.name,
-          loanAmount: monthlyLoan.loan_amount,
-          balance: monthlyLoan.balance,
-          monthlyAmount: monthlyLoan.monthly_amount,
-          totalMonths: monthlyLoan.total_months,
-          startDate: monthlyLoan.start_date,
-          loanGivenDate: monthlyLoan.loan_given_date,
-          paymentDay: new Date(monthlyLoan.start_date).getDate(),
-          currentMonth: Math.ceil((new Date() - new Date(monthlyLoan.start_date)) / (1000 * 60 * 60 * 24 * 30)),
-          payments: monthlyLoan.payments || [] // Include payment history
-        });
-      });
-
-      // Process Auto Finance loans
-      if (hasAutoFinance) {
-        autoFinanceCustomers.forEach(af => {
-          if (af.status === 'closed' || af.balance <= 0) return;
-          data.autoFinanceLoans.push({
-            id: af.id,
-            loanName: `${af.vehicle_make} ${af.vehicle_model}`,
-            vehicleReg: af.vehicle_reg_number,
-            vehicleType: af.vehicle_type,
-            loanAmount: af.loan_amount,
-            totalPayable: af.total_payable,
-            balance: af.balance,
-            emiAmount: af.emi_amount,
-            paidEmis: af.paid_emis,
-            tenureMonths: af.tenure_months,
-            startDate: af.start_date,
-            loanType: 'auto-finance',
-            payments: af.payments || []
-          });
-        });
-      }
-
+      const data = await response.json();
       setCustomerData(data);
       setLoading(false);
     } catch (err) {
