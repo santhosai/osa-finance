@@ -1474,14 +1474,22 @@ function MonthlyFinanceDetailView({ customer, onBack, onUpdate }) {
     }
   };
 
+  // Get month name from payment schedule
+  const getMonthLabel = (monthNumber) => {
+    const payment = paymentSchedule[monthNumber - 1];
+    return payment ? payment.monthName : `Month ${monthNumber}`;
+  };
+
   // Handle WhatsApp send
   const sendWhatsApp = () => {
     if (!pendingPaymentData || !pendingPaymentData.phone) return;
 
+    const monthLabel = getMonthLabel(pendingPaymentData.monthNumber);
+
     const message = `Payment Receipt - Monthly Finance
 
 Customer: ${pendingPaymentData.customerName}
-Month ${pendingPaymentData.monthNumber} Payment: Rs.${pendingPaymentData.amountPaid.toLocaleString('en-IN')}
+${monthLabel} Payment: Rs.${pendingPaymentData.amountPaid.toLocaleString('en-IN')} ✅
 Date: ${new Date().toLocaleDateString('en-IN')}
 Remaining Balance: Rs.${pendingPaymentData.balance.toLocaleString('en-IN')}
 
@@ -1490,6 +1498,31 @@ Thank you for your payment!
 - Om Sai Murugan Finance`;
 
     const cleanPhone = pendingPaymentData.phone.replace(/\D/g, '');
+    const phoneWithCountryCode = `91${cleanPhone}`;
+    const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Send payment reminder for unpaid month
+  const sendReminder = (payment) => {
+    if (!customer.phone) return;
+
+    const message = `Payment Reminder - Om Sai Murugan Finance
+
+Hi ${customer.name},
+
+${payment.monthName} payment is pending.
+
+Amount Due: Rs.${customer.monthly_amount.toLocaleString('en-IN')}
+Due Date: ${formatDate(payment.date)}
+Total Balance: Rs.${customer.balance.toLocaleString('en-IN')}
+
+Kindly pay at the earliest.
+
+- Om Sai Murugan Finance
+Ph: 8667510724`;
+
+    const cleanPhone = customer.phone.replace(/\D/g, '');
     const phoneWithCountryCode = `91${cleanPhone}`;
     const whatsappUrl = `https://wa.me/${phoneWithCountryCode}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
@@ -1877,13 +1910,35 @@ Thank you for your payment!
               >
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b', marginBottom: '4px' }}>
-                    Month {payment.month} - {payment.monthName}
+                    {payment.monthName}
                   </div>
                   <div style={{ fontSize: '13px', color: '#64748b' }}>
                     Due: {formatDate(payment.date)} | {formatCurrency(payment.amount)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {/* Reminder button for unpaid months */}
+                  {!payment.paid && customer.phone && (
+                    <button
+                      onClick={() => sendReminder(payment)}
+                      style={{
+                        background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      title="Send Payment Reminder"
+                    >
+                      📱 Remind
+                    </button>
+                  )}
                   {/* Print button for paid months */}
                   {payment.paid && (
                     <button
