@@ -5,6 +5,10 @@
   background: #f9fafb;
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Navbar */
 .navbar {
   background: #1e40af;

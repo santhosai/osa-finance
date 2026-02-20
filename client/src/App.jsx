@@ -1,34 +1,64 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
+
+// Small/critical components loaded immediately (needed on first render)
 import Login from './components/Login';
 import ModuleSelector from './components/ModuleSelector';
-import Dashboard from './components/Dashboard';
-import Customers from './components/Customers';
-import CustomerLoans from './components/CustomerLoans';
-import LoanDetails from './components/LoanDetails';
-import ExcelPaymentTracker from './components/ExcelPaymentTracker';
-import VaddiList from './components/VaddiList';
-import SundayCollections from './components/SundayCollections';
-import OverduePayments from './components/OverduePayments';
-import MonthlyFinanceView from './components/MonthlyFinanceView';
-import WeeklyFinanceView from './components/WeeklyFinanceView';
-import InvestmentsList from './components/InvestmentsList';
-import ArchivedLoans from './components/ArchivedLoans';
-import UserManagement from './components/UserManagement';
-import DailyFinance from './components/DailyFinance';
-import AdminProfit from './components/AdminProfit';
-import UserCollections from './components/UserCollections';
-import AdminCollections from './components/AdminCollections';
-import ChitDashboard from './components/ChitDashboard';
-import AutoFinanceDashboard from './components/AutoFinanceDashboard';
-import BalanceCheck from './components/BalanceCheck';
 import ErrorBoundary from './components/ErrorBoundary';
+import BalanceCheck from './components/BalanceCheck';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import './App.css';
 
+// Heavy components loaded lazily — only downloaded when the user navigates to that page
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Customers = lazy(() => import('./components/Customers'));
+const CustomerLoans = lazy(() => import('./components/CustomerLoans'));
+const LoanDetails = lazy(() => import('./components/LoanDetails'));
+const ExcelPaymentTracker = lazy(() => import('./components/ExcelPaymentTracker'));
+const VaddiList = lazy(() => import('./components/VaddiList'));
+const SundayCollections = lazy(() => import('./components/SundayCollections'));
+const OverduePayments = lazy(() => import('./components/OverduePayments'));
+const MonthlyFinanceView = lazy(() => import('./components/MonthlyFinanceView'));
+const WeeklyFinanceView = lazy(() => import('./components/WeeklyFinanceView'));
+const InvestmentsList = lazy(() => import('./components/InvestmentsList'));
+const ArchivedLoans = lazy(() => import('./components/ArchivedLoans'));
+const UserManagement = lazy(() => import('./components/UserManagement'));
+const DailyFinance = lazy(() => import('./components/DailyFinance'));
+const AdminProfit = lazy(() => import('./components/AdminProfit'));
+const UserCollections = lazy(() => import('./components/UserCollections'));
+const AdminCollections = lazy(() => import('./components/AdminCollections'));
+const ChitDashboard = lazy(() => import('./components/ChitDashboard'));
+const AutoFinanceDashboard = lazy(() => import('./components/AutoFinanceDashboard'));
+
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
 const CURRENT_PASSWORD_VERSION = '2025-01-27-v2';
+
+// Loading screen shown while a lazy component is being downloaded
+function PageLoader() {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh',
+      background: '#0f172a',
+      color: '#94a3b8',
+      gap: '16px'
+    }}>
+      <div style={{
+        width: '40px',
+        height: '40px',
+        border: '3px solid #334155',
+        borderTopColor: '#6366f1',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite'
+      }} />
+      <div style={{ fontSize: '14px', letterSpacing: '0.05em' }}>Loading...</div>
+    </div>
+  );
+}
 
 // Wrapper components that use useNavigate
 function DashboardWrapper() {
@@ -183,26 +213,28 @@ function AppContent() {
       <ThemeProvider>
         <LanguageProvider>
           <div className="app">
-            <Routes>
-              <Route path="/dashboard" element={<DashboardWrapper />} />
-              <Route path="/customers" element={<CustomersWrapper />} />
-              <Route path="/customer-loans/:customerId" element={<CustomerLoansWrapper />} />
-              <Route path="/loan-details/:loanId" element={<LoanDetailsWrapper />} />
-              <Route path="/sunday-collections" element={<SundayCollectionsWrapper />} />
-              <Route path="/overdue-payments" element={<OverduePaymentsWrapper />} />
-              <Route path="/payment-tracker" element={<ExcelPaymentTrackerWrapper />} />
-              <Route path="/vaddi-list" element={<VaddiListWrapper />} />
-              <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
-              <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
-              <Route path="/investments" element={<InvestmentsListWrapper />} />
-              <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
-              <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
-              <Route path="/user-management" element={<UserManagementWrapper />} />
-              <Route path="/admin-profit" element={<AdminProfitWrapper />} />
-              <Route path="/my-collections" element={<UserCollectionsWrapper />} />
-              <Route path="/admin-collections" element={<AdminCollectionsWrapper />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/dashboard" element={<DashboardWrapper />} />
+                <Route path="/customers" element={<CustomersWrapper />} />
+                <Route path="/customer-loans/:customerId" element={<CustomerLoansWrapper />} />
+                <Route path="/loan-details/:loanId" element={<LoanDetailsWrapper />} />
+                <Route path="/sunday-collections" element={<SundayCollectionsWrapper />} />
+                <Route path="/overdue-payments" element={<OverduePaymentsWrapper />} />
+                <Route path="/payment-tracker" element={<ExcelPaymentTrackerWrapper />} />
+                <Route path="/vaddi-list" element={<VaddiListWrapper />} />
+                <Route path="/weekly-finance" element={<WeeklyFinanceViewWrapper />} />
+                <Route path="/monthly-finance" element={<MonthlyFinanceViewWrapper />} />
+                <Route path="/investments" element={<InvestmentsListWrapper />} />
+                <Route path="/archived-loans" element={<ArchivedLoansWrapper />} />
+                <Route path="/daily-finance" element={<DailyFinanceWrapper />} />
+                <Route path="/user-management" element={<UserManagementWrapper />} />
+                <Route path="/admin-profit" element={<AdminProfitWrapper />} />
+                <Route path="/my-collections" element={<UserCollectionsWrapper />} />
+                <Route path="/admin-collections" element={<AdminCollectionsWrapper />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </Suspense>
           </div>
         </LanguageProvider>
       </ThemeProvider>
@@ -215,10 +247,12 @@ function AppContent() {
       <ThemeProvider>
         <LanguageProvider>
           <div className="app">
-            <Routes>
-              <Route path="/chit-dashboard" element={<ChitDashboardWrapper />} />
-              <Route path="*" element={<Navigate to="/chit-dashboard" replace />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/chit-dashboard" element={<ChitDashboardWrapper />} />
+                <Route path="*" element={<Navigate to="/chit-dashboard" replace />} />
+              </Routes>
+            </Suspense>
           </div>
         </LanguageProvider>
       </ThemeProvider>
@@ -231,10 +265,12 @@ function AppContent() {
       <ThemeProvider>
         <LanguageProvider>
           <div className="app">
-            <Routes>
-              <Route path="/auto-finance" element={<AutoFinanceDashboardWrapper />} />
-              <Route path="*" element={<Navigate to="/auto-finance" replace />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/auto-finance" element={<AutoFinanceDashboardWrapper />} />
+                <Route path="*" element={<Navigate to="/auto-finance" replace />} />
+              </Routes>
+            </Suspense>
           </div>
         </LanguageProvider>
       </ThemeProvider>

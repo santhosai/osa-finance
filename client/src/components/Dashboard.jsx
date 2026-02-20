@@ -1332,7 +1332,17 @@ function Dashboard({ navigateTo }) {
       );
 
       if (whatsappChoice) {
-        sendMonthlyWhatsApp(result.customer || customer);
+        // Build updated customer: use new balance from server response,
+        // and simulate the new payment so month-status count is correct
+        const updatedCustomer = {
+          ...customer,
+          balance: result.balance !== undefined ? result.balance : (customer.balance - customer.monthly_amount),
+          payments: [
+            ...(customer.payments || []),
+            { amount: customer.monthly_amount, payment_date: new Date().toISOString().split('T')[0] }
+          ]
+        };
+        sendMonthlyWhatsApp(updatedCustomer);
       }
 
       // Ask about printing
@@ -1378,20 +1388,48 @@ function Dashboard({ navigateTo }) {
     }
   };
 
-  // Send Monthly Finance WhatsApp Receipt
+  // Send Monthly Finance WhatsApp Receipt (Tamil with month-by-month status)
   const sendMonthlyWhatsApp = (customer) => {
     if (!customer.phone) {
       alert('No phone number for this customer');
       return;
     }
 
-    const paymentDay = customer.start_date ? new Date(customer.start_date).getDate() : '-';
-    const message = `*Payment Receipt*\n\n` +
-      `Customer: ${customer.customer_name || customer.name}\n` +
-      `Amount Paid: ₹${customer.monthly_amount}\n` +
-      `Balance: ₹${customer.balance}\n` +
-      `Payment Day: ${paymentDay}\n\n` +
-      `Thank you for your payment!\n- Om Sai Murugan Finance`;
+    const tamilMonths = ['ஜன', 'பிப்', 'மார்', 'ஏப்', 'மே', 'ஜூன்', 'ஜூலை', 'ஆக', 'செப்', 'அக்', 'நவ', 'டிச'];
+
+    const startDate = customer.start_date ? new Date(customer.start_date) : new Date();
+    const totalMonths = customer.total_months || 5;
+    const paidCount = (customer.payments || []).length;
+
+    // Build month-by-month status lines in Tamil
+    const monthLines = [];
+    for (let i = 0; i < totalMonths; i++) {
+      const monthIndex = (startDate.getMonth() + i) % 12;
+      const monthName = tamilMonths[monthIndex];
+      const isPaid = i < paidCount;
+      const isJustPaid = i === paidCount - 1;
+
+      if (isPaid) {
+        monthLines.push(`✅ மாதம் ${i + 1}: ${monthName} - செலுத்தப்பட்டது${isJustPaid ? ' ✨' : ''}`);
+      } else {
+        monthLines.push(`❌ மாதம் ${i + 1}: ${monthName} - நிலுவையில் உள்ளது`);
+      }
+    }
+
+    const today = new Date().toLocaleDateString('en-IN');
+    const customerName = customer.customer_name || customer.name;
+    const amountPaid = (customer.monthly_amount || 0).toLocaleString('en-IN');
+    const balance = (customer.balance || 0).toLocaleString('en-IN');
+
+    const message =
+      `*கட்டண ரசீது*\n\n` +
+      `வாடிக்கையாளர்: ${customerName}\n` +
+      `செலுத்திய தொகை: ₹${amountPaid}\n\n` +
+      `📋 மாதாந்திர கட்டண நிலை:\n` +
+      monthLines.join('\n') + '\n\n' +
+      `மீதி தொகை: ₹${balance}\n` +
+      `தேதி: ${today}\n\n` +
+      `உங்கள் கட்டணத்திற்கு நன்றி!\n- ஓம் சாய் முருகன் ஃபைனான்ஸ்`;
 
     const cleanPhone = customer.phone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(message)}`;
