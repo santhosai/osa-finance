@@ -1,93 +1,235 @@
 /**
- * Sunday-centric utility functions for finance application
- * All loans and payments operate on Sundays only
+ * Day-centric utility functions for finance application
+ * Supports Sunday (0) and Thursday (4) collection days
+ * All original Sunday functions preserved for backward compatibility
  */
 
+const DAY_NAMES = { 0: 'Sunday', 4: 'Thursday' };
+
 /**
- * Get the next Sunday from a given date
+ * Generic: Get the next occurrence of a specific day from a given date
  * @param {Date|string} date - Input date
- * @returns {Date} - Next Sunday
+ * @param {number} dayOfWeek - Target day (0=Sunday, 4=Thursday)
+ * @returns {Date}
  */
-export function getNextSunday(date = new Date()) {
+export function getNextDay(date = new Date(), dayOfWeek = 0) {
   const d = new Date(date);
   const day = d.getDay();
-  const daysUntilSunday = day === 0 ? 7 : 7 - day;
-  d.setDate(d.getDate() + daysUntilSunday);
+  const daysUntil = day === dayOfWeek ? 7 : ((dayOfWeek - day + 7) % 7);
+  d.setDate(d.getDate() + daysUntil);
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
 /**
- * Get the previous Sunday from a given date
+ * Generic: Get the previous occurrence of a specific day
  * @param {Date|string} date - Input date
- * @returns {Date} - Previous Sunday
+ * @param {number} dayOfWeek - Target day (0=Sunday, 4=Thursday)
+ * @returns {Date}
  */
-export function getPreviousSunday(date = new Date()) {
+export function getPreviousDay(date = new Date(), dayOfWeek = 0) {
   const d = new Date(date);
   const day = d.getDay();
-  const daysSinceSunday = day === 0 ? 7 : day;
-  d.setDate(d.getDate() - daysSinceSunday);
+  const daysSince = day === dayOfWeek ? 7 : ((day - dayOfWeek + 7) % 7);
+  d.setDate(d.getDate() - daysSince);
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
 /**
- * Get this week's Sunday (could be today if today is Sunday, or last Sunday)
- * @returns {Date} - This week's Sunday
+ * Generic: Get this week's target day (today if it matches, or last occurrence)
+ * @param {number} dayOfWeek - Target day (0=Sunday, 4=Thursday)
+ * @returns {Date}
  */
-export function getThisSunday() {
+export function getThisDay(dayOfWeek = 0) {
   const today = new Date();
   const day = today.getDay();
 
-  if (day === 0) {
-    // Today is Sunday
+  if (day === dayOfWeek) {
     today.setHours(0, 0, 0, 0);
     return today;
   }
 
-  // Return last Sunday
-  return getPreviousSunday(today);
+  return getPreviousDay(today, dayOfWeek);
 }
 
 /**
- * Get last Sunday (always previous Sunday, even if today is Sunday)
- * @returns {Date} - Last Sunday
+ * Generic: Get last occurrence (always previous, even if today matches)
+ * @param {number} dayOfWeek - Target day (0=Sunday, 4=Thursday)
+ * @returns {Date}
  */
-export function getLastSunday() {
+export function getLastDay(dayOfWeek = 0) {
   const today = new Date();
   const day = today.getDay();
-  const daysToSubtract = day === 0 ? 7 : day;
+  const daysToSubtract = day === dayOfWeek ? 7 : ((day - dayOfWeek + 7) % 7);
   today.setDate(today.getDate() - daysToSubtract);
   today.setHours(0, 0, 0, 0);
   return today;
 }
 
 /**
- * Check if a given date is a Sunday
+ * Generic: Check if a given date falls on the target day
  * @param {Date|string} date - Date to check
- * @returns {boolean} - True if Sunday
+ * @param {number} dayOfWeek - Target day (0=Sunday, 4=Thursday)
+ * @returns {boolean}
  */
-export function isSunday(date) {
+export function isTargetDay(date, dayOfWeek = 0) {
   const d = new Date(date);
-  return d.getDay() === 0;
+  return d.getDay() === dayOfWeek;
 }
 
 /**
- * Generate payment schedule for a loan starting on a Sunday
- * @param {Date|string} loanStartSunday - Loan disbursement Sunday
- * @param {number} totalWeeks - Total number of weeks (default 10)
- * @returns {Array} - Array of Sunday dates for payment schedule
+ * Generic: Get the next N occurrences of a specific day
+ * @param {number} count - Number of days to get
+ * @param {number} dayOfWeek - Target day (0=Sunday, 4=Thursday)
+ * @returns {Array<Date>}
  */
-export function generatePaymentSchedule(loanStartSunday, totalWeeks = 10) {
-  const startDate = new Date(loanStartSunday);
+export function getUpcomingDays(count = 4, dayOfWeek = 0) {
+  const days = [];
+  let current = getNextDay(new Date(), dayOfWeek);
 
-  if (!isSunday(startDate)) {
-    throw new Error('Loan start date must be a Sunday');
+  for (let i = 0; i < count; i++) {
+    days.push(new Date(current));
+    current.setDate(current.getDate() + 7);
   }
 
+  return days;
+}
+
+/**
+ * Generic: Get all occurrences of a day between two dates
+ * @param {Date|string} startDate
+ * @param {Date|string} endDate
+ * @param {number} dayOfWeek - Target day (0=Sunday, 4=Thursday)
+ * @returns {Array<Date>}
+ */
+export function getDaysInRange(startDate, endDate, dayOfWeek = 0) {
+  const days = [];
+  let currentDate = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (!isTargetDay(currentDate, dayOfWeek)) {
+    currentDate = getNextDay(currentDate, dayOfWeek);
+  }
+
+  while (currentDate <= end) {
+    days.push(new Date(currentDate));
+    currentDate.setDate(currentDate.getDate() + 7);
+  }
+
+  return days;
+}
+
+/**
+ * Generic: Check if a target day is in the past
+ * @param {Date|string} date
+ * @param {number} dayOfWeek - Target day (0=Sunday, 4=Thursday)
+ * @returns {boolean}
+ */
+export function isPastDay(date, dayOfWeek = 0) {
+  const thisDay = getThisDay(dayOfWeek);
+  const checkDate = new Date(date);
+  checkDate.setHours(0, 0, 0, 0);
+  return checkDate < thisDay;
+}
+
+/**
+ * Generic: Get relative day label (This Thursday, Last Sunday, etc.)
+ * @param {Date|string} date
+ * @param {number} dayOfWeek - Target day (0=Sunday, 4=Thursday)
+ * @returns {string}
+ */
+export function getRelativeDayLabel(date, dayOfWeek = 0) {
+  const checkDate = new Date(date);
+  checkDate.setHours(0, 0, 0, 0);
+  const dayName = DAY_NAMES[dayOfWeek] || 'Day';
+
+  const thisDay = getThisDay(dayOfWeek);
+  const lastDay = getLastDay(dayOfWeek);
+  const nextDay = getNextDay(new Date(), dayOfWeek);
+
+  if (checkDate.getTime() === thisDay.getTime()) {
+    return `This ${dayName}`;
+  } else if (checkDate.getTime() === lastDay.getTime()) {
+    return `Last ${dayName}`;
+  } else if (checkDate.getTime() === nextDay.getTime()) {
+    return `Next ${dayName}`;
+  }
+
+  return formatSundayDisplay(checkDate);
+}
+
+/**
+ * Helper: Convert collection_day string to dayOfWeek number
+ * @param {string} collectionDay - 'Sunday' or 'Thursday'
+ * @returns {number} - 0 for Sunday, 4 for Thursday
+ */
+export function collectionDayToNumber(collectionDay) {
+  return collectionDay === 'Thursday' ? 4 : 0;
+}
+
+// ============ BACKWARD-COMPATIBLE SUNDAY FUNCTIONS ============
+
+export function getNextSunday(date = new Date()) {
+  return getNextDay(date, 0);
+}
+
+export function getPreviousSunday(date = new Date()) {
+  return getPreviousDay(date, 0);
+}
+
+export function getThisSunday() {
+  return getThisDay(0);
+}
+
+export function getLastSunday() {
+  return getLastDay(0);
+}
+
+export function isSunday(date) {
+  return isTargetDay(date, 0);
+}
+
+export function getSundaysInRange(startDate, endDate) {
+  return getDaysInRange(startDate, endDate, 0);
+}
+
+export function getUpcomingSundays(count = 4) {
+  return getUpcomingDays(count, 0);
+}
+
+export function isPastSunday(sunday) {
+  return isPastDay(sunday, 0);
+}
+
+export function getRelativeSundayLabel(sunday) {
+  return getRelativeDayLabel(sunday, 0);
+}
+
+// ============ THURSDAY CONVENIENCE FUNCTIONS ============
+
+export function getNextThursday(date = new Date()) {
+  return getNextDay(date, 4);
+}
+
+export function getPreviousThursday(date = new Date()) {
+  return getPreviousDay(date, 4);
+}
+
+export function getThisThursday() {
+  return getThisDay(4);
+}
+
+export function isThursday(date) {
+  return isTargetDay(date, 4);
+}
+
+// ============ DAY-AGNOSTIC FUNCTIONS (no changes needed) ============
+
+export function generatePaymentSchedule(loanStartDay, totalWeeks = 10) {
+  const startDate = new Date(loanStartDay);
   const schedule = [];
 
-  // First payment is NEXT Sunday after loan disbursement
   for (let week = 1; week <= totalWeeks; week++) {
     const paymentDate = new Date(startDate);
     paymentDate.setDate(startDate.getDate() + (week * 7));
@@ -101,53 +243,6 @@ export function generatePaymentSchedule(loanStartSunday, totalWeeks = 10) {
   return schedule;
 }
 
-/**
- * Get all Sundays between two dates (inclusive)
- * @param {Date|string} startDate - Start date
- * @param {Date|string} endDate - End date
- * @returns {Array<Date>} - Array of Sunday dates
- */
-export function getSundaysInRange(startDate, endDate) {
-  const sundays = [];
-  let currentDate = new Date(startDate);
-  const end = new Date(endDate);
-
-  // Move to first Sunday if not already
-  if (!isSunday(currentDate)) {
-    currentDate = getNextSunday(currentDate);
-  }
-
-  while (currentDate <= end) {
-    sundays.push(new Date(currentDate));
-    currentDate.setDate(currentDate.getDate() + 7);
-  }
-
-  return sundays;
-}
-
-/**
- * Get the next N Sundays starting from today
- * @param {number} count - Number of Sundays to get (default 4)
- * @returns {Array<Date>} - Array of upcoming Sunday dates
- */
-export function getUpcomingSundays(count = 4) {
-  const sundays = [];
-  let currentSunday = getNextSunday(new Date());
-
-  for (let i = 0; i < count; i++) {
-    sundays.push(new Date(currentSunday));
-    currentSunday.setDate(currentSunday.getDate() + 7);
-  }
-
-  return sundays;
-}
-
-/**
- * Format Sunday for display in UI
- * @param {Date|string} date - Sunday date
- * @param {number} weekNumber - Optional week number
- * @returns {string} - Formatted string (e.g., "Nov 17, 2024" or "Nov 17, 2024 (Week 1)")
- */
 export function formatSundayDisplay(date, weekNumber = null) {
   const d = new Date(date);
   const options = { month: 'short', day: 'numeric', year: 'numeric' };
@@ -160,21 +255,11 @@ export function formatSundayDisplay(date, weekNumber = null) {
   return formatted;
 }
 
-/**
- * Format date for API (YYYY-MM-DD)
- * @param {Date|string} date - Date to format
- * @returns {string} - Formatted date string
- */
 export function formatDateForAPI(date) {
   const d = new Date(date);
   return d.toISOString().split('T')[0];
 }
 
-/**
- * Format date for display (DD/MM/YYYY)
- * @param {Date|string} date - Date to format
- * @returns {string} - Formatted date string
- */
 export function formatDateForDisplay(date) {
   const d = new Date(date);
   const day = String(d.getDate()).padStart(2, '0');
@@ -183,15 +268,9 @@ export function formatDateForDisplay(date) {
   return `${day}/${month}/${year}`;
 }
 
-/**
- * Get the week number for a payment based on loan start date
- * @param {Date|string} loanStartSunday - Loan start Sunday
- * @param {Date|string} paymentSunday - Payment Sunday
- * @returns {number} - Week number (1-based)
- */
-export function getWeekNumber(loanStartSunday, paymentSunday) {
-  const startDate = new Date(loanStartSunday);
-  const paymentDate = new Date(paymentSunday);
+export function getWeekNumber(loanStartDay, paymentDay) {
+  const startDate = new Date(loanStartDay);
+  const paymentDate = new Date(paymentDay);
 
   const diffTime = paymentDate - startDate;
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -200,67 +279,20 @@ export function getWeekNumber(loanStartSunday, paymentSunday) {
   return weekNumber;
 }
 
-/**
- * Calculate expected completion date for a loan
- * @param {Date|string} loanStartSunday - Loan start Sunday
- * @param {number} totalWeeks - Total weeks of loan
- * @returns {Date} - Expected completion Sunday
- */
-export function calculateCompletionDate(loanStartSunday, totalWeeks) {
-  const startDate = new Date(loanStartSunday);
+export function calculateCompletionDate(loanStartDay, totalWeeks) {
+  const startDate = new Date(loanStartDay);
   const completionDate = new Date(startDate);
   completionDate.setDate(startDate.getDate() + (totalWeeks * 7));
   return completionDate;
 }
 
-/**
- * Check if a Sunday is in the past
- * @param {Date|string} sunday - Sunday to check
- * @returns {boolean} - True if past Sunday
- */
-export function isPastSunday(sunday) {
-  const thisSunday = getThisSunday();
-  const checkDate = new Date(sunday);
-  checkDate.setHours(0, 0, 0, 0);
-  return checkDate < thisSunday;
-}
-
-/**
- * Check if a Sunday is today
- * @param {Date|string} sunday - Sunday to check
- * @returns {boolean} - True if today is Sunday and matches
- */
-export function isToday(sunday) {
+export function isToday(date) {
   const today = new Date();
-  const checkDate = new Date(sunday);
+  const checkDate = new Date(date);
 
   return (
     today.getFullYear() === checkDate.getFullYear() &&
     today.getMonth() === checkDate.getMonth() &&
     today.getDate() === checkDate.getDate()
   );
-}
-
-/**
- * Get relative Sunday label (This Sunday, Last Sunday, Next Sunday)
- * @param {Date|string} sunday - Sunday date
- * @returns {string} - Relative label
- */
-export function getRelativeSundayLabel(sunday) {
-  const checkDate = new Date(sunday);
-  checkDate.setHours(0, 0, 0, 0);
-
-  const thisSunday = getThisSunday();
-  const lastSunday = getLastSunday();
-  const nextSunday = getNextSunday(new Date());
-
-  if (checkDate.getTime() === thisSunday.getTime()) {
-    return 'This Sunday';
-  } else if (checkDate.getTime() === lastSunday.getTime()) {
-    return 'Last Sunday';
-  } else if (checkDate.getTime() === nextSunday.getTime()) {
-    return 'Next Sunday';
-  }
-
-  return formatSundayDisplay(checkDate);
 }

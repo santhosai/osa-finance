@@ -17,6 +17,8 @@ const translations = {
     userManagement: 'User Management',
     logout: 'Logout',
     sundayCollections: 'Sunday Collections',
+    thursdayCollections: 'Thursday Collections',
+    collectionDay: 'Collection Day',
     overduePayments: 'Overdue Payments',
     paymentTracker: 'Payment Tracker',
 
@@ -107,6 +109,8 @@ const translations = {
     userManagement: 'பயனர் மேலாண்மை',
     logout: 'வெளியேறு',
     sundayCollections: 'ஞாயிறு வசூல்',
+    thursdayCollections: 'வியாழன் வசூல்',
+    collectionDay: 'வசூல் நாள்',
     overduePayments: 'தாமத பணம்',
     paymentTracker: 'பணம் கண்காணிப்பு',
 

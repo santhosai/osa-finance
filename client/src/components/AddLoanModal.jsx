@@ -7,6 +7,7 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(customerId || '');
   const [loanType, setLoanType] = useState(defaultLoanType || 'Weekly'); // Weekly or Monthly
+  const [collectionDay, setCollectionDay] = useState('Sunday'); // Sunday or Thursday
   const [loanName, setLoanName] = useState('');
   const [loanAmount, setLoanAmount] = useState('');
   const [weeklyAmount, setWeeklyAmount] = useState('');
@@ -77,6 +78,7 @@ function AddLoanModal({ customerId, customerName, customerPhone, onClose, onSucc
 You have received a loan of ₹${parseInt(loanAmount).toLocaleString('en-IN')} from Om Sai Murugan Finance.
 
 Weekly payment: ₹${parseInt(paymentAmount).toLocaleString('en-IN')}
+Collection day: Every ${collectionDay}
 Payment starts from: ${new Date(startDate).toLocaleDateString('en-IN')}
 
 Thank you for choosing our service!
@@ -150,6 +152,7 @@ Thank you for choosing our service!
           customer_id: selectedCustomerId,
           loan_name: loanName.trim() || 'General Loan', // Default if empty
           loan_type: loanType,
+          ...(loanType === 'Weekly' && { collection_day: collectionDay }),
           loan_amount: parseInt(loanAmount),
           weekly_amount: loanType === 'Weekly' ? parseInt(weeklyAmount) : 0,
           monthly_amount: loanType === 'Monthly' ? parseInt(monthlyAmount) : 0,
@@ -323,9 +326,27 @@ Thank you for choosing our service!
               <option value="Monthly">Monthly Finance (5 months)</option>
             </select>
             <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
-              {loanType === 'Weekly' ? '10 weekly payments on Sundays' : '5 monthly payments (any date)'}
+              {loanType === 'Weekly' ? `10 weekly payments on ${collectionDay}s` : '5 monthly payments (any date)'}
             </small>
           </div>
+
+          {loanType === 'Weekly' && (
+            <div className="form-group">
+              <label className="form-label">Collection Day</label>
+              <select
+                className="form-input"
+                value={collectionDay}
+                onChange={(e) => setCollectionDay(e.target.value)}
+                style={{ fontSize: '14px', fontWeight: 600 }}
+              >
+                <option value="Sunday">Sunday</option>
+                <option value="Thursday">Thursday</option>
+              </select>
+              <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+                Payments will be collected every {collectionDay}
+              </small>
+            </div>
+          )}
 
           <div className="form-group">
             <label className="form-label">Friend Name</label>
@@ -429,7 +450,7 @@ Thank you for choosing our service!
             />
             <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
               {loanType === 'Weekly'
-                ? 'When they start paying weekly (must be a Sunday)'
+                ? `When they start paying weekly (must be a ${collectionDay})`
                 : 'When they start paying monthly (any date)'}
             </small>
           </div>

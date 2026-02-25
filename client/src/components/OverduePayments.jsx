@@ -43,16 +43,19 @@ function OverduePayments({ navigateTo }) {
 
           // Only include if they have missed payments
           if (missedPayments > 0) {
-            // Find the last Sunday they should have paid
-            const lastExpectedSunday = new Date(today);
-            const dayOfWeek = lastExpectedSunday.getDay();
-            const daysToLastSunday = dayOfWeek === 0 ? 0 : dayOfWeek;
-            lastExpectedSunday.setDate(lastExpectedSunday.getDate() - daysToLastSunday);
+            // Find the last expected collection day (Sunday or Thursday based on loan)
+            const loanCollectionDay = loanData.collection_day || 'Sunday';
+            const targetDayNum = loanCollectionDay === 'Thursday' ? 4 : 0;
+            const lastExpectedDay = new Date(today);
+            const currentDayOfWeek = lastExpectedDay.getDay();
+            let daysToLast = currentDayOfWeek - targetDayNum;
+            if (daysToLast < 0) daysToLast += 7;
+            lastExpectedDay.setDate(lastExpectedDay.getDate() - daysToLast);
 
-            // Check if they paid on the last expected Sunday
-            const lastSundayStr = lastExpectedSunday.toISOString().split('T')[0];
+            // Check if they paid on the last expected collection day
+            const lastDayStr = lastExpectedDay.toISOString().split('T')[0];
             const paidLastSunday = loanData.payments?.some(
-              payment => payment.payment_date === lastSundayStr
+              payment => payment.payment_date === lastDayStr
             );
 
             // Calculate overdue amount

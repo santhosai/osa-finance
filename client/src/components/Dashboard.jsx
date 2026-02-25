@@ -56,6 +56,7 @@ function Dashboard({ navigateTo }) {
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
   const [undoPaymentConfirm, setUndoPaymentConfirm] = useState(null); // { loan, customer, paymentId }
   const [weeklyDiagnostic, setWeeklyDiagnostic] = useState(null); // Weekly loans overview
+  const [weeklyCollectionDay, setWeeklyCollectionDay] = useState('Sunday'); // Sunday or Thursday toggle
   const [showCharts, setShowCharts] = useState(false); // Toggle charts visibility
   const [loansGivenDate, setLoansGivenDate] = useState(new Date().toISOString().split('T')[0]); // For loans given tracker
   const [showLoansGivenModal, setShowLoansGivenModal] = useState(false); // For loans given modal
@@ -440,24 +441,26 @@ function Dashboard({ navigateTo }) {
       setWeeklyPaymentsData({ paidLoans: [], unpaidLoans: [], loading: true });
 
       const selected = new Date(selectedDate + 'T00:00:00');
-      const isSunday = selected.getDay() === 0;
+      const expectedDayNum = weeklyCollectionDay === 'Thursday' ? 4 : 0;
+      const isCorrectDay = selected.getDay() === expectedDayNum;
 
-      if (!isSunday) {
+      if (!isCorrectDay) {
         setWeeklyPaymentsData({ paidLoans: [], unpaidLoans: [], loading: false });
         return;
       }
 
-      const sundayDate = selectedDate;
+      const collectionDate = selectedDate;
 
-      // Helper to get first payment Sunday
-      const getFirstPaymentSunday = (startDateStr) => {
+      // Helper to get first payment day matching collection day
+      const getFirstPaymentDay = (startDateStr) => {
         const date = new Date(startDateStr + 'T00:00:00');
         const dayOfWeek = date.getDay();
-        if (dayOfWeek === 0) return date;
-        const daysUntilSunday = 7 - dayOfWeek;
-        const firstSunday = new Date(date);
-        firstSunday.setDate(date.getDate() + daysUntilSunday);
-        return firstSunday;
+        if (dayOfWeek === expectedDayNum) return date;
+        let daysUntil = expectedDayNum - dayOfWeek;
+        if (daysUntil < 0) daysUntil += 7;
+        const firstDay = new Date(date);
+        firstDay.setDate(date.getDate() + daysUntil);
+        return firstDay;
       };
 
       // Get all loan IDs that need payment check
@@ -471,9 +474,13 @@ function Dashboard({ navigateTo }) {
         customer.loans.forEach(loan => {
           if (loan.status === 'closed' || loan.loan_type !== 'Weekly' || loan.balance <= 0) return;
 
-          // Skip loans where first payment Sunday hasn't arrived yet
-          const firstPaymentSunday = getFirstPaymentSunday(loan.start_date);
-          if (firstPaymentSunday > selected) return; // First payment is in the future
+          // Filter by collection day (default Sunday for backward compat)
+          const loanCollectionDay = loan.collection_day || 'Sunday';
+          if (loanCollectionDay !== weeklyCollectionDay) return;
+
+          // Skip loans where first payment day hasn't arrived yet
+          const firstPaymentDay = getFirstPaymentDay(loan.start_date);
+          if (firstPaymentDay > selected) return; // First payment is in the future
 
           // NEW LOGIC: Week number based on payments made, not calendar weeks
           // paymentsMade = how much collected / weekly amount
@@ -494,7 +501,7 @@ function Dashboard({ navigateTo }) {
 
       // Batch fetch: get all payments for this date in one call
       try {
-        const paymentsResponse = await fetch(`${API_URL}/payments-by-date?date=${sundayDate}`);
+        const paymentsResponse = await fetch(`${API_URL}/payments-by-date?date=${collectionDate}`);
         const paymentsOnDate = paymentsResponse.ok ? await paymentsResponse.json() : [];
 
         // Create a Map of loan_id -> payment data (includes balance_after and week_number)
@@ -542,13 +549,13 @@ function Dashboard({ navigateTo }) {
 
     fetchWeeklyPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, customersLength, paymentsRefreshKey]);
+  }, [selectedDate, customersLength, paymentsRefreshKey, weeklyCollectionDay]);
 
   // Fetch weekly diagnostic data for overview
   useEffect(() => {
     const fetchDiagnostic = async () => {
       try {
-        const response = await fetch(`${API_URL}/weekly-diagnostic`);
+        const response = await fetch(`${API_URL}/weekly-diagnostic?collection_day=${weeklyCollectionDay}`);
         if (response.ok) {
           const data = await response.json();
           // Calculate total balance from all loans
@@ -565,7 +572,7 @@ function Dashboard({ navigateTo }) {
     };
 
     fetchDiagnostic();
-  }, []); // Run on mount
+  }, [weeklyCollectionDay]); // Re-fetch when collection day changes
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -3133,7 +3140,7 @@ function Dashboard({ navigateTo }) {
                   fontSize: '10px',
                   textAlign: 'center'
                 }}>
-                  📅 This Sunday: <strong>{weeklyPaymentsData.paidLoans.length + weeklyPaymentsData.unpaidLoans.length}</strong> of {weeklyDiagnostic.totalWeeklyLoans} loans due
+                  📅 This {weeklyCollectionDay}: <strong>{weeklyPaymentsData.paidLoans.length + weeklyPaymentsData.unpaidLoans.length}</strong> of {weeklyDiagnostic.totalWeeklyLoans} loans due
                 </div>
               )}
             </div>
@@ -3147,6 +3154,32 @@ function Dashboard({ navigateTo }) {
             marginBottom: '10px',
             boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
           }}>
+            {/* Day Toggle */}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
+              {['Sunday', 'Thursday'].map(day => (
+                <button
+                  key={day}
+                  onClick={() => setWeeklyCollectionDay(day)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    background: weeklyCollectionDay === day
+                      ? (day === 'Sunday' ? '#3b82f6' : '#8b5cf6')
+                      : '#e5e7eb',
+                    color: weeklyCollectionDay === day ? 'white' : '#6b7280',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {day}
+                </button>
+              ))}
+            </div>
+
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -3161,7 +3194,7 @@ function Dashboard({ navigateTo }) {
                 fontWeight: 700,
                 color: '#1e293b'
               }}>
-                📅 {t('weeklyPayments')}
+                📅 {weeklyCollectionDay} {t('weeklyPayments')}
               </h3>
               <input
                 type="date"
@@ -3179,11 +3212,12 @@ function Dashboard({ navigateTo }) {
             </div>
 
 {(() => {
-              // Get the selected date and check if it's a Sunday
+              // Get the selected date and check if it matches the collection day
               const selected = new Date(selectedDate + 'T00:00:00');
-              const isSunday = selected.getDay() === 0;
+              const expectedDayNum = weeklyCollectionDay === 'Thursday' ? 4 : 0;
+              const isCorrectDay = selected.getDay() === expectedDayNum;
 
-              if (!isSunday) {
+              if (!isCorrectDay) {
                 return (
                   <div style={{
                     textAlign: 'center',
@@ -3192,7 +3226,7 @@ function Dashboard({ navigateTo }) {
                     fontSize: '13px',
                     fontWeight: 600
                   }}>
-                    ⚠️ Please select a Sunday. Collections are only on Sundays.
+                    ⚠️ Please select a {weeklyCollectionDay}. Collections are only on {weeklyCollectionDay}s.
                   </div>
                 );
               }
@@ -3222,7 +3256,7 @@ function Dashboard({ navigateTo }) {
                     color: '#6b7280',
                     fontSize: '13px'
                   }}>
-                    No payments due for this Sunday
+                    No payments due for this {weeklyCollectionDay}
                   </div>
                 );
               }

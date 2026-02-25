@@ -89,7 +89,8 @@ app.get('/api/customers', async (req, res) => {
         start_date: loanData.start_date,
         loan_given_date: loanData.loan_given_date,
         last_payment_date: lastPaymentByLoan[loanDoc.id] || null,
-        created_at: loanData.created_at
+        created_at: loanData.created_at,
+        collection_day: loanData.collection_day || 'Sunday'
       });
     });
 
@@ -320,23 +321,25 @@ app.get('/api/loans/:id', async (req, res) => {
 // Create new loan
 app.post('/api/loans', async (req, res) => {
   try {
-    const { customer_id, loan_name, loan_type, loan_amount, weekly_amount, monthly_amount, loan_given_date, start_date } = req.body;
+    const { customer_id, loan_name, loan_type, loan_amount, weekly_amount, monthly_amount, loan_given_date, start_date, collection_day } = req.body;
 
     if (!customer_id || !loan_amount || !loan_given_date || !start_date) {
       return res.status(400).json({ error: 'Customer ID, loan amount, loan given date, and start date are required' });
     }
 
     const loanTypeValue = loan_type || 'Weekly'; // Default to Weekly
+    const collectionDay = (loanTypeValue === 'Weekly') ? (collection_day || 'Sunday') : undefined;
 
     // Validate based on loan type
     if (loanTypeValue === 'Weekly') {
       if (!weekly_amount) {
         return res.status(400).json({ error: 'Weekly amount is required for Weekly loans' });
       }
-      // Validate that start_date is a Sunday for Weekly loans
+      // Validate that start_date matches the collection day
       const startDate = new Date(start_date);
-      if (startDate.getDay() !== 0) {
-        return res.status(400).json({ error: 'Weekly loans can only start on Sundays' });
+      const expectedDay = collectionDay === 'Thursday' ? 4 : 0;
+      if (startDate.getDay() !== expectedDay) {
+        return res.status(400).json({ error: `Weekly loans with ${collectionDay} collection must start on a ${collectionDay}` });
       }
     } else if (loanTypeValue === 'Monthly') {
       if (!monthly_amount) {
@@ -359,6 +362,7 @@ app.post('/api/loans', async (req, res) => {
       balance: loan_amount,
       loan_given_date,
       start_date,
+      ...(collectionDay && { collection_day: collectionDay }),
       status: 'active',
       created_at: new Date().toISOString()
     };
@@ -1266,13 +1270,14 @@ app.post('/api/payments', async (req, res) => {
 
     const loanData = loanDoc.data();
     const loanType = loanData.loan_type || 'Weekly';
+    const collectionDay = loanData.collection_day || 'Sunday';
 
-    // Validate payment date based on loan type
+    // Validate payment date based on loan type and collection day
     const paymentDate = new Date(payment_date);
     if (loanType === 'Weekly') {
-      // Weekly loans: Payments must be on Sundays
-      if (paymentDate.getDay() !== 0) {
-        return res.status(400).json({ error: 'Weekly loan payments can only be made on Sundays' });
+      const expectedDay = collectionDay === 'Thursday' ? 4 : 0;
+      if (paymentDate.getDay() !== expectedDay) {
+        return res.status(400).json({ error: `This loan's payments can only be made on ${collectionDay}s` });
       }
     }
     // Monthly loans: Payments can be on any date (no restriction)
@@ -1784,6 +1789,10 @@ app.get('/api/stats', async (req, res) => {
     let outstanding = 0;
     let weeklyOutstanding = 0;
     let monthlyOutstanding = 0;
+    let sundayOutstanding = 0;
+    let thursdayOutstanding = 0;
+    let sundayActiveLoans = 0;
+    let thursdayActiveLoans = 0;
 
     // Calculate Weekly outstanding
     activeLoansSnapshot.forEach(doc => {
@@ -1797,6 +1806,15 @@ app.get('/api/stats', async (req, res) => {
         monthlyOutstanding += balance;
       } else {
         weeklyOutstanding += balance;
+        // Split by collection day
+        const collectionDay = loan.collection_day || 'Sunday';
+        if (collectionDay === 'Thursday') {
+          thursdayOutstanding += balance;
+          if (balance > 0) thursdayActiveLoans++;
+        } else {
+          sundayOutstanding += balance;
+          if (balance > 0) sundayActiveLoans++;
+        }
       }
     });
 
@@ -1850,6 +1868,10 @@ app.get('/api/stats', async (req, res) => {
       outstanding,
       weeklyOutstanding,
       monthlyOutstanding,
+      sundayOutstanding,
+      thursdayOutstanding,
+      sundayActiveLoans,
+      thursdayActiveLoans,
       totalCustomers,
       paymentsThisWeek,
       // Database statistics
@@ -1876,6 +1898,8 @@ app.get('/api/stats', async (req, res) => {
 // Analyze weekly loan totals to find discrepancies
 app.get('/api/weekly-diagnostic', async (req, res) => {
   try {
+    const targetDay = req.query.collection_day; // optional filter
+
     // Get all active loans (filter balance > 0 in code to avoid composite index)
     const loansSnapshot = await db.collection('loans')
       .where('status', '==', 'active')
@@ -1891,6 +1915,10 @@ app.get('/api/weekly-diagnostic', async (req, res) => {
       const loan = doc.data();
       const loanType = loan.loan_type || 'Weekly';
       const balance = loan.balance || 0;
+      const loanCollectionDay = loan.collection_day || 'Sunday';
+
+      // Filter by collection day if specified
+      if (targetDay && loanCollectionDay !== targetDay) return;
 
       // Only include Weekly loans with balance > 0
       if (loanType === 'Weekly' && balance > 0) {
@@ -1946,7 +1974,8 @@ app.get('/api/weekly-diagnostic', async (req, res) => {
 // Get all customers due for payment on a specific Sunday
 app.get('/api/sunday-collections', async (req, res) => {
   try {
-    const { date } = req.query;
+    const { date, collection_day } = req.query;
+    const targetCollectionDay = collection_day || 'Sunday';
 
     if (!date) {
       return res.status(400).json({ error: 'Date parameter is required' });
@@ -2002,7 +2031,11 @@ app.get('/api/sunday-collections', async (req, res) => {
 
       if (!customer) continue;
 
-      // Check if loan should have a payment on this Sunday
+      // Filter by collection day (default Sunday for backward compat)
+      const loanCollectionDay = loanData.collection_day || 'Sunday';
+      if (loanCollectionDay !== targetCollectionDay) continue;
+
+      // Check if loan should have a payment on this day
       const startDate = new Date(loanData.start_date);
       const selectedDate = new Date(date);
 

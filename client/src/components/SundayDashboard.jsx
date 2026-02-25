@@ -1,23 +1,33 @@
 import { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 import {
-  getThisSunday,
-  getLastSunday,
-  getNextSunday,
-  getPreviousSunday,
+  getThisDay,
+  getLastDay,
+  getNextDay,
+  getPreviousDay,
   formatSundayDisplay,
   formatDateForAPI,
-  getUpcomingSundays,
-  getRelativeSundayLabel,
-  isToday
+  getUpcomingDays,
+  getRelativeDayLabel,
+  isToday,
+  collectionDayToNumber
 } from '../utils/sundayHelpers';
 import * as XLSX from 'xlsx';
 
 function SundayDashboard({ navigateTo }) {
-  const [selectedSunday, setSelectedSunday] = useState(formatDateForAPI(getThisSunday()));
+  const [collectionDay, setCollectionDay] = useState('Sunday'); // Sunday or Thursday
+  const dayOfWeek = collectionDayToNumber(collectionDay);
+  const [selectedSunday, setSelectedSunday] = useState(formatDateForAPI(getThisDay(0)));
   const [sundayData, setSundayData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+
+  // When toggle changes, reset date to this occurrence of that day
+  const handleDayToggle = (day) => {
+    setCollectionDay(day);
+    const num = day === 'Thursday' ? 4 : 0;
+    setSelectedSunday(formatDateForAPI(getThisDay(num)));
+  };
 
   useEffect(() => {
     fetchSundayData();
@@ -26,8 +36,8 @@ function SundayDashboard({ navigateTo }) {
   const fetchSundayData = async () => {
     setLoading(true);
     try {
-      // Fetch data for selected Sunday
-      const response = await fetch(`${API_URL}/sunday-data?date=${selectedSunday}`);
+      // Fetch data for selected day
+      const response = await fetch(`${API_URL}/sunday-data?date=${selectedSunday}&collection_day=${collectionDay}`);
       const data = await response.json();
       setSundayData(data);
     } catch (error) {
@@ -39,8 +49,8 @@ function SundayDashboard({ navigateTo }) {
 
   const handleDateChange = (e) => {
     const date = new Date(e.target.value);
-    if (date.getDay() !== 0) {
-      alert('Please select a Sunday!');
+    if (date.getDay() !== dayOfWeek) {
+      alert(`Please select a ${collectionDay}!`);
       return;
     }
     setSelectedSunday(e.target.value);
@@ -49,24 +59,24 @@ function SundayDashboard({ navigateTo }) {
   const navigateToSunday = (direction) => {
     const currentDate = new Date(selectedSunday);
     if (direction === 'prev') {
-      const prevSunday = getPreviousSunday(currentDate);
-      setSelectedSunday(formatDateForAPI(prevSunday));
+      const prev = getPreviousDay(currentDate, dayOfWeek);
+      setSelectedSunday(formatDateForAPI(prev));
     } else {
-      const nextSunday = getNextSunday(currentDate);
-      setSelectedSunday(formatDateForAPI(nextSunday));
+      const next = getNextDay(currentDate, dayOfWeek);
+      setSelectedSunday(formatDateForAPI(next));
     }
   };
 
   const jumpToSunday = (type) => {
-    let targetSunday;
+    let target;
     if (type === 'last') {
-      targetSunday = getLastSunday();
+      target = getLastDay(dayOfWeek);
     } else if (type === 'this') {
-      targetSunday = getThisSunday();
+      target = getThisDay(dayOfWeek);
     } else if (type === 'next') {
-      targetSunday = getNextSunday(new Date());
+      target = getNextDay(new Date(), dayOfWeek);
     }
-    setSelectedSunday(formatDateForAPI(targetSunday));
+    setSelectedSunday(formatDateForAPI(target));
   };
 
   const downloadTXT = () => {
@@ -166,7 +176,7 @@ function SundayDashboard({ navigateTo }) {
   };
 
   const sendWhatsAppReminder = (customer) => {
-    const message = `Reminder: Payment Due\n\nHello ${customer.name},\n\nYour weekly payment of ₹${customer.weeklyAmount.toLocaleString('en-IN')} is due this Sunday (${formatSundayDisplay(selectedSunday)}).\n\nWeek ${customer.weekNumber}/${customer.totalWeeks}\nRemaining Balance: ₹${customer.balance.toLocaleString('en-IN')}\n\nThank you!`;
+    const message = `Reminder: Payment Due\n\nHello ${customer.name},\n\nYour weekly payment of ₹${customer.weeklyAmount.toLocaleString('en-IN')} is due this ${collectionDay} (${formatSundayDisplay(selectedSunday)}).\n\nWeek ${customer.weekNumber}/${customer.totalWeeks}\nRemaining Balance: ₹${customer.balance.toLocaleString('en-IN')}\n\nThank you!`;
 
     const phoneNumber = customer.phone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/91${phoneNumber}?text=${encodeURIComponent(message)}`;
@@ -183,7 +193,7 @@ function SundayDashboard({ navigateTo }) {
     return `₹${amount.toLocaleString('en-IN')}`;
   };
 
-  const upcomingSundays = getUpcomingSundays(4);
+  const upcomingSundays = getUpcomingDays(4, dayOfWeek);
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', maxWidth: '100vw', overflowX: 'hidden' }}>
@@ -313,7 +323,7 @@ function SundayDashboard({ navigateTo }) {
             >
               ☰
             </button>
-            <h2 style={{ margin: 0, color: 'white', fontSize: '18px', fontWeight: 700 }}>Sunday Collections</h2>
+            <h2 style={{ margin: 0, color: 'white', fontSize: '18px', fontWeight: 700 }}>{collectionDay} Collections</h2>
           </div>
 
           <button
@@ -337,7 +347,33 @@ function SundayDashboard({ navigateTo }) {
         </div>
 
         <div style={{ padding: '16px' }}>
-          {/* Sunday Selector */}
+          {/* Day Toggle */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+            {['Sunday', 'Thursday'].map(day => (
+              <button
+                key={day}
+                onClick={() => handleDayToggle(day)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  background: collectionDay === day
+                    ? (day === 'Sunday' ? '#3b82f6' : '#8b5cf6')
+                    : 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                  border: collectionDay === day ? '2px solid white' : '2px solid transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+
+          {/* Day Selector */}
           <div style={{
             background: 'white',
             borderRadius: '12px',
@@ -346,7 +382,7 @@ function SundayDashboard({ navigateTo }) {
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
           }}>
             <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
-              Select Sunday
+              Select {collectionDay}
             </h3>
 
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
@@ -362,13 +398,13 @@ function SundayDashboard({ navigateTo }) {
                   fontSize: '14px'
                 }}
               >
-                Last Sunday
+                Last {collectionDay}
               </button>
               <button
                 onClick={() => jumpToSunday('this')}
                 style={{
                   padding: '10px 16px',
-                  background: '#3b82f6',
+                  background: collectionDay === 'Thursday' ? '#8b5cf6' : '#3b82f6',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -377,7 +413,7 @@ function SundayDashboard({ navigateTo }) {
                   fontSize: '14px'
                 }}
               >
-                This Sunday
+                This {collectionDay}
               </button>
               <button
                 onClick={() => jumpToSunday('next')}
@@ -391,7 +427,7 @@ function SundayDashboard({ navigateTo }) {
                   fontSize: '14px'
                 }}
               >
-                Next Sunday
+                Next {collectionDay}
               </button>
             </div>
 
@@ -444,7 +480,7 @@ function SundayDashboard({ navigateTo }) {
             </div>
 
             <div style={{ marginTop: '12px', fontSize: '14px', color: '#6b7280', textAlign: 'center' }}>
-              {getRelativeSundayLabel(selectedSunday)}
+              {getRelativeDayLabel(selectedSunday, dayOfWeek)}
             </div>
           </div>
 

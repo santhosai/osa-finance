@@ -9,6 +9,7 @@ const fetcher = (url) => fetch(url).then(res => res.json());
 function WeeklyFinanceView({ navigateTo }) {
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState(null);
+  const [collectionDay, setCollectionDay] = useState('Sunday'); // Sunday or Thursday toggle
 
   // Fetch all customers with loans
   const { data: allCustomers = [], error, isLoading, mutate } = useSWR(
@@ -22,17 +23,18 @@ function WeeklyFinanceView({ navigateTo }) {
   );
 
   // Show Weekly type loans + old loans without type (old loans default to Weekly)
+  // Filtered by collection day toggle
   const weeklyLoans = useMemo(() => {
     const loans = [];
     allCustomers.forEach(customer => {
       if (customer.loans && customer.loans.length > 0) {
         customer.loans.forEach(loan => {
-          // Show Weekly loans OR old loans without loan_type (default to Weekly)
-          // This ensures old loans don't appear in Monthly view
           const isWeekly = !loan.loan_type || loan.loan_type === 'Weekly';
           const hasBalance = loan.balance > 0;
+          const loanCollectionDay = loan.collection_day || 'Sunday';
+          const matchesDay = loanCollectionDay === collectionDay;
 
-          if (isWeekly && hasBalance) {
+          if (isWeekly && hasBalance && matchesDay) {
             loans.push({
               ...loan,
               customer_name: customer.name,
@@ -44,7 +46,7 @@ function WeeklyFinanceView({ navigateTo }) {
       }
     });
     return loans.sort((a, b) => a.customer_name.localeCompare(b.customer_name));
-  }, [allCustomers]);
+  }, [allCustomers, collectionDay]);
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -199,6 +201,32 @@ function WeeklyFinanceView({ navigateTo }) {
       </div>
 
       <div style={{ padding: '16px' }}>
+        {/* Day Toggle */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+          {['Sunday', 'Thursday'].map(day => (
+            <button
+              key={day}
+              onClick={() => setCollectionDay(day)}
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 700,
+                background: collectionDay === day
+                  ? (day === 'Sunday' ? '#3b82f6' : '#8b5cf6')
+                  : 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: collectionDay === day ? '2px solid white' : '2px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {day}
+            </button>
+          ))}
+        </div>
+
         <div style={{
           background: 'white',
           padding: '20px',
@@ -215,7 +243,7 @@ function WeeklyFinanceView({ navigateTo }) {
             gap: '10px'
           }}>
             <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>
-              📅 Weekly Finance ({weeklyLoans.length})
+              📅 {collectionDay} Finance ({weeklyLoans.length})
             </h3>
             <button
               onClick={() => setShowAddLoanModal(true)}

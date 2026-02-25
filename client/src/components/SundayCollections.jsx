@@ -3,7 +3,8 @@ import AddPaymentModal from './AddPaymentModal';
 import { API_URL } from '../config';
 
 function SundayCollections({ navigateTo }) {
-  const [selectedSunday, setSelectedSunday] = useState(getNextSunday());
+  const [collectionDay, setCollectionDay] = useState('Sunday'); // Sunday or Thursday
+  const [selectedSunday, setSelectedSunday] = useState(getNextCollectionDay('Sunday'));
   const [sundayCustomers, setSundayCustomers] = useState([]);
   const [loadingSundayCustomers, setLoadingSundayCustomers] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -12,29 +13,37 @@ function SundayCollections({ navigateTo }) {
   const customersPerPage = 20;
   const [dateError, setDateError] = useState('');
 
-  // Helper function to get next Sunday
-  function getNextSunday() {
+  // Helper function to get next occurrence of a day
+  function getNextCollectionDay(day = 'Sunday') {
     const today = new Date();
     const dayOfWeek = today.getDay();
-    const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-    const nextSunday = new Date(today);
-    nextSunday.setDate(today.getDate() + daysUntilSunday);
-    // Use local timezone to avoid date shifting
-    const year = nextSunday.getFullYear();
-    const month = String(nextSunday.getMonth() + 1).padStart(2, '0');
-    const day = String(nextSunday.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const targetDay = day === 'Thursday' ? 4 : 0;
+    let daysUntil = targetDay - dayOfWeek;
+    if (daysUntil < 0) daysUntil += 7;
+    const nextDay = new Date(today);
+    nextDay.setDate(today.getDate() + daysUntil);
+    const year = nextDay.getFullYear();
+    const month = String(nextDay.getMonth() + 1).padStart(2, '0');
+    const d = String(nextDay.getDate()).padStart(2, '0');
+    return `${year}-${month}-${d}`;
   }
+
+  // When toggle changes, reset date to next occurrence of that day
+  const handleDayToggle = (day) => {
+    setCollectionDay(day);
+    setSelectedSunday(getNextCollectionDay(day));
+  };
 
   useEffect(() => {
     fetchSundayCustomers();
-  }, [selectedSunday]);
+  }, [selectedSunday, collectionDay]);
 
   const fetchSundayCustomers = async () => {
-    // Validate that selected date is a Sunday
+    // Validate that selected date matches the collection day
     const selectedDate = new Date(selectedSunday + 'T00:00:00');
-    if (selectedDate.getDay() !== 0) {
-      setDateError('⚠️ Please select a Sunday. Collections are only on Sundays.');
+    const expectedDayNum = collectionDay === 'Thursday' ? 4 : 0;
+    if (selectedDate.getDay() !== expectedDayNum) {
+      setDateError(`⚠️ Please select a ${collectionDay}. Collections are only on ${collectionDay}s.`);
       setSundayCustomers([]);
       return;
     }
@@ -51,11 +60,13 @@ function SundayCollections({ navigateTo }) {
       allCustomers.forEach(customer => {
         if (customer.loans && customer.loans.length > 0) {
           customer.loans.forEach(loan => {
-            // Only show Weekly loans with balance > 0
+            // Only show Weekly loans with balance > 0, matching collection day
             const isWeekly = !loan.loan_type || loan.loan_type === 'Weekly';
             const hasBalance = loan.balance > 0;
+            const loanCollectionDay = loan.collection_day || 'Sunday';
+            const matchesDay = loanCollectionDay === collectionDay;
 
-            if (isWeekly && hasBalance) {
+            if (isWeekly && hasBalance && matchesDay) {
               const promise = (async () => {
                 try {
                   const loanResponse = await fetch(`${API_URL}/loans/${loan.loan_id}`);
@@ -148,7 +159,7 @@ function SundayCollections({ navigateTo }) {
     const url = URL.createObjectURL(blob);
 
     link.setAttribute('href', url);
-    link.setAttribute('download', `Sunday_Collection_${selectedSunday}.csv`);
+    link.setAttribute('download', `${collectionDay}_Collection_${selectedSunday}.csv`);
     link.style.visibility = 'hidden';
 
     document.body.appendChild(link);
@@ -193,7 +204,7 @@ function SundayCollections({ navigateTo }) {
         >
           <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
         </svg>
-        <h2>Sunday Collections</h2>
+        <h2>{collectionDay} Collections</h2>
         <svg
           className="nav-icon"
           fill="white"
@@ -206,9 +217,35 @@ function SundayCollections({ navigateTo }) {
       </div>
 
       <div style={{ padding: '16px' }}>
+        {/* Day Toggle */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+          {['Sunday', 'Thursday'].map(day => (
+            <button
+              key={day}
+              onClick={() => handleDayToggle(day)}
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 700,
+                background: collectionDay === day
+                  ? (day === 'Sunday' ? '#3b82f6' : '#8b5cf6')
+                  : '#e5e7eb',
+                color: collectionDay === day ? 'white' : '#374151',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {day}
+            </button>
+          ))}
+        </div>
+
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#1f2937' }}>
-            Select Sunday
+            Select {collectionDay}
           </label>
           <input
             type="date"
