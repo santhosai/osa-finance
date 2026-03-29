@@ -60,6 +60,11 @@ function Dashboard({ navigateTo }) {
   const [showCharts, setShowCharts] = useState(false); // Toggle charts visibility
   const [loansGivenDate, setLoansGivenDate] = useState(new Date().toISOString().split('T')[0]); // For loans given tracker
   const [showLoansGivenModal, setShowLoansGivenModal] = useState(false); // For loans given modal
+  const [loansGivenTab, setLoansGivenTab] = useState('daily'); // 'daily' or 'monthly'
+  const [loansGivenMonth, setLoansGivenMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [monthlyLoansData, setMonthlyLoansData] = useState({});
+  const [monthlyLoansLoading, setMonthlyLoansLoading] = useState(false);
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState(null);
   const [printData, setPrintData] = useState(null); // For print receipt
   const [monthlyPaymentConfirm, setMonthlyPaymentConfirm] = useState(null); // For Monthly Finance payment confirmation
   const [monthlyUndoConfirm, setMonthlyUndoConfirm] = useState(null); // For Monthly Finance undo confirmation
@@ -133,6 +138,35 @@ function Dashboard({ navigateTo }) {
       dedupingInterval: 2000,
     }
   );
+
+  // Fetch all loans for a full month (monthly calendar view)
+  const fetchMonthlyLoans = useCallback(async (yearMonth) => {
+    setMonthlyLoansLoading(true);
+    try {
+      const [year, month] = yearMonth.split('-').map(Number);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const results = {};
+      await Promise.all(
+        Array.from({ length: daysInMonth }, (_, i) => {
+          const dateStr = `${yearMonth}-${String(i + 1).padStart(2, '0')}`;
+          return fetch(`${API_URL}/loans-by-date?date=${dateStr}`)
+            .then(r => r.json())
+            .then(data => { results[dateStr] = data; })
+            .catch(() => { results[dateStr] = { loans: [], total: 0, count: 0 }; });
+        })
+      );
+      setMonthlyLoansData(results);
+    } catch (e) {
+      console.error('Monthly loans fetch error:', e);
+    }
+    setMonthlyLoansLoading(false);
+  }, [API_URL]);
+
+  useEffect(() => {
+    if (showLoansGivenModal && loansGivenTab === 'monthly') {
+      fetchMonthlyLoans(loansGivenMonth);
+    }
+  }, [showLoansGivenModal, loansGivenTab, loansGivenMonth, fetchMonthlyLoans]);
 
   // Fetch Pending UPI Payments
   const { data: pendingPayments = [], mutate: mutatePendingPayments } = useSWR(
@@ -982,7 +1016,9 @@ function Dashboard({ navigateTo }) {
       const name = (item.customer_name || item.name || item.customerName || item.customer?.name || 'Customer').trim();
       const amount = item.loan_amount || item.loanAmount || 0;
       console.log(`  Name: "${name}", Amount: ${amount}`);
-      receipt += `${i + 1}.${name.substring(0, 18)}\n`;
+      const loanType = item.loan_type || '';
+      const typeShort = loanType === 'Monthly Finance' ? 'Monthly' : loanType || 'Loan';
+      receipt += `${i + 1}.${name.substring(0, 16)} [${typeShort}]\n`;
       receipt += `  Rs.${amount.toLocaleString('en-IN')}\n`;
     });
 
@@ -1602,6 +1638,32 @@ function Dashboard({ navigateTo }) {
       </div>
     );
   }
+
+  // Monthly calendar computed values (inside Dashboard, correct scope)
+  const calYear = parseInt(loansGivenMonth.split('-')[0]);
+  const calMonth = parseInt(loansGivenMonth.split('-')[1]);
+  const calMonthLabel = new Date(calYear, calMonth - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const calFirstDayOfWeek = (new Date(calYear, calMonth - 1, 1).getDay() + 6) % 7;
+  const calDaysInMonth = new Date(calYear, calMonth, 0).getDate();
+  const calCells = [];
+  for (let i = 0; i < calFirstDayOfWeek; i++) calCells.push(null);
+  for (let d = 1; d <= calDaysInMonth; d++) calCells.push(d);
+  const calMonthTotal = Object.values(monthlyLoansData).reduce((s, v) => s + (v.total || 0), 0);
+  const calMonthCount = Object.values(monthlyLoansData).reduce((s, v) => s + (v.count || 0), 0);
+  const calAllLoans = Object.entries(monthlyLoansData)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .flatMap(([date, v]) => (v.loans || []).map(l => ({ ...l, _date: date })));
+  // Breakdown by loan type
+  const calWeeklyLoans = calAllLoans.filter(l => l.loan_type === 'Weekly');
+  const calMonthlyFinLoans = calAllLoans.filter(l => l.loan_type === 'Monthly Finance' || l.loan_type === 'Monthly');
+  const calVaddiLoans = calAllLoans.filter(l => l.loan_type === 'Vaddi');
+  const calWeeklyTotal = calWeeklyLoans.reduce((s, l) => s + (l.loan_amount || 0), 0);
+  const calMonthlyFinTotal = calMonthlyFinLoans.reduce((s, l) => s + (l.loan_amount || 0), 0);
+  const calVaddiTotal = calVaddiLoans.reduce((s, l) => s + (l.loan_amount || 0), 0);
+  const calSelectedLoans = calendarSelectedDate
+    ? (monthlyLoansData[calendarSelectedDate] || { loans: [], total: 0, count: 0 })
+    : null;
+  const calToday = new Date().toISOString().split('T')[0];
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%)', maxWidth: '100vw', overflowX: 'hidden' }}>
@@ -5524,7 +5586,9 @@ function Dashboard({ navigateTo }) {
               padding: '0',
               maxWidth: '450px',
               width: '100%',
-              maxHeight: '80vh',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
               overflow: 'hidden',
               boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
             }}
@@ -5537,7 +5601,8 @@ function Dashboard({ navigateTo }) {
               color: 'white',
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              flexShrink: 0
             }}>
               <div style={{ fontSize: '16px', fontWeight: 700 }}>💸 Loans Given</div>
               <button
@@ -5558,8 +5623,16 @@ function Dashboard({ navigateTo }) {
               >×</button>
             </div>
 
+            {/* Tab Toggle */}
+            <div style={{ display: 'flex', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+              <button onClick={() => setLoansGivenTab('daily')} style={{ flex: 1, padding: '10px', border: 'none', borderBottom: loansGivenTab === 'daily' ? '3px solid #059669' : '3px solid transparent', background: loansGivenTab === 'daily' ? 'white' : 'transparent', color: loansGivenTab === 'daily' ? '#059669' : '#64748b', fontWeight: loansGivenTab === 'daily' ? 700 : 500, fontSize: '13px', cursor: 'pointer' }}>📅 Daily</button>
+              <button onClick={() => setLoansGivenTab('monthly')} style={{ flex: 1, padding: '10px', border: 'none', borderBottom: loansGivenTab === 'monthly' ? '3px solid #059669' : '3px solid transparent', background: loansGivenTab === 'monthly' ? 'white' : 'transparent', color: loansGivenTab === 'monthly' ? '#059669' : '#64748b', fontWeight: loansGivenTab === 'monthly' ? 700 : 500, fontSize: '13px', cursor: 'pointer' }}>📆 Monthly</button>
+            </div>
+
+            {/* ── DAILY TAB ── */}
+            {loansGivenTab === 'daily' && <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 }}>
             {/* Date Picker */}
-            <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
               <input
                 type="date"
                 value={loansGivenDate}
@@ -5863,6 +5936,170 @@ function Dashboard({ navigateTo }) {
                 </div>
               )}
             </div>
+            </div>}
+
+            {/* ── MONTHLY TAB ── */}
+            {loansGivenTab === 'monthly' && <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 }}>
+              {/* Month Navigator */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                <button
+                  onClick={() => { const d = new Date(calYear, calMonth - 2, 1); setLoansGivenMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); setCalendarSelectedDate(null); }}
+                  style={{ background: 'none', border: '1px solid #cbd5e1', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', fontSize: '18px' }}
+                >‹</button>
+                <div style={{ fontWeight: 700, fontSize: '15px', color: '#1e293b' }}>{calMonthLabel}</div>
+                <button
+                  onClick={() => { const d = new Date(calYear, calMonth, 1); setLoansGivenMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); setCalendarSelectedDate(null); }}
+                  style={{ background: 'none', border: '1px solid #cbd5e1', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', fontSize: '18px' }}
+                >›</button>
+              </div>
+
+              <div style={{ overflowY: 'auto', flex: 1, padding: '12px 14px' }}>
+                {monthlyLoansLoading ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                    <div style={{ fontSize: '28px', marginBottom: '8px' }}>⏳</div>
+                    <div style={{ fontSize: '13px' }}>Loading {calMonthLabel}...</div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Day headers */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
+                      {['M','T','W','T','F','S','S'].map((d, i) => (
+                        <div key={i} style={{ textAlign: 'center', fontSize: '11px', fontWeight: 700, color: i >= 5 ? '#dc2626' : '#64748b', padding: '3px 0' }}>{d}</div>
+                      ))}
+                    </div>
+                    {/* Day cells */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
+                      {calCells.map((day, idx) => {
+                        if (!day) return <div key={idx} />;
+                        const dateStr = `${loansGivenMonth}-${String(day).padStart(2,'0')}`;
+                        const dayData = monthlyLoansData[dateStr];
+                        const hasLoans = dayData && dayData.count > 0;
+                        const isSelected = calendarSelectedDate === dateStr;
+                        const isToday = dateStr === calToday;
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => hasLoans && setCalendarSelectedDate(isSelected ? null : dateStr)}
+                            style={{ textAlign: 'center', padding: '4px 2px', borderRadius: '8px', cursor: hasLoans ? 'pointer' : 'default', background: isSelected ? '#059669' : hasLoans ? '#ecfdf5' : 'transparent', border: isToday ? '2px solid #f59e0b' : isSelected ? '2px solid #059669' : '2px solid transparent' }}
+                          >
+                            <div style={{ fontSize: '12px', fontWeight: isToday ? 700 : 500, color: isSelected ? 'white' : isToday ? '#d97706' : '#1e293b' }}>{day}</div>
+                            {hasLoans && (
+                              <>
+                                <div style={{ fontSize: '9px', fontWeight: 700, color: isSelected ? 'white' : '#059669' }}>{dayData.count}</div>
+                                <div style={{ fontSize: '8px', color: isSelected ? '#d1fae5' : '#047857', whiteSpace: 'nowrap' }}>₹{(dayData.total/1000).toFixed(0)}k</div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Selected date loan list */}
+                    {calendarSelectedDate && calSelectedLoans && (
+                      <div style={{ marginTop: '10px', background: '#f0fdf4', borderRadius: '10px', padding: '10px 12px', border: '1px solid #bbf7d0' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#065f46', marginBottom: '8px' }}>
+                          {new Date(calendarSelectedDate + 'T00:00:00').toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })} — {calSelectedLoans.count} loans • {formatCurrency(calSelectedLoans.total)}
+                        </div>
+                        {(calSelectedLoans.loans || []).map((loan, i) => (
+                          <div key={i} onClick={() => { setShowLoansGivenModal(false); if (loan.loan_type === 'Vaddi') navigateTo('vaddi-list'); else navigateTo('loan-details', loan.id); }}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', background: 'white', borderRadius: '7px', marginBottom: '5px', cursor: 'pointer', border: '1px solid #d1fae5' }}>
+                            <div>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>{loan.customer_name}</div>
+                              <div style={{ fontSize: '10px', color: '#64748b' }}>{loan.loan_type}{loan.loan_name ? ` • ${loan.loan_name}` : ''}</div>
+                            </div>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#059669' }}>{formatCurrency(loan.loan_amount)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Monthly Summary + Download */}
+                    {/* Loan type breakdown */}
+                    {calAllLoans.length > 0 && (
+                      <div style={{ marginTop: '10px', background: '#f8fafc', borderRadius: '10px', padding: '8px 12px', border: '1px solid #e2e8f0' }}>
+                        {calWeeklyLoans.length > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #e2e8f0' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#1e40af' }}>📅 Weekly</span>
+                            <span style={{ fontSize: '12px', color: '#64748b' }}>({calWeeklyLoans.length} loans)</span>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#1e40af' }}>{formatCurrency(calWeeklyTotal)}</span>
+                          </div>
+                        )}
+                        {calMonthlyFinLoans.length > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: calVaddiLoans.length > 0 ? '1px solid #e2e8f0' : 'none' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#7c3aed' }}>💰 Monthly</span>
+                            <span style={{ fontSize: '12px', color: '#64748b' }}>({calMonthlyFinLoans.length} loans)</span>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#7c3aed' }}>{formatCurrency(calMonthlyFinTotal)}</span>
+                          </div>
+                        )}
+                        {calVaddiLoans.length > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#b45309' }}>🏦 Vaddi</span>
+                            <span style={{ fontSize: '12px', color: '#64748b' }}>({calVaddiLoans.length} loans)</span>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#b45309' }}>{formatCurrency(calVaddiTotal)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ecfdf5', borderRadius: '10px', padding: '10px 14px' }}>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#065f46' }}>Month Total</div>
+                        <div style={{ fontSize: '17px', fontWeight: 700, color: '#047857' }}>{formatCurrency(calMonthTotal)}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '10px', color: '#065f46' }}>Loans</div>
+                        <div style={{ fontSize: '17px', fontWeight: 700, color: '#047857' }}>{calMonthCount}</div>
+                      </div>
+                      {calAllLoans.length > 0 && (
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            onClick={() => {
+                              const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                              const m = 15, pw = 210;
+                              doc.setFontSize(15); doc.setFont('helvetica', 'bold');
+                              doc.text('OM SAI MURUGAN FINANCE', pw/2, m+5, { align: 'center' });
+                              doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+                              doc.text(`Loans Given - ${calMonthLabel}`, pw/2, m+13, { align: 'center' });
+                              let y = m+22;
+                              doc.setFillColor(30,41,59); doc.rect(m, y, pw-m*2, 8, 'F');
+                              doc.setTextColor(255,255,255); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+                              doc.text('#', m+4, y+5.5); doc.text('Date', m+12, y+5.5); doc.text('Customer', m+38, y+5.5); doc.text('Type', m+105, y+5.5); doc.text('Amount', m+168, y+5.5, { align:'right' });
+                              y+=8; doc.setTextColor(0,0,0); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+                              calAllLoans.forEach((loan, idx) => {
+                                if (y > 270) { doc.addPage(); y = m; }
+                                if (idx%2===0) { doc.setFillColor(248,250,252); doc.rect(m, y, pw-m*2, 7, 'F'); }
+                                doc.text(String(idx+1), m+4, y+5);
+                                doc.text(new Date(loan._date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'}), m+12, y+5);
+                                doc.text((loan.customer_name||'').substring(0,30), m+38, y+5);
+                                doc.text((loan.loan_type||'').substring(0,18), m+105, y+5);
+                                doc.text(`Rs.${(loan.loan_amount||0).toLocaleString('en-IN')}`, m+168, y+5, { align:'right' });
+                                y+=7;
+                              });
+                              y+=4; doc.setFillColor(236,253,245); doc.rect(m, y, pw-m*2, 10, 'F');
+                              doc.setFontSize(9.5); doc.setFont('helvetica','bold');
+                              doc.text(`Total: Rs.${calMonthTotal.toLocaleString('en-IN')}  |  Loans: ${calMonthCount}`, pw/2, y+7, { align:'center' });
+                              y+=16; doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(120,120,120);
+                              doc.text('Ph: 8667510724', pw/2, y, { align:'center' });
+                              doc.save(`LoansGiven_${loansGivenMonth}.pdf`);
+                            }}
+                            style={{ padding: '7px 11px', background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                          >📥 PDF</button>
+                          <button
+                            onClick={() => {
+                              const printWindow = window.open('', '_blank');
+                              const rows = calAllLoans.map((loan, idx) => `<tr><td>${idx+1}</td><td>${new Date(loan._date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</td><td>${loan.customer_name||''}</td><td>${loan.loan_type||''}</td><td style="text-align:right">&#8377;${(loan.loan_amount||0).toLocaleString('en-IN')}</td></tr>`).join('');
+                              printWindow.document.write(`<!DOCTYPE html><html><head><title>Loans Given - ${calMonthLabel}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto}h2,h3{text-align:center;margin:4px 0}table{width:100%;border-collapse:collapse;margin:15px 0;font-size:13px}th{background:#1e293b;color:white;padding:8px;text-align:left}th:last-child{text-align:right}td{padding:7px 8px;border-bottom:1px solid #e2e8f0}tr:nth-child(even){background:#f8fafc}.total{font-size:16px;font-weight:bold;text-align:center;margin:15px 0;padding:12px;background:#ecfdf5;border-radius:8px}.footer{text-align:center;margin-top:15px;font-size:11px;color:#888}</style></head><body><h2>OM SAI MURUGAN FINANCE</h2><h3>Loans Given - ${calMonthLabel}</h3><table><thead><tr><th>#</th><th>Date</th><th>Customer</th><th>Type</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: &#8377;${calMonthTotal.toLocaleString('en-IN')} | Loans: ${calMonthCount}</div><div class="footer">Ph: 8667510724</div><script>window.onload=function(){window.print();window.onafterprint=function(){window.close()}}<\/script></body></html>`);
+                              printWindow.document.close();
+                            }}
+                            style={{ padding: '7px 11px', background: 'linear-gradient(135deg, #059669 0%, #047857 100%)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                          >🖨️ Print</button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>}
+
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import AddCustomerModal from './AddCustomerModal';
 import AddLoanModal from './AddLoanModal';
@@ -42,8 +42,25 @@ function Customers({ navigateTo }) {
     dedupingInterval: 2000,
   });
 
+  // Reset page when search or tab changes
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, activeTab]);
+
   // Use appropriate data based on active tab
-  const customers = activeTab === 'weekly' ? weeklyCustomers : monthlyCustomers;
+  // Weekly: API already filters by searchTerm; also apply client-side for safety
+  // Monthly: API has no search param, so filter client-side
+  const lowerSearch = searchTerm.toLowerCase().trim();
+  const weeklyFiltered = lowerSearch
+    ? weeklyCustomers.filter(c =>
+        (c.name || '').toLowerCase().includes(lowerSearch) ||
+        (c.phone || '').includes(searchTerm.trim()))
+    : weeklyCustomers;
+  const monthlyFiltered = lowerSearch
+    ? monthlyCustomers.filter(c =>
+        (c.name || '').toLowerCase().includes(lowerSearch) ||
+        (c.phone || '').includes(searchTerm.trim()))
+    : monthlyCustomers;
+
+  const customers = activeTab === 'weekly' ? weeklyFiltered : monthlyFiltered;
   const isLoading = activeTab === 'weekly' ? weeklyLoading : monthlyLoading;
   const error = activeTab === 'weekly' ? weeklyError : monthlyError;
   const mutate = activeTab === 'weekly' ? mutateWeekly : mutateMonthly;
