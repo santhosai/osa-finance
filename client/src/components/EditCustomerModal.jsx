@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { API_URL } from '../config';
 
-function EditCustomerModal({ customer, onClose, onSuccess }) {
+function EditCustomerModal({ customer, activeTab, onClose, onSuccess }) {
   const [name, setName] = useState(customer.name || '');
   const [phone, setPhone] = useState(customer.phone || '');
 
@@ -21,15 +21,30 @@ function EditCustomerModal({ customer, onClose, onSuccess }) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/customers/${customer.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+      let url, body;
+
+      if (activeTab === 'monthly') {
+        // Monthly Finance: update name/phone only — keep all financial data unchanged
+        url = `${API_URL}/monthly-finance/customers/${customer.id}`;
+        body = {
           name: name.trim(),
-          phone: cleanPhone
-        })
+          phone: cleanPhone,
+          loan_amount: customer.loan_amount,
+          monthly_amount: customer.monthly_amount,
+          total_months: customer.total_months,
+          start_date: customer.start_date,
+          loan_given_date: customer.loan_given_date || customer.start_date,
+        };
+      } else {
+        // Weekly: update name and phone only
+        url = `${API_URL}/customers/${customer.id}`;
+        body = { name: name.trim(), phone: cleanPhone };
+      }
+
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       });
 
       if (response.ok) {

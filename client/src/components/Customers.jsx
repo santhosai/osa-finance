@@ -584,6 +584,7 @@ function Customers({ navigateTo }) {
       {showEditModal && customerToEdit && (
         <EditCustomerModal
           customer={customerToEdit}
+          activeTab={activeTab}
           onClose={() => {
             setShowEditModal(false);
             setCustomerToEdit(null);
