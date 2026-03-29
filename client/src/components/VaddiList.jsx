@@ -439,155 +439,249 @@ const VaddiList = ({ navigateTo }) => {
     });
   };
 
-  // Generate Acknowledgment PDF (Tamil)
-  const generateAcknowledgmentPDF = (entry, shouldPrint = false) => {
+  // Generate English Acknowledgment PDF
+  const generateEnglishAcknowledgmentPDF = (entry) => {
     const doc = new jsPDF();
     const loanDate = entry.loan_date || new Date().toISOString().split('T')[0];
-    const formattedDate = new Date(loanDate).toLocaleDateString('ta-IN', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric'
+    const formattedDate = new Date(loanDate + 'T00:00:00').toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'long', year: 'numeric'
+    });
+    const todayFormatted = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'long', year: 'numeric'
     });
 
-    // Header
+    // ── Header ──
     doc.setFillColor(30, 58, 138);
-    doc.rect(0, 0, 210, 40, 'F');
+    doc.rect(0, 0, 210, 42, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
+    doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text('LOAN ACKNOWLEDGMENT', 105, 15, { align: 'center' });
-    doc.setFontSize(14);
+    doc.text('LOAN ACKNOWLEDGMENT', 105, 16, { align: 'center' });
+    doc.setFontSize(13);
     doc.text('OM SAI MURUGAN FINANCE', 105, 28, { align: 'center' });
     doc.setFontSize(10);
-    doc.text('Kadan Opputhal Pathiram', 105, 36, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.text('Loan Agreement Document', 105, 37, { align: 'center' });
 
-    // Body
     doc.setTextColor(0, 0, 0);
+    let y = 55;
+
+    // ── Date ──
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
+    doc.text(`Date: ${formattedDate}`, 20, y);
+    y += 14;
 
-    let yPos = 55;
-
-    // Date
-    doc.text(`Date / Theti: ${formattedDate}`, 20, yPos);
-    yPos += 15;
-
-    // Main content (Tamil transliteration + English)
+    // ── Main Statement ──
     doc.setFontSize(10);
-    const mainText = `Naan, ${entry.name}, Santhosh Kumar (OM SAI MURUGAN FINANCE) avarkalitam irunthu kadan petrathai oppukolkiren.`;
-    const mainTextEn = `I, ${entry.name}, hereby acknowledge receiving a loan from Santhosh Kumar (OM SAI MURUGAN FINANCE).`;
-    const splitMain = doc.splitTextToSize(mainText, 170);
-    const splitMainEn = doc.splitTextToSize(mainTextEn, 170);
-    doc.text(splitMain, 20, yPos);
-    yPos += splitMain.length * 6;
-    doc.setTextColor(100, 100, 100);
-    doc.setFontSize(9);
-    doc.text(splitMainEn, 20, yPos);
-    doc.setTextColor(0, 0, 0);
-    yPos += splitMainEn.length * 5 + 10;
+    const stmt = `I, ${entry.name}, hereby acknowledge receiving a loan from Santhosh Kumar (OM SAI MURUGAN FINANCE) and agree to repay as per the terms stated below.`;
+    const splitStmt = doc.splitTextToSize(stmt, 170);
+    doc.text(splitStmt, 20, y);
+    y += splitStmt.length * 6 + 10;
 
-    // Loan Details Box
+    // ── Loan Details Box ──
+    const boxHeight = 12 + (entry.principal_amount ? 8 : 0) + (entry.amount ? 8 : 0) + (entry.collateral_type ? 8 : 0) + 8;
     doc.setFillColor(240, 240, 250);
-    doc.rect(15, yPos - 5, 180, 45, 'F');
+    doc.rect(15, y - 5, 180, boxHeight + 10, 'F');
     doc.setDrawColor(102, 126, 234);
-    doc.rect(15, yPos - 5, 180, 45, 'S');
-
+    doc.rect(15, y - 5, 180, boxHeight + 10, 'S');
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('KADAN VIVARANGAL / LOAN DETAILS', 20, yPos + 5);
+    doc.text('LOAN DETAILS', 20, y + 5);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
+    let dy = y + 16;
+    if (entry.principal_amount) { doc.text(`Principal Amount   :  Rs. ${Number(entry.principal_amount).toLocaleString('en-IN')}/-`, 25, dy); dy += 8; }
+    if (entry.amount)           { doc.text(`Monthly Interest   :  Rs. ${Number(entry.amount).toLocaleString('en-IN')}/-`, 25, dy); dy += 8; }
+    if (entry.collateral_type)  { doc.text(`Collateral         :  ${entry.collateral_type}`, 25, dy); dy += 8; }
+    doc.text(`Interest Due Day   :  ${entry.day} of every month`, 25, dy);
+    y += boxHeight + 18;
 
-    if (entry.principal_amount) {
-      doc.text(`Asal Thogai / Principal Amount: Rs ${formatForThermal(entry.principal_amount)}/-`, 25, yPos + 18);
-    }
-    if (entry.amount) {
-      doc.text(`Vatti Thogai / Monthly Interest: Rs ${formatForThermal(entry.amount)}/-`, 25, yPos + 25);
-      yPos += 7;
-    }
-    if (entry.interest_rate) {
-      doc.text(`Vatti Viruppu / Interest Rate: ${entry.interest_rate}% per month`, 25, yPos + 25);
-      yPos += 7;
-    }
-    if (entry.collateral_type) {
-      doc.text(`Othaikkapatta Porulgal / Collateral: ${entry.collateral_type}`, 25, yPos + 25);
-      yPos += 7;
-    }
-    doc.text(`Vatti Seluthum Theti / Interest Due Day: ${entry.day} (Every Month)`, 25, yPos + 25);
-    yPos += 55;
-
-    // Terms
+    // ── Terms ──
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text('NIBANTHANAIKAL / TERMS:', 20, yPos);
+    doc.text('TERMS & CONDITIONS', 20, y);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    yPos += 10;
-
+    doc.setFontSize(9.5);
+    y += 10;
     const terms = [
-      '1. Ovvoru mathamum kurippitta thetiyil vatti seluthven / I will pay interest on the due date every month.',
-      '2. Vatti seluthath thavarinaal satta nadavadikaik edukkapadum / Legal action will be taken for non-payment.',
-      '3. Asal thogaiyai paraspara oppanthathin padi thirumbi seluthuven / I will repay principal as per agreement.',
-      '4. Intha opputhal pathiram en kadan kadamaikku saanraaga amaiyum / This acknowledgment is proof of my obligation.'
+      '1.  I will pay the interest amount on the due date every month without fail.',
+      '2.  Legal action will be taken if interest is not paid on time.',
+      '3.  I will repay the principal amount as per mutual agreement.',
+      '4.  This acknowledgment document is proof of my loan obligation.'
     ];
+    terms.forEach(t => {
+      const split = doc.splitTextToSize(t, 168);
+      doc.text(split, 22, y);
+      y += split.length * 5.5 + 3;
+    });
+    y += 6;
 
-    terms.forEach(term => {
-      const splitTerm = doc.splitTextToSize(term, 170);
-      doc.text(splitTerm, 25, yPos);
-      yPos += splitTerm.length * 5 + 3;
+    // ── Borrower Details Box ──
+    const bh = entry.aadhar_number ? 44 : 36;
+    doc.setFillColor(255, 250, 235);
+    doc.rect(15, y, 180, bh, 'F');
+    doc.setDrawColor(251, 191, 36);
+    doc.rect(15, y, 180, bh, 'S');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('BORROWER DETAILS', 20, y + 9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Name          :  ${entry.name}`, 25, y + 20);
+    doc.text(`Phone         :  ${entry.phone}`, 25, y + 29);
+    if (entry.aadhar_number) { doc.text(`Aadhar        :  ${entry.aadhar_number}`, 25, y + 38); }
+    y += bh + 14;
+
+    // ── Signatures ──
+    doc.line(20, y + 18, 85, y + 18);
+    doc.line(125, y + 18, 190, y + 18);
+    doc.setFontSize(9);
+    doc.text('Borrower Signature', 35, y + 25);
+    doc.text('Lender Signature', 142, y + 25);
+    y += 35;
+
+    // ── Aadhar Note ──
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text('* Please write your Aadhar number below your signature', 20, y);
+
+    // ── Footer ──
+    doc.setFontSize(8);
+    doc.setTextColor(160, 160, 160);
+    doc.text(`Generated on ${todayFormatted}  |  This is a legal document`, 105, 287, { align: 'center' });
+
+    doc.save(`Acknowledgment_English_${entry.name.replace(/\s+/g, '_')}_${loanDate}.pdf`);
+  };
+
+  // Generate Tamil Acknowledgment PDF (HTML → browser print/save)
+  const generateTamilAcknowledgmentPDF = (entry) => {
+    const loanDate = entry.loan_date || new Date().toISOString().split('T')[0];
+    const formattedDate = new Date(loanDate + 'T00:00:00').toLocaleDateString('ta-IN', {
+      day: 'numeric', month: 'long', year: 'numeric'
+    });
+    const todayFormatted = new Date().toLocaleDateString('ta-IN', {
+      day: 'numeric', month: 'long', year: 'numeric'
     });
 
-    yPos += 8;
+    const principalRow = entry.principal_amount
+      ? `<tr><td class="label">அசல் தொகை</td><td class="colon">:</td><td>ரூ. ${Number(entry.principal_amount).toLocaleString('en-IN')}/-</td></tr>` : '';
+    const interestAmtRow = entry.amount
+      ? `<tr><td class="label">மாத வட்டி தொகை</td><td class="colon">:</td><td>ரூ. ${Number(entry.amount).toLocaleString('en-IN')}/-</td></tr>` : '';
+    const interestRateRow = ''; // Removed as per requirement
+    const collateralRow = entry.collateral_type
+      ? `<tr><td class="label">ஈட்டு பொருள்</td><td class="colon">:</td><td>${entry.collateral_type}</td></tr>` : '';
+    const aadharRow = entry.aadhar_number
+      ? `<tr><td class="label">ஆதார் எண்</td><td class="colon">:</td><td>${entry.aadhar_number}</td></tr>` : '';
 
-    // Borrower Details
-    doc.setFillColor(255, 250, 240);
-    doc.rect(15, yPos, 180, 35, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('KADAN VAANGIYAVAR VIVARAM / BORROWER DETAILS:', 20, yPos + 8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Peyar / Name: ${entry.name}`, 25, yPos + 18);
-    doc.text(`Tholaipesi / Phone: ${entry.phone}`, 25, yPos + 28);
-    if (entry.aadhar_number) {
-      doc.text(`Aadhar: ${entry.aadhar_number}`, 120, yPos + 18);
+    const html = `<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8"/>
+  <title>கடன் ஒப்புதல் பத்திரம் - ${entry.name}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Noto Sans Tamil', sans-serif; font-size: 13px; color: #111; background: white; padding: 30px 35px; line-height: 1.7; }
+    .header { background: #1e3a8a; color: white; text-align: center; padding: 18px 20px; border-radius: 4px; margin-bottom: 24px; }
+    .header h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; letter-spacing: 1px; }
+    .header h2 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .header p  { font-size: 11px; opacity: 0.85; }
+    .date-line { font-size: 12px; margin-bottom: 16px; }
+    .stmt { font-size: 13px; margin-bottom: 20px; background: #f8fafc; border-left: 4px solid #1e3a8a; padding: 12px 14px; border-radius: 2px; }
+    .section-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; padding-bottom: 4px; border-bottom: 2px solid #1e3a8a; color: #1e3a8a; }
+    .box { border: 1.5px solid #c7d2fe; background: #eef2ff; border-radius: 6px; padding: 14px 18px; margin-bottom: 20px; }
+    .box table { width: 100%; border-collapse: collapse; }
+    .box table td { padding: 4px 6px; font-size: 12.5px; vertical-align: top; }
+    .box table td.label { font-weight: 600; width: 45%; color: #1e3a8a; }
+    .box table td.colon { width: 5%; text-align: center; }
+    .terms-box { margin-bottom: 20px; }
+    .terms-box ol { padding-left: 20px; }
+    .terms-box ol li { margin-bottom: 7px; font-size: 12.5px; }
+    .borrower-box { border: 1.5px solid #fbbf24; background: #fffbeb; border-radius: 6px; padding: 14px 18px; margin-bottom: 24px; }
+    .borrower-box table { width: 100%; border-collapse: collapse; }
+    .borrower-box table td { padding: 4px 6px; font-size: 12.5px; vertical-align: top; }
+    .borrower-box table td.label { font-weight: 600; width: 35%; color: #92400e; }
+    .borrower-box table td.colon { width: 5%; text-align: center; }
+    .sig-row { display: flex; justify-content: space-between; margin-top: 10px; margin-bottom: 8px; }
+    .sig-box { width: 45%; text-align: center; }
+    .sig-line { border-bottom: 1.5px solid #333; margin-bottom: 6px; height: 40px; }
+    .sig-label { font-size: 11.5px; font-weight: 600; }
+    .note { font-size: 10.5px; color: #666; margin-top: 10px; }
+    .footer { margin-top: 16px; text-align: center; font-size: 10px; color: #aaa; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    @media print {
+      body { padding: 15px 20px; }
+      @page { margin: 10mm; size: A4; }
     }
-    yPos += 45;
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>கடன் ஒப்புதல் பத்திரம்</h1>
+    <h2>ஓம் சாய் முருகன் பைனான்ஸ்</h2>
+    <p>கடன் ஒப்பந்த ஆவணம்</p>
+  </div>
 
-    // Signature Section
-    doc.line(20, yPos + 20, 80, yPos + 20);
-    doc.line(130, yPos + 20, 190, yPos + 20);
-    doc.setFontSize(9);
-    doc.text('Kadan Vaangiyavar Kaiyoppam', 22, yPos + 28);
-    doc.text('Borrower Signature', 30, yPos + 34);
-    doc.text('Kadan Koduppavar Kaiyoppam', 132, yPos + 28);
-    doc.text('Lender Signature', 145, yPos + 34);
+  <div class="date-line"><strong>தேதி:</strong> ${formattedDate}</div>
 
-    yPos += 42;
+  <div class="stmt">
+    நான், <strong>${entry.name}</strong>, சந்தோஷ் குமார் (<strong>ஓம் சாய் முருகன் பைனான்ஸ்</strong>) அவர்களிடம் இருந்து கடன் பெற்றதை ஒப்புக்கொண்டு, கீழே கூறிய நிபந்தனைகளின்படி திரும்ப செலுத்துவதற்கு உடன்படுகிறேன்.
+  </div>
 
-    // Aadhar note
-    doc.setFontSize(9);
-    doc.setTextColor(100, 100, 100);
-    doc.text('* Ungal Aadhar ennai kaiyoppathirkku keele ezhuthavum', 20, yPos);
-    doc.text('  (Please write your Aadhar number below your signature)', 20, yPos + 5);
+  <div class="box">
+    <div class="section-title">கடன் விவரங்கள்</div>
+    <table>
+      ${principalRow}
+      ${interestAmtRow}
+      ${interestRateRow}
+      ${collateralRow}
+      <tr><td class="label">வட்டி செலுத்தும் தேதி</td><td class="colon">:</td><td>ஒவ்வொரு மாதமும் ${entry.day}ம் தேதி</td></tr>
+    </table>
+  </div>
 
-    // Footer
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Generated on ${new Date().toLocaleDateString('en-IN')} | Ithu sattapoorvamana aavanam / This is a legal document`, 105, 285, { align: 'center' });
+  <div class="terms-box">
+    <div class="section-title">நிபந்தனைகள்</div>
+    <ol>
+      <li>ஒவ்வொரு மாதமும் குறிப்பிட்ட தேதியில் வட்டி தவறாமல் செலுத்துவேன்.</li>
+      <li>வட்டி செலுத்தாவிட்டால் சட்ட நடவடிக்கை எடுக்கப்படும் என்பதை ஒப்புக்கொள்கிறேன்.</li>
+      <li>அசல் தொகையை பரஸ்பர ஒப்பந்தத்தின்படி திரும்ப செலுத்துவேன்.</li>
+      <li>இந்த ஒப்புதல் பத்திரம் என் கடன் கடமைக்கு சட்டப்பூர்வமான சான்றாக அமையும்.</li>
+    </ol>
+  </div>
 
-    if (shouldPrint) {
-      // Open in new window for printing
-      const pdfBlob = doc.output('blob');
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-      const printWindow = window.open(pdfUrl, '_blank');
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-        };
-      }
-    } else {
-      // Save as PDF
-      doc.save(`Acknowledgment_${entry.name.replace(/\s+/g, '_')}_${loanDate}.pdf`);
+  <div class="borrower-box">
+    <div class="section-title" style="color:#92400e;border-color:#fbbf24">கடன் வாங்கியவர் விவரம்</div>
+    <table>
+      <tr><td class="label">பெயர்</td><td class="colon">:</td><td>${entry.name}</td></tr>
+      <tr><td class="label">தொலைபேசி</td><td class="colon">:</td><td>${entry.phone}</td></tr>
+      ${aadharRow}
+    </table>
+  </div>
+
+  <div class="sig-row">
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">கடன் வாங்கியவர் கையொப்பம்</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">கடன் கொடுப்பவர் கையொப்பம்</div>
+    </div>
+  </div>
+
+  <div class="note">* உங்கள் ஆதார் எண்ணை கையொப்பத்திற்கு கீழே எழுதவும்</div>
+
+  <div class="footer">உருவாக்கப்பட்ட தேதி: ${todayFormatted} &nbsp;|&nbsp; இது சட்டபூர்வமான ஆவணம்</div>
+
+</body>
+</html>`;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      // Wait for fonts to load then print
+      printWindow.document.fonts.ready.then(() => printWindow.print());
     }
   };
 
@@ -2379,9 +2473,9 @@ Thank you for your payment!
                           {!isSettled && (
                             <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
                               <button
-                                onClick={() => generateAcknowledgmentPDF(entry, false)}
+                                onClick={() => generateTamilAcknowledgmentPDF(entry)}
                                 style={{
-                                  background: '#f59e0b',
+                                  background: '#dc2626',
                                   color: 'white',
                                   border: 'none',
                                   borderRadius: '4px',
@@ -2391,12 +2485,12 @@ Thank you for your payment!
                                   fontWeight: 600
                                 }}
                               >
-                                📄 PDF
+                                📄 தமிழ்
                               </button>
                               <button
-                                onClick={() => generateAcknowledgmentPDF(entry, true)}
+                                onClick={() => generateEnglishAcknowledgmentPDF(entry)}
                                 style={{
-                                  background: '#3b82f6',
+                                  background: '#1d4ed8',
                                   color: 'white',
                                   border: 'none',
                                   borderRadius: '4px',
@@ -2406,7 +2500,7 @@ Thank you for your payment!
                                   fontWeight: 600
                                 }}
                               >
-                                🖨️ Print
+                                📄 English
                               </button>
                               <button
                                 onClick={() => {

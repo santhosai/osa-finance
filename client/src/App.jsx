@@ -6,6 +6,7 @@ import Login from './components/Login';
 import ModuleSelector from './components/ModuleSelector';
 import ErrorBoundary from './components/ErrorBoundary';
 import BalanceCheck from './components/BalanceCheck';
+import LandingPage from './components/LandingPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import './App.css';
@@ -286,7 +287,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public route - no authentication required */}
+        {/* Public routes - no authentication required */}
+        <Route path="/website" element={<LandingPage />} />
         <Route path="/balance-check" element={<BalanceCheck />} />
 
         {/* All other routes require authentication */}
