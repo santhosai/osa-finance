@@ -24,16 +24,6 @@ function BackupWeeklyPDF({ onClose }) {
     (name || '').toLowerCase().includes('sakkara');
 
   const generatePDF = async () => {
-    // Open window immediately on user click — before any async work
-    // This is required to avoid browser popup blockers
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      setProgress('Error: Popup blocked. Please allow popups for this site in your browser address bar, then try again.');
-      return;
-    }
-    printWindow.document.write('<html><body style="font-family:Arial;padding:40px;color:#1e293b;"><h2>⏳ Loading data, please wait...</h2></body></html>');
-    printWindow.document.close();
-
     setLoading(true);
     setDone(false);
     setStats(null);
@@ -356,12 +346,24 @@ function BackupWeeklyPDF({ onClose }) {
 </body>
 </html>`;
 
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      // Small delay so fonts/styles load before print dialog
-      setTimeout(() => printWindow.print(), 900);
+      // Use hidden iframe — never blocked by popup blockers
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;';
+      document.body.appendChild(iframe);
+
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(html);
+      iframe.contentDocument.close();
+
+      // Wait for content to render, then print
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        // Remove iframe after print dialog closes
+        setTimeout(() => {
+          try { document.body.removeChild(iframe); } catch (_) {}
+        }, 2000);
+      }, 900);
 
       setStats({ sunday: sundayLoans.length, thursday: thursdayLoans.length, total });
       setDone(true);
@@ -369,7 +371,6 @@ function BackupWeeklyPDF({ onClose }) {
     } catch (err) {
       console.error('BackupWeeklyPDF error:', err);
       setProgress('Error: ' + err.message);
-      try { printWindow.close(); } catch (_) {}
     } finally {
       setLoading(false);
     }
