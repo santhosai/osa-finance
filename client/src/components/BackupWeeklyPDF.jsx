@@ -24,6 +24,16 @@ function BackupWeeklyPDF({ onClose }) {
     (name || '').toLowerCase().includes('sakkara');
 
   const generatePDF = async () => {
+    // Open window immediately on user click — before any async work
+    // This is required to avoid browser popup blockers
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      setProgress('Error: Popup blocked. Please allow popups for this site in your browser address bar, then try again.');
+      return;
+    }
+    printWindow.document.write('<html><body style="font-family:Arial;padding:40px;color:#1e293b;"><h2>⏳ Loading data, please wait...</h2></body></html>');
+    printWindow.document.close();
+
     setLoading(true);
     setDone(false);
     setStats(null);
@@ -346,10 +356,7 @@ function BackupWeeklyPDF({ onClose }) {
 </body>
 </html>`;
 
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        throw new Error('Popup blocked. Please allow popups for this site.');
-      }
+      printWindow.document.open();
       printWindow.document.write(html);
       printWindow.document.close();
       printWindow.focus();
@@ -362,6 +369,7 @@ function BackupWeeklyPDF({ onClose }) {
     } catch (err) {
       console.error('BackupWeeklyPDF error:', err);
       setProgress('Error: ' + err.message);
+      try { printWindow.close(); } catch (_) {}
     } finally {
       setLoading(false);
     }
