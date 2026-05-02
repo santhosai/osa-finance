@@ -10,6 +10,7 @@ import SendWishes from './SendWishes';
 import PrintReceipt from './PrintReceipt';
 import PrintReports from './PrintReports';
 import BackupData from './BackupData';
+import BackupWeeklyPDF from './BackupWeeklyPDF';
 import GlobalSearch from './GlobalSearch';
 import AllPaymentsDueModal from './AllPaymentsDueModal';
 import PaymentReminders from './PaymentReminders';
@@ -38,6 +39,7 @@ function Dashboard({ navigateTo }) {
   const [showSendWishes, setShowSendWishes] = useState(false);
   const [showPrintReports, setShowPrintReports] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showBackupWeeklyPDF, setShowBackupWeeklyPDF] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [showAllPaymentsDue, setShowAllPaymentsDue] = useState(false);
   const [showPaymentReminders, setShowPaymentReminders] = useState(false);
@@ -2349,6 +2351,27 @@ function Dashboard({ navigateTo }) {
             💾 Backup to Excel
           </button>
 
+          {/* Backup Weekly PDF */}
+          <button
+            onClick={() => { setShowSidebar(false); setShowBackupWeeklyPDF(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)'}
+          >
+            📄 Backup Weekly PDF
+          </button>
 
         </div>
 
@@ -5009,6 +5032,10 @@ function Dashboard({ navigateTo }) {
 
       {showBackupModal && (
         <BackupData onClose={() => setShowBackupModal(false)} />
+      )}
+
+      {showBackupWeeklyPDF && (
+        <BackupWeeklyPDF onClose={() => setShowBackupWeeklyPDF(false)} />
       )}
 
       {showPaymentReminders && (
