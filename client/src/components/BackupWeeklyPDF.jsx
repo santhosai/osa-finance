@@ -27,36 +27,19 @@ function BackupWeeklyPDF({ onClose }) {
     setLoading(true);
     setDone(false);
     setStats(null);
-    setProgress('Fetching customers...');
+    setProgress('Loading all loan data...');
 
     try {
-      const res = await fetch(`${API_URL}/customers`);
-      if (!res.ok) throw new Error('Failed to fetch customers');
-      const allCustomers = await res.json();
-
-      // Collect all active weekly loans
-      const allLoans = [];
-      allCustomers.forEach((customer) => {
-        if (!customer.loans || customer.loans.length === 0) return;
-        customer.loans.forEach((loan) => {
-          const isWeekly = !loan.loan_type || loan.loan_type === 'Weekly';
-          const isActive = Number(loan.balance) > 0;
-          if (isWeekly && isActive) {
-            allLoans.push({
-              ...loan,
-              customer_name: customer.name,
-              customer_phone: customer.phone,
-              customer_id: customer.id,
-            });
-          }
-        });
-      });
+      // Single API call — server returns everything (loans + customers + payments)
+      const res = await fetch(`${API_URL}/weekly-backup`);
+      if (!res.ok) throw new Error('Failed to fetch backup data');
+      const { loans: allLoans } = await res.json();
 
       // Sort helper — by loan_given_date ascending
       const byGivenDate = (a, b) => {
         const da = new Date(a.loan_given_date || a.start_date || 0);
-        const db = new Date(b.loan_given_date || b.start_date || 0);
-        return da - db;
+        const db_date = new Date(b.loan_given_date || b.start_date || 0);
+        return da - db_date;
       };
 
       const sundayLoans = allLoans
@@ -69,34 +52,11 @@ function BackupWeeklyPDF({ onClose }) {
 
       const total = sundayLoans.length + thursdayLoans.length;
 
-      // Fetch payment history for every loan one by one
-      const paymentsMap = {};
-      const allLoansOrdered = [...sundayLoans, ...thursdayLoans];
-
-      for (let i = 0; i < allLoansOrdered.length; i++) {
-        const loan = allLoansOrdered[i];
-        setProgress(`Fetching payment history... ${i + 1} / ${total}`);
-        try {
-          const r = await fetch(`${API_URL}/loans/${loan.loan_id}`);
-          if (r.ok) {
-            const data = await r.json();
-            // Sort payments oldest → newest
-            paymentsMap[loan.loan_id] = (data.payments || []).sort(
-              (a, b) => new Date(a.payment_date) - new Date(b.payment_date)
-            );
-          } else {
-            paymentsMap[loan.loan_id] = [];
-          }
-        } catch {
-          paymentsMap[loan.loan_id] = [];
-        }
-      }
-
       setProgress('Building PDF...');
 
       // Build one customer block HTML
       const buildCustomerBlock = (loan, idx, theme) => {
-        const payments = paymentsMap[loan.loan_id] || [];
+        const payments = loan.payments || [];
         const sak = isSakkara(loan.customer_name);
 
         const accentColor = sak

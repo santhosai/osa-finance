@@ -448,6 +448,59 @@ app.put('/api/loans/:id/close', async (req, res) => {
   }
 });
 
+// Weekly backup — all active weekly loans + customers + payments in one call
+app.get('/api/weekly-backup', async (req, res) => {
+  try {
+    // 1. All loans with balance > 0 (one Firestore query)
+    const loansSnapshot = await db.collection('loans').where('balance', '>', 0).get();
+    const weeklyLoans = loansSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(loan => !loan.loan_type || loan.loan_type === 'Weekly');
+
+    if (weeklyLoans.length === 0) return res.json({ loans: [] });
+
+    // 2. Fetch all unique customers in parallel (one doc.get per customer, all parallel)
+    const customerIds = [...new Set(weeklyLoans.map(l => l.customer_id))];
+    const customerDocs = await Promise.all(customerIds.map(id => db.collection('customers').doc(id).get()));
+    const customersMap = {};
+    customerDocs.forEach(doc => { if (doc.exists) customersMap[doc.id] = doc.data(); });
+
+    // 3. Fetch all payments in parallel batches of 30 (Firestore 'in' limit)
+    const loanIds = weeklyLoans.map(l => l.id);
+    const paymentsMap = {};
+    const batches = [];
+    for (let i = 0; i < loanIds.length; i += 30) batches.push(loanIds.slice(i, i + 30));
+
+    await Promise.all(batches.map(async batch => {
+      const snap = await db.collection('payments').where('loan_id', 'in', batch).get();
+      snap.docs.forEach(doc => {
+        const p = { id: doc.id, ...doc.data() };
+        if (!paymentsMap[p.loan_id]) paymentsMap[p.loan_id] = [];
+        paymentsMap[p.loan_id].push(p);
+      });
+    }));
+
+    // Sort each loan's payments oldest → newest
+    Object.keys(paymentsMap).forEach(lid => {
+      paymentsMap[lid].sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
+    });
+
+    // 4. Join and return
+    const loans = weeklyLoans.map(loan => ({
+      loan_id: loan.id,
+      ...loan,
+      customer_name: customersMap[loan.customer_id]?.name || 'Unknown',
+      customer_phone: customersMap[loan.customer_id]?.phone || '-',
+      payments: paymentsMap[loan.id] || []
+    }));
+
+    res.json({ loans });
+  } catch (error) {
+    console.error('Weekly backup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Recalculate loan balance based on actual payments
 app.post('/api/loans/:id/recalculate-balance', async (req, res) => {
   try {
