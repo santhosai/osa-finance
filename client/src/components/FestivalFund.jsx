@@ -129,9 +129,11 @@ export default function FestivalFund({ navigateTo }) {
   const [form, setForm] = useState({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1 });
 
   // Record-payment
-  const [payTarget, setPayTarget]   = useState(null); // customer object
+  const [payTarget, setPayTarget]   = useState(null); // customer object (Record Payment screen)
   const [payDate, setPayDate]       = useState(todayISO());
   const [custSearch, setCustSearch] = useState('');
+  const [quickPay, setQuickPay]     = useState(null); // { customer } for quick-pay modal
+  const [quickDate, setQuickDate]   = useState(todayISO());
 
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3500); };
 
@@ -206,6 +208,33 @@ export default function FestivalFund({ navigateTo }) {
       flash(`✅ Payment recorded for ${customer.name}`);
       sendWhatsAppMsg(customer, data, 'received');
       setPayTarget(null);
+      fetchAll();
+    } catch (e) { flash(e.message); }
+    setSaving(false);
+  };
+
+  const quickRecordPayment = async () => {
+    if (!quickPay) return;
+    const customer = quickPay.customer;
+    const monthIdx = (customer.payment_months || []).indexOf(selMonth);
+    if (monthIdx === -1) return flash('No payment due this month');
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_URL}/festival-fund/payments`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: customer.id,
+          payment_month: selMonth,
+          month_number: monthIdx + 1,
+          amount: customer.scheme_amount,
+          payment_date: quickDate
+        })
+      });
+      const data = await r.json();
+      if (!r.ok) return flash(data.error || 'Failed');
+      flash(`✅ ${customer.name} — payment recorded`);
+      sendWhatsAppMsg(customer, data, 'received');
+      setQuickPay(null);
       fetchAll();
     } catch (e) { flash(e.message); }
     setSaving(false);
@@ -409,6 +438,60 @@ th{background:#1e293b;color:white;}
   return (
     <div style={{ minHeight:'100vh', background:'#0f172a', color:'#f1f5f9' }}>
 
+      {/* ── QUICK PAY MODAL ─────────────────────────────────────── */}
+      {quickPay && (
+        <div style={S.modal} onClick={() => setQuickPay(null)}>
+          <div style={{ ...S.modalBox, maxWidth:340 }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ padding:'16px 18px', background:'linear-gradient(135deg,#15803d,#166534)', borderRadius:'16px 16px 0 0' }}>
+              <div style={{ fontSize:16, fontWeight:700, color:'white' }}>💰 Quick Pay</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.75)', marginTop:2 }}>{fmtFull(selMonth)}</div>
+            </div>
+            <div style={{ padding:'16px 18px' }}>
+              {/* Customer info */}
+              <div style={{ background:'#0f172a', borderRadius:10, padding:'10px 12px', marginBottom:14, border:'1px solid #334155' }}>
+                <div style={{ fontSize:15, fontWeight:700 }}>{quickPay.customer.name}</div>
+                <div style={{ fontSize:10, color:'#94a3b8', marginTop:3 }}>
+                  Father: {quickPay.customer.father_name} &nbsp;|&nbsp; 📞 {quickPay.customer.mobile}
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:6 }}>
+                  <span style={S.badge2(quickPay.customer.scheme===1?'#1e3a5f':'#3b1e5f', quickPay.customer.scheme===1?'#93c5fd':'#c4b5fd')}>
+                    Scheme {quickPay.customer.scheme}
+                  </span>
+                  <span style={{ fontSize:16, fontWeight:800, color:'#f59e0b' }}>
+                    ₹{quickPay.customer.scheme_amount.toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Date picker */}
+              <label style={S.label}>Payment Date</label>
+              <input
+                style={S.input}
+                type="date"
+                value={quickDate}
+                onChange={e => setQuickDate(e.target.value)}
+              />
+
+              {/* Confirm */}
+              <button
+                style={S.primaryBtn('linear-gradient(135deg,#15803d,#166534)')}
+                disabled={saving}
+                onClick={quickRecordPayment}
+              >
+                {saving ? '⏳ Recording...' : `✅ Confirm Payment — ₹${quickPay.customer.scheme_amount.toLocaleString('en-IN')}`}
+              </button>
+              <button
+                onClick={() => setQuickPay(null)}
+                style={{ width:'100%', padding:10, background:'none', border:'1px solid #334155', borderRadius:8, color:'#94a3b8', fontSize:12, cursor:'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Flash message */}
       {msg && (
         <div style={{ position:'fixed',top:56,left:0,right:0,zIndex:400,padding:'10px 16px',background:'#1e3a5f',color:'#93c5fd',fontSize:13,textAlign:'center',borderBottom:'1px solid #334155' }}>
@@ -581,7 +664,7 @@ th{background:#1e293b;color:white;}
                         </div>
                       </div>
                       <div style={S.row}>
-                        <button style={S.btn('#15803d')} onClick={() => { setPayTarget(c); setSection('payment'); }}>Pay</button>
+                        <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickPay({ customer: c }); }}>Pay</button>
                         <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
                       </div>
                     </div>
@@ -795,7 +878,7 @@ th{background:#1e293b;color:white;}
                     <div style={{ fontSize:9,color:'#94a3b8',marginTop:2 }}>{c.father_name} | 📞 {c.mobile} | Due: ₹{c.scheme_amount.toLocaleString('en-IN')}</div>
                   </div>
                   <div style={S.row}>
-                    <button style={S.btn('#15803d')} onClick={() => { setPayTarget(c); setSection('payment'); }}>Pay</button>
+                    <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickPay({ customer: c }); }}>Pay</button>
                     <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
                   </div>
                 </div>
