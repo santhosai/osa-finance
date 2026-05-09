@@ -150,6 +150,13 @@ self.addEventListener('push', (event) => {
   }
 });
 
+// Allow banner to trigger immediate activation
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

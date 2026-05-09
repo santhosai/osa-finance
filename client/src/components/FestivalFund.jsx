@@ -132,8 +132,12 @@ export default function FestivalFund({ navigateTo }) {
   const [payTarget, setPayTarget]   = useState(null); // customer object (Record Payment screen)
   const [payDate, setPayDate]       = useState(todayISO());
   const [custSearch, setCustSearch] = useState('');
-  const [quickPay, setQuickPay]     = useState(null); // { customer } for quick-pay modal
+  const [quickPay, setQuickPay]     = useState(null);
   const [quickDate, setQuickDate]   = useState(todayISO());
+  const [detailCust, setDetailCust] = useState(null); // customer for detail/history modal
+  const [editCust, setEditCust]     = useState(null); // customer being edited
+  const [editForm, setEditForm]     = useState({ name:'', father_name:'', mobile:'', spouse_name:'' });
+  const [custListSearch, setCustListSearch] = useState('');
 
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3500); };
 
@@ -235,6 +239,42 @@ export default function FestivalFund({ navigateTo }) {
       flash(`✅ ${customer.name} — payment recorded`);
       sendWhatsAppMsg(customer, data, 'received');
       setQuickPay(null);
+      fetchAll();
+    } catch (e) { flash(e.message); }
+    setSaving(false);
+  };
+
+  const deleteCustomer = async (customer) => {
+    if (!window.confirm(`Delete "${customer.name}"? All their payment records will remain but customer will be removed.`)) return;
+    try {
+      const r = await fetch(`${API_URL}/festival-fund/customers/${customer.id}`, { method:'DELETE' });
+      if (!r.ok) return flash('Failed to delete');
+      flash(`Deleted: ${customer.name}`);
+      setDetailCust(null);
+      fetchAll();
+    } catch (e) { flash(e.message); }
+  };
+
+  const openEdit = (customer) => {
+    setEditCust(customer);
+    setEditForm({ name:customer.name, father_name:customer.father_name, mobile:customer.mobile, spouse_name:customer.spouse_name||'' });
+  };
+
+  const saveEdit = async () => {
+    if (!editForm.name.trim() || !editForm.father_name.trim() || !editForm.mobile.trim())
+      return flash('Name, Father Name and Mobile are required');
+    if (!/^\d{10}$/.test(editForm.mobile.trim())) return flash('Mobile must be 10 digits');
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_URL}/festival-fund/customers/${editCust.id}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(editForm)
+      });
+      const data = await r.json();
+      if (!r.ok) return flash(data.error || 'Failed');
+      flash(`✅ ${data.name} updated`);
+      setEditCust(null);
+      setDetailCust(prev => prev ? { ...prev, ...editForm } : null);
       fetchAll();
     } catch (e) { flash(e.message); }
     setSaving(false);
@@ -410,18 +450,83 @@ th{background:#1e293b;color:white;}
     }, 600);
   };
 
+  // ── PDF export ────────────────────────────────────────────────────────────
+  const exportPDF = () => {
+    const paidRows = paidThisMonth.map((c, i) => {
+      const pay = paymentMap[c.id]?.[selMonth];
+      const mNum = (c.payment_months||[]).indexOf(selMonth) + 1;
+      return `<tr style="background:${i%2===0?'#f0fdf4':'white'}">
+        <td>${i+1}</td><td>${c.name}</td><td>${c.father_name}</td><td>${c.mobile}</td>
+        <td>S${c.scheme}</td><td>M${mNum}/10</td>
+        <td>₹${c.scheme_amount.toLocaleString('en-IN')}</td>
+        <td>${pay ? fmtDate(pay.payment_date) : '-'}</td>
+        <td style="color:#15803d;font-weight:700;">✓ PAID</td>
+      </tr>`;
+    }).join('');
+    const unpaidRows = unpaidThisMonth.map((c, i) => {
+      const mNum = (c.payment_months||[]).indexOf(selMonth) + 1;
+      return `<tr style="background:${i%2===0?'#fef2f2':'white'}">
+        <td>${paidThisMonth.length+i+1}</td><td>${c.name}</td><td>${c.father_name}</td><td>${c.mobile}</td>
+        <td>S${c.scheme}</td><td>M${mNum}/10</td>
+        <td>₹${c.scheme_amount.toLocaleString('en-IN')}</td>
+        <td>-</td>
+        <td style="color:#dc2626;font-weight:700;">✗ UNPAID</td>
+      </tr>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+@page{size:A4 landscape;margin:10mm}
+body{font-family:Arial,sans-serif;font-size:10px;}
+h2{text-align:center;font-size:14px;margin:0 0 3px;}
+.sub{text-align:center;font-size:10px;color:#555;margin-bottom:10px;}
+table{width:100%;border-collapse:collapse;}
+th,td{border:1px solid #ddd;padding:5px 6px;text-align:left;}
+th{background:#1e293b;color:white;font-size:10px;}
+.sum{display:inline-block;background:#f8fafc;border:1px solid #ddd;border-radius:6px;padding:6px 14px;text-align:center;margin:0 6px 10px;}
+.sum strong{display:block;font-size:15px;}
+</style></head><body>
+<h2>OM SAI MURUGAN FINANCE — Festival Fund</h2>
+<div class="sub">Monthly Report: ${fmtFull(selMonth)} &nbsp;|&nbsp; Generated: ${fmtDate(todayISO())}</div>
+<div style="text-align:center;margin-bottom:10px;">
+  <span class="sum"><strong>${dueThisMonth.length}</strong>Total Due</span>
+  <span class="sum" style="color:#15803d"><strong>${paidThisMonth.length}</strong>Paid</span>
+  <span class="sum" style="color:#dc2626"><strong>${unpaidThisMonth.length}</strong>Unpaid</span>
+  <span class="sum"><strong>₹${(stats?.collected_amount||0).toLocaleString('en-IN')}</strong>Collected</span>
+  <span class="sum" style="color:#dc2626"><strong>₹${(stats?.pending_amount||0).toLocaleString('en-IN')}</strong>Pending</span>
+</div>
+<table><thead><tr><th>#</th><th>Name</th><th>Father</th><th>Mobile</th><th>Scheme</th><th>Month</th><th>Amount</th><th>Paid On</th><th>Status</th></tr></thead>
+<tbody>${paidRows}${unpaidRows}</tbody></table>
+</body></html>`;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;';
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => { try { document.body.removeChild(iframe); } catch(_){} }, 2000);
+    }, 600);
+  };
+
   // ── Nav helper ────────────────────────────────────────────────────────────
   const nav = (s) => { setSection(s); setSidebarOpen(false); };
 
+  const completedCustomers = customers.filter(c =>
+    (c.payment_months||[]).every(m => paymentMap[c.id]?.[m])
+  );
+
   const NAV = [
-    { id:'dashboard', icon:'📊', label:'Dashboard', group:'Overview' },
-    { id:'addcust',   icon:'➕', label:'Add Customer', group:'Customers' },
+    { id:'dashboard', icon:'📊', label:'Dashboard',        group:'Overview' },
+    { id:'customers', icon:'👥', label:'All Customers',    group:'Customers', badge: completedCustomers.length > 0 ? completedCustomers.length : 0, badgeColor:'#15803d' },
+    { id:'addcust',   icon:'➕', label:'Add Customer',     group:'Customers' },
     { id:'monthly',   icon:'📅', label:'Monthly Payments', badge:unpaidThisMonth.length, group:'Payments' },
-    { id:'payment',   icon:'💰', label:'Record Payment', group:'Payments' },
+    { id:'payment',   icon:'💰', label:'Record Payment',   group:'Payments' },
     { id:'reminder',  icon:'🔔', label:'Payment Reminder', badge:unpaidThisMonth.length, group:'Payments' },
   ];
 
-  const titles = { dashboard:'Dashboard', addcust:'Add Customer', monthly:'Monthly Payments', payment:'Record Payment', reminder:'Payment Reminder' };
+  const titles = { dashboard:'Dashboard', customers:'All Customers', addcust:'Add Customer', monthly:'Monthly Payments', payment:'Record Payment', reminder:'Payment Reminder' };
 
   // ── Month picker shared ───────────────────────────────────────────────────
   const MonthPicker = () => (
@@ -521,7 +626,7 @@ th{background:#1e293b;color:white;}
                   <div key={n.id} style={S.navItem(section === n.id)} onClick={() => nav(n.id)}>
                     <span style={{ width:18, textAlign:'center' }}>{n.icon}</span>
                     {n.label}
-                    {n.badge > 0 && <span style={S.badge()}>{n.badge}</span>}
+                    {n.badge > 0 && <span style={S.badge(n.badgeColor || '#dc2626')}>{n.badge}</span>}
                   </div>
                 ))}
                 {group !== 'Payments' && <div style={S.navDivider} />}
@@ -832,6 +937,254 @@ th{background:#1e293b;color:white;}
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── ALL CUSTOMERS ────────────────────────────────────── */}
+      {section === 'customers' && (
+        <div style={S.page}>
+          <div style={S.card}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <span style={{ fontSize:13, fontWeight:700 }}>👥 All Members ({customers.length})</span>
+              {completedCustomers.length > 0 && (
+                <span style={{ background:'#14532d', color:'#4ade80', fontSize:10, padding:'3px 8px', borderRadius:10, fontWeight:700 }}>
+                  {completedCustomers.length} Completed ✓
+                </span>
+              )}
+            </div>
+
+            <input
+              style={S.input}
+              placeholder="🔍 Search by name or mobile..."
+              value={custListSearch}
+              onChange={e => setCustListSearch(e.target.value)}
+            />
+
+            {loading && <div style={{ color:'#64748b', textAlign:'center', padding:20 }}>Loading...</div>}
+
+            {/* Active customers */}
+            {customers.filter(c => {
+              const q = custListSearch.toLowerCase();
+              return !q || c.name.toLowerCase().includes(q) || c.mobile.includes(q);
+            }).filter(c => !completedCustomers.some(cc => cc.id === c.id)).map(c => {
+              const paidCount = (c.payment_months||[]).filter(m => paymentMap[c.id]?.[m]).length;
+              const pct = Math.round(paidCount / 10 * 100);
+              return (
+                <div key={c.id}
+                  onClick={() => setDetailCust(c)}
+                  style={{ ...S.crow('pending'), cursor:'pointer', borderLeft:'3px solid #f59e0b', flexDirection:'column', alignItems:'stretch', gap:6 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700 }}>
+                        {c.name}
+                        <span style={{ ...S.badge2(c.scheme===1?'#1e3a5f':'#3b1e5f', c.scheme===1?'#93c5fd':'#c4b5fd'), marginLeft:6 }}>
+                          S{c.scheme} ₹{c.scheme_amount/1000}K
+                        </span>
+                      </div>
+                      <div style={{ fontSize:9, color:'#94a3b8', marginTop:2 }}>
+                        {c.father_name} &nbsp;|&nbsp; 📞 {c.mobile}
+                        {c.spouse_name ? ` | 💑 ${c.spouse_name}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ textAlign:'right', flexShrink:0 }}>
+                      <div style={{ fontSize:14, fontWeight:800, color: paidCount >= 10 ? '#4ade80' : '#f59e0b' }}>{paidCount}/10</div>
+                      <div style={{ fontSize:8, color:'#94a3b8' }}>months</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+                      <span style={{ fontSize:8, color:'#94a3b8' }}>Progress</span>
+                      <span style={{ fontSize:8, color: pct >= 100 ? '#4ade80' : '#f59e0b' }}>{pct}%</span>
+                    </div>
+                    <div style={{ background:'#334155', borderRadius:4, height:4 }}>
+                      <div style={{ width:`${pct}%`, height:'100%', background: pct >= 100 ? '#4ade80' : '#f59e0b', borderRadius:4, transition:'width .3s' }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Completed customers */}
+            {completedCustomers.filter(c => {
+              const q = custListSearch.toLowerCase();
+              return !q || c.name.toLowerCase().includes(q) || c.mobile.includes(q);
+            }).length > 0 && (
+              <>
+                <div style={{ fontSize:10, fontWeight:700, color:'#4ade80', padding:'8px 0 5px', marginTop:8, borderBottom:'1px solid #334155' }}>
+                  🎊 COMPLETED MEMBERS ({completedCustomers.length})
+                </div>
+                {completedCustomers.filter(c => {
+                  const q = custListSearch.toLowerCase();
+                  return !q || c.name.toLowerCase().includes(q) || c.mobile.includes(q);
+                }).map(c => (
+                  <div key={c.id}
+                    onClick={() => setDetailCust(c)}
+                    style={{ ...S.crow('paid'), cursor:'pointer', borderLeft:'3px solid #4ade80' }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700 }}>
+                        {c.name}
+                        <span style={{ ...S.badge2('#14532d','#4ade80'), marginLeft:6 }}>✓ Done</span>
+                        <span style={{ ...S.badge2(c.scheme===1?'#1e3a5f':'#3b1e5f', c.scheme===1?'#93c5fd':'#c4b5fd'), marginLeft:4 }}>S{c.scheme}</span>
+                      </div>
+                      <div style={{ fontSize:9, color:'#94a3b8', marginTop:2 }}>
+                        {c.father_name} &nbsp;|&nbsp; 📞 {c.mobile} &nbsp;|&nbsp; All 10 months paid
+                      </div>
+                    </div>
+                    <span style={{ color:'#4ade80', fontSize:18 }}>🎊</span>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {customers.length === 0 && !loading && (
+              <div style={{ textAlign:'center', color:'#64748b', padding:'30px 0', fontSize:13 }}>
+                No members yet.<br />
+                <button onClick={() => nav('addcust')} style={{ marginTop:10, ...S.btn('#d97706') }}>+ Add First Member</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── CUSTOMER DETAIL MODAL ─────────────────────────────── */}
+      {detailCust && (() => {
+        const c = customers.find(x => x.id === detailCust.id) || detailCust;
+        const paidCount = (c.payment_months||[]).filter(m => paymentMap[c.id]?.[m]).length;
+        const isCompleted = paidCount >= 10;
+        return (
+          <div style={S.modal} onClick={() => setDetailCust(null)}>
+            <div style={{ ...S.modalBox, maxWidth:440 }} onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div style={{ padding:'16px 18px', background: isCompleted ? 'linear-gradient(135deg,#14532d,#15803d)' : 'linear-gradient(135deg,#92400e,#b45309)', borderRadius:'16px 16px 0 0' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize:17, fontWeight:800, color:'white' }}>{c.name}</div>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.75)', marginTop:3 }}>
+                      Father: {c.father_name}
+                      {c.spouse_name ? ` | Spouse: ${c.spouse_name}` : ''}
+                    </div>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.75)', marginTop:1 }}>
+                      📞 {c.mobile} &nbsp;|&nbsp; Scheme {c.scheme} — ₹{c.scheme_amount.toLocaleString('en-IN')}/mo
+                    </div>
+                  </div>
+                  {isCompleted && <span style={{ fontSize:22 }}>🎊</span>}
+                </div>
+                {/* Progress bar */}
+                <div style={{ marginTop:10 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+                    <span style={{ fontSize:9, color:'rgba(255,255,255,0.7)' }}>Payment Progress</span>
+                    <span style={{ fontSize:9, color:'white', fontWeight:700 }}>{paidCount}/10 months</span>
+                  </div>
+                  <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:4, height:6 }}>
+                    <div style={{ width:`${paidCount*10}%`, height:'100%', background: isCompleted ? '#4ade80' : '#fbbf24', borderRadius:4 }} />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ padding:'14px 18px' }}>
+                {/* Month chips */}
+                <div style={{ fontSize:10, fontWeight:700, color:'#94a3b8', marginBottom:6 }}>Payment Timeline:</div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:14 }}>
+                  {(c.payment_months||[]).map((m, i) => {
+                    const pay = paymentMap[c.id]?.[m];
+                    const isCur = m === selMonth;
+                    return (
+                      <div key={m} style={{ ...S.chip(pay ? 'done' : isCur ? 'cur' : 'todo'), display:'flex', flexDirection:'column', alignItems:'center', minWidth:56 }}>
+                        <span style={{ fontSize:9, fontWeight:700 }}>M{i+1}</span>
+                        <span style={{ fontSize:8 }}>{fmt(m)}</span>
+                        {pay && <span style={{ fontSize:7, color:'#4ade80' }}>{fmtDate(pay.payment_date)}</span>}
+                        {!pay && isCur && <span style={{ fontSize:7, color:'#f59e0b' }}>DUE</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Paid history */}
+                {(c.payment_months||[]).some(m => paymentMap[c.id]?.[m]) && (
+                  <>
+                    <div style={{ fontSize:10, fontWeight:700, color:'#94a3b8', marginBottom:5 }}>Payment History:</div>
+                    {(c.payment_months||[]).map((m, i) => {
+                      const pay = paymentMap[c.id]?.[m];
+                      if (!pay) return null;
+                      return (
+                        <div key={m} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 8px', background:'#0f172a', borderRadius:6, marginBottom:4, border:'1px solid #1a3b20' }}>
+                          <span style={{ fontSize:11, color:'#4ade80', fontWeight:600 }}>M{i+1} — {fmtFull(m)}</span>
+                          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                            <span style={{ fontSize:10, color:'#94a3b8' }}>{fmtDate(pay.payment_date)}</span>
+                            <span style={{ fontSize:11, fontWeight:700, color:'#f59e0b' }}>₹{(pay.amount||0).toLocaleString('en-IN')}</span>
+                            <button style={S.btn('#475569')} onClick={() => printReceipt(c, pay)}>🖨</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ marginTop:8, padding:'6px 10px', background:'#0f172a', borderRadius:8, border:'1px solid #334155', display:'flex', justifyContent:'space-between' }}>
+                      <span style={{ fontSize:11, color:'#94a3b8' }}>Total Paid</span>
+                      <span style={{ fontSize:13, fontWeight:800, color:'#f59e0b' }}>
+                        ₹{(c.payment_months||[]).reduce((sum,m) => sum + (paymentMap[c.id]?.[m]?.amount||0), 0).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {/* Action buttons */}
+                <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                  <button
+                    style={{ flex:1, ...S.btn('#1e40af'), padding:'9px 0', fontSize:12 }}
+                    onClick={() => { openEdit(c); setDetailCust(null); }}
+                  >✏️ Edit</button>
+                  <button
+                    style={{ flex:1, ...S.btn('#dc2626'), padding:'9px 0', fontSize:12 }}
+                    onClick={() => deleteCustomer(c)}
+                  >🗑️ Delete</button>
+                  <button
+                    style={{ flex:1, ...S.btn('#25d366'), padding:'9px 0', fontSize:12 }}
+                    onClick={() => { window.open(`https://wa.me/91${c.mobile}`, '_blank'); }}
+                  >💬 WA</button>
+                </div>
+                <button onClick={() => setDetailCust(null)}
+                  style={{ width:'100%', padding:9, background:'none', border:'1px solid #334155', borderRadius:8, color:'#94a3b8', fontSize:12, cursor:'pointer', marginTop:8 }}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ─── EDIT CUSTOMER MODAL ───────────────────────────────── */}
+      {editCust && (
+        <div style={S.modal} onClick={() => setEditCust(null)}>
+          <div style={{ ...S.modalBox, maxWidth:400 }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding:'16px 18px', background:'linear-gradient(135deg,#1e40af,#1e3a8a)', borderRadius:'16px 16px 0 0' }}>
+              <div style={{ fontSize:16, fontWeight:800, color:'white' }}>✏️ Edit Member</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{editCust.name}</div>
+            </div>
+            <div style={{ padding:'16px 18px' }}>
+              <label style={S.label}>Customer Name <span style={{ color:'#f87171' }}>*</span></label>
+              <input style={S.input} value={editForm.name}
+                onChange={e => setEditForm(f => ({ ...f, name:e.target.value }))} />
+
+              <label style={S.label}>Father Name <span style={{ color:'#f87171' }}>*</span></label>
+              <input style={S.input} value={editForm.father_name}
+                onChange={e => setEditForm(f => ({ ...f, father_name:e.target.value }))} />
+
+              <label style={S.label}>Mobile Number <span style={{ color:'#f87171' }}>*</span></label>
+              <input style={S.input} type="tel" maxLength={10} value={editForm.mobile}
+                onChange={e => setEditForm(f => ({ ...f, mobile:e.target.value.replace(/\D/,'') }))} />
+
+              <label style={S.label}>Spouse Name <span style={{ color:'#475569' }}>(Optional)</span></label>
+              <input style={S.input} value={editForm.spouse_name}
+                onChange={e => setEditForm(f => ({ ...f, spouse_name:e.target.value }))} />
+
+              <button style={S.primaryBtn('linear-gradient(135deg,#1e40af,#1e3a8a)')} disabled={saving} onClick={saveEdit}>
+                {saving ? '⏳ Saving...' : '✅ Save Changes'}
+              </button>
+              <button onClick={() => setEditCust(null)}
+                style={{ width:'100%', padding:10, background:'none', border:'1px solid #334155', borderRadius:8, color:'#94a3b8', fontSize:12, cursor:'pointer' }}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 
 // Small/critical components loaded immediately (needed on first render)
@@ -302,10 +302,67 @@ function AppContent() {
   return null;
 }
 
+// PWA update banner — shows when a new service worker is waiting
+function PWAUpdateBanner() {
+  const [show, setShow] = useState(false);
+  const swRef = useRef(null);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then(reg => {
+      const check = (sw) => {
+        if (sw && sw.state === 'installed') { swRef.current = sw; setShow(true); }
+      };
+      if (reg.waiting) { swRef.current = reg.waiting; setShow(true); }
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (sw) sw.addEventListener('statechange', () => check(sw));
+      });
+    });
+    // Poll for updates every 60 seconds
+    const iv = setInterval(() => { navigator.serviceWorker.ready.then(r => r.update()); }, 60000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const reload = () => {
+    if (swRef.current) {
+      swRef.current.postMessage({ type: 'SKIP_WAITING' });
+      window.location.reload();
+    }
+  };
+
+  if (!show) return null;
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
+      background: 'linear-gradient(135deg,#1e40af,#1e3a8a)',
+      padding: '12px 16px', display: 'flex', alignItems: 'center',
+      justifyContent: 'space-between', gap: 12,
+      borderTop: '2px solid #3b82f6', boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
+    }}>
+      <div>
+        <div style={{ color: 'white', fontSize: 13, fontWeight: 700 }}>🆕 New version available</div>
+        <div style={{ color: '#93c5fd', fontSize: 11 }}>Tap Update to get the latest features</div>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => setShow(false)}
+          style={{ padding: '6px 12px', background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 7, color: 'white', fontSize: 12, cursor: 'pointer' }}>
+          Later
+        </button>
+        <button onClick={reload}
+          style={{ padding: '6px 14px', background: '#3b82f6', border: 'none', borderRadius: 7, color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          Update Now
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Main App component with public routes
 function App() {
   return (
     <BrowserRouter>
+      <PWAUpdateBanner />
       <Routes>
         {/* Public routes - no authentication required */}
         <Route path="/website" element={<LandingPage />} />

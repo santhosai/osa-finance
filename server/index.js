@@ -5629,6 +5629,18 @@ app.post('/api/festival-fund/customers', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/festival-fund/customers/:id', async (req, res) => {
+  try {
+    const { name, father_name, mobile, spouse_name } = req.body;
+    if (!name || !father_name || !mobile)
+      return res.status(400).json({ error: 'name, father_name and mobile are required' });
+    const update = { name, father_name, mobile, spouse_name: spouse_name || '' };
+    await db.collection('festival_fund_customers').doc(req.params.id).update(update);
+    const doc = await db.collection('festival_fund_customers').doc(req.params.id).get();
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.delete('/api/festival-fund/customers/:id', async (req, res) => {
   try {
     await db.collection('festival_fund_customers').doc(req.params.id).delete();
