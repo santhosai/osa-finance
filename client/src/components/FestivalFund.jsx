@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { API_URL } from '../config';
+import { db } from '../firebase';
+import {
+  collection, getDocs, addDoc, updateDoc, deleteDoc,
+  doc, query, where
+} from 'firebase/firestore';
 
 const PHONE = '8667510724';
 
@@ -32,6 +36,16 @@ function monthOptions() {
     opts.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
   return opts;
+}
+
+function getFestivalPaymentMonths(joinMonth) {
+  const [y, m] = joinMonth.split('-').map(Number);
+  const months = [];
+  for (let i = 1; i <= 10; i++) {
+    const d = new Date(y, m - 1 + i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  return months;
 }
 
 // ── Styles ──────────────────────────────────────────────────────────────────
@@ -145,14 +159,32 @@ export default function FestivalFund({ navigateTo }) {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [cRes, pRes, sRes] = await Promise.all([
-        fetch(`${API_URL}/festival-fund/customers`),
-        fetch(`${API_URL}/festival-fund/payments`),
-        fetch(`${API_URL}/festival-fund/stats?month=${selMonth}`)
+      const [cSnap, pSnap] = await Promise.all([
+        getDocs(collection(db, 'festival_fund_customers')),
+        getDocs(collection(db, 'festival_fund_payments'))
       ]);
-      setCustomers(await cRes.json());
-      setPayments(await pRes.json());
-      setStats(await sRes.json());
+      const custs = cSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const pays  = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setCustomers(custs);
+      setPayments(pays);
+
+      // Compute stats locally
+      const paidIds = new Set(pays.filter(p => p.payment_month === selMonth).map(p => p.customer_id));
+      const due     = custs.filter(c => (c.payment_months || []).includes(selMonth));
+      const paid    = due.filter(c => paidIds.has(c.id));
+      const unpaid  = due.filter(c => !paidIds.has(c.id));
+      const monthPays = pays.filter(p => p.payment_month === selMonth);
+      setStats({
+        total_customers:   custs.length,
+        scheme1_count:     custs.filter(c => c.scheme === 1).length,
+        scheme2_count:     custs.filter(c => c.scheme === 2).length,
+        due_this_month:    due.length,
+        paid_this_month:   paid.length,
+        unpaid_this_month: unpaid.length,
+        collected_amount:  monthPays.reduce((s, p) => s + (p.amount || 0), 0),
+        pending_amount:    unpaid.reduce((s, c) => s + c.scheme_amount, 0),
+        current_month:     selMonth
+      });
     } catch (e) { flash('Error loading data: ' + e.message); }
     setLoading(false);
   }, [selMonth]);
@@ -178,12 +210,18 @@ export default function FestivalFund({ navigateTo }) {
       return flash('Mobile must be 10 digits');
     setSaving(true);
     try {
-      const r = await fetch(`${API_URL}/festival-fund/customers`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ ...form, scheme: Number(form.scheme) })
-      });
-      const data = await r.json();
-      if (!r.ok) return flash(data.error || 'Failed');
+      const scheme = Number(form.scheme);
+      const schemeAmount = scheme === 1 ? 1000 : 2000;
+      const now = new Date();
+      const joinMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+      const data = {
+        name: form.name.trim(), father_name: form.father_name.trim(),
+        mobile: form.mobile.trim(), spouse_name: form.spouse_name || '',
+        scheme, scheme_amount: schemeAmount, join_month: joinMonth,
+        payment_months: getFestivalPaymentMonths(joinMonth),
+        created_at: now.toISOString(), status: 'active'
+      };
+      await addDoc(collection(db, 'festival_fund_customers'), data);
       flash(`✅ ${data.name} registered!`);
       setForm({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1 });
       fetchAll();
@@ -195,22 +233,17 @@ export default function FestivalFund({ navigateTo }) {
   const recordPayment = async (customer) => {
     const monthIdx = (customer.payment_months || []).indexOf(selMonth);
     if (monthIdx === -1) return flash('This customer has no payment due for this month');
+    if (paymentMap[customer.id]?.[selMonth]) return flash('Payment already recorded for this month');
     setSaving(true);
     try {
-      const r = await fetch(`${API_URL}/festival-fund/payments`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          customer_id: customer.id,
-          payment_month: selMonth,
-          month_number: monthIdx + 1,
-          amount: customer.scheme_amount,
-          payment_date: payDate
-        })
-      });
-      const data = await r.json();
-      if (!r.ok) return flash(data.error || 'Failed');
+      const data = {
+        customer_id: customer.id, payment_month: selMonth,
+        month_number: monthIdx + 1, amount: customer.scheme_amount,
+        payment_date: payDate, created_at: new Date().toISOString()
+      };
+      const ref = await addDoc(collection(db, 'festival_fund_payments'), data);
       flash(`✅ Payment recorded for ${customer.name}`);
-      sendWhatsAppMsg(customer, data, 'received');
+      sendWhatsAppMsg(customer, { ...data, id: ref.id }, 'received');
       setPayTarget(null);
       fetchAll();
     } catch (e) { flash(e.message); }
@@ -222,22 +255,17 @@ export default function FestivalFund({ navigateTo }) {
     const customer = quickPay.customer;
     const monthIdx = (customer.payment_months || []).indexOf(selMonth);
     if (monthIdx === -1) return flash('No payment due this month');
+    if (paymentMap[customer.id]?.[selMonth]) return flash('Payment already recorded for this month');
     setSaving(true);
     try {
-      const r = await fetch(`${API_URL}/festival-fund/payments`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id: customer.id,
-          payment_month: selMonth,
-          month_number: monthIdx + 1,
-          amount: customer.scheme_amount,
-          payment_date: quickDate
-        })
-      });
-      const data = await r.json();
-      if (!r.ok) return flash(data.error || 'Failed');
+      const data = {
+        customer_id: customer.id, payment_month: selMonth,
+        month_number: monthIdx + 1, amount: customer.scheme_amount,
+        payment_date: quickDate, created_at: new Date().toISOString()
+      };
+      const ref = await addDoc(collection(db, 'festival_fund_payments'), data);
       flash(`✅ ${customer.name} — payment recorded`);
-      sendWhatsAppMsg(customer, data, 'received');
+      sendWhatsAppMsg(customer, { ...data, id: ref.id }, 'received');
       setQuickPay(null);
       fetchAll();
     } catch (e) { flash(e.message); }
@@ -247,8 +275,7 @@ export default function FestivalFund({ navigateTo }) {
   const deleteCustomer = async (customer) => {
     if (!window.confirm(`Delete "${customer.name}"? All their payment records will remain but customer will be removed.`)) return;
     try {
-      const r = await fetch(`${API_URL}/festival-fund/customers/${customer.id}`, { method:'DELETE' });
-      if (!r.ok) return flash('Failed to delete');
+      await deleteDoc(doc(db, 'festival_fund_customers', customer.id));
       flash(`Deleted: ${customer.name}`);
       setDetailCust(null);
       fetchAll();
@@ -266,15 +293,14 @@ export default function FestivalFund({ navigateTo }) {
     if (!/^\d{10}$/.test(editForm.mobile.trim())) return flash('Mobile must be 10 digits');
     setSaving(true);
     try {
-      const r = await fetch(`${API_URL}/festival-fund/customers/${editCust.id}`, {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(editForm)
-      });
-      const data = await r.json();
-      if (!r.ok) return flash(data.error || 'Failed');
-      flash(`✅ ${data.name} updated`);
+      const update = {
+        name: editForm.name.trim(), father_name: editForm.father_name.trim(),
+        mobile: editForm.mobile.trim(), spouse_name: editForm.spouse_name || ''
+      };
+      await updateDoc(doc(db, 'festival_fund_customers', editCust.id), update);
+      flash(`✅ ${update.name} updated`);
       setEditCust(null);
-      setDetailCust(prev => prev ? { ...prev, ...editForm } : null);
+      setDetailCust(prev => prev ? { ...prev, ...update } : null);
       fetchAll();
     } catch (e) { flash(e.message); }
     setSaving(false);
@@ -283,7 +309,7 @@ export default function FestivalFund({ navigateTo }) {
   const undoPayment = async (paymentId, customerName) => {
     if (!window.confirm(`Undo payment for ${customerName}?`)) return;
     try {
-      await fetch(`${API_URL}/festival-fund/payments/${paymentId}`, { method:'DELETE' });
+      await deleteDoc(doc(db, 'festival_fund_payments', paymentId));
       flash(`Undone: ${customerName}`);
       fetchAll();
     } catch (e) { flash(e.message); }
