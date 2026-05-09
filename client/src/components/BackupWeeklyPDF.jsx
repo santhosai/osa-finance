@@ -27,56 +27,13 @@ function BackupWeeklyPDF({ onClose }) {
     setLoading(true);
     setDone(false);
     setStats(null);
-    setProgress('Loading customers...');
+    setProgress('Loading all loan data...');
 
     try {
-      // Step 1: fetch all customers (includes their active loan IDs + balances)
-      const customersRes = await fetch(`${API_URL}/customers`);
-      if (!customersRes.ok) throw new Error('Failed to fetch customers');
-      const customers = await customersRes.json();
-
-      // Collect loan IDs where balance > 0
-      const loanEntries = [];
-      for (const customer of customers) {
-        for (const loan of (customer.loans || [])) {
-          if ((loan.balance || 0) > 0) {
-            loanEntries.push({
-              loanId: loan.loan_id,
-              fallbackName: customer.name,
-              fallbackPhone: customer.phone,
-            });
-          }
-        }
-      }
-
-      setProgress(`Loading ${loanEntries.length} loan records...`);
-
-      // Step 2: batch-fetch full loan data (with payments) — 12 at a time
-      const BATCH = 12;
-      const allLoans = [];
-      for (let i = 0; i < loanEntries.length; i += BATCH) {
-        const slice = loanEntries.slice(i, i + BATCH);
-        const results = await Promise.all(
-          slice.map(async ({ loanId, fallbackName, fallbackPhone }) => {
-            const r = await fetch(`${API_URL}/loans/${loanId}`);
-            if (!r.ok) return null;
-            const d = await r.json();
-            return {
-              ...d,
-              customer_name: d.customer_name || fallbackName,
-              customer_phone: d.customer_phone || fallbackPhone,
-              // sort payments ascending by date for the PDF
-              payments: (d.payments || []).slice().sort(
-                (a, b) => new Date(a.payment_date) - new Date(b.payment_date)
-              ),
-            };
-          })
-        );
-        allLoans.push(...results.filter(Boolean));
-        setProgress(
-          `Loaded ${Math.min(i + BATCH, loanEntries.length)} / ${loanEntries.length} loans...`
-        );
-      }
+      // Single API call — server returns all loans + customers + payments efficiently
+      const res = await fetch(`${API_URL}/weekly-pdf-backup`);
+      if (!res.ok) throw new Error('Failed to fetch backup data');
+      const { loans: allLoans } = await res.json();
 
       // Sort helper — by loan_given_date ascending
       const byGivenDate = (a, b) => {
