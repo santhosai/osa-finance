@@ -31,6 +31,7 @@ const UserCollections = lazy(() => import('./components/UserCollections'));
 const AdminCollections = lazy(() => import('./components/AdminCollections'));
 const ChitDashboard = lazy(() => import('./components/ChitDashboard'));
 const AutoFinanceDashboard = lazy(() => import('./components/AutoFinanceDashboard'));
+const FestivalFund = lazy(() => import('./components/FestivalFund'));
 
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
 const CURRENT_PASSWORD_VERSION = '2025-01-27-v2';
@@ -163,6 +164,11 @@ function AutoFinanceDashboardWrapper() {
   return <AutoFinanceDashboard navigateTo={(path) => navigate(`/${path}`)} />;
 }
 
+function FestivalFundWrapper() {
+  const navigate = useNavigate();
+  return <FestivalFund navigateTo={(path) => navigate(`/${path}`)} />;
+}
+
 
 // Main app component wrapper
 function AppContent() {
@@ -275,6 +281,20 @@ function AppContent() {
           </div>
         </LanguageProvider>
       </ThemeProvider>
+    );
+  }
+
+  // FESTIVAL FUND MODULE
+  if (selectedModule === 'festival-fund') {
+    return (
+      <div className="app">
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/festival-fund" element={<FestivalFundWrapper />} />
+            <Route path="*" element={<Navigate to="/festival-fund" replace />} />
+          </Routes>
+        </Suspense>
+      </div>
     );
   }
 

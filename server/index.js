@@ -5588,6 +5588,114 @@ app.get('/api/balance-check/:phone', async (req, res) => {
   }
 });
 
+// ============ FESTIVAL FUND ROUTES ============
+
+function getFestivalPaymentMonths(joinMonth) {
+  const [y, m] = joinMonth.split('-').map(Number);
+  const months = [];
+  for (let i = 1; i <= 10; i++) {
+    const d = new Date(y, m - 1 + i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return months;
+}
+
+app.get('/api/festival-fund/customers', async (req, res) => {
+  try {
+    const snap = await db.collection('festival_fund_customers').get();
+    res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/festival-fund/customers', async (req, res) => {
+  try {
+    const { name, father_name, mobile, spouse_name, scheme } = req.body;
+    if (!name || !father_name || !mobile || !scheme)
+      return res.status(400).json({ error: 'name, father_name, mobile and scheme are required' });
+    const schemeAmount = scheme === 1 ? 1000 : 2000;
+    const now = new Date();
+    const joinMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const data = {
+      name, father_name, mobile,
+      spouse_name: spouse_name || '',
+      scheme, scheme_amount: schemeAmount,
+      join_month: joinMonth,
+      payment_months: getFestivalPaymentMonths(joinMonth),
+      created_at: now.toISOString(),
+      status: 'active'
+    };
+    const ref = await db.collection('festival_fund_customers').add(data);
+    res.json({ id: ref.id, ...data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/festival-fund/customers/:id', async (req, res) => {
+  try {
+    await db.collection('festival_fund_customers').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/festival-fund/payments', async (req, res) => {
+  try {
+    const { month } = req.query;
+    let q = db.collection('festival_fund_payments');
+    if (month) q = q.where('payment_month', '==', month);
+    const snap = await q.get();
+    res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/festival-fund/payments', async (req, res) => {
+  try {
+    const { customer_id, payment_month, month_number, amount, payment_date } = req.body;
+    if (!customer_id || !payment_month || !month_number || !amount || !payment_date)
+      return res.status(400).json({ error: 'All fields required' });
+    const existing = await db.collection('festival_fund_payments')
+      .where('customer_id', '==', customer_id)
+      .where('payment_month', '==', payment_month).get();
+    if (!existing.empty)
+      return res.status(400).json({ error: 'Payment already recorded for this month' });
+    const data = { customer_id, payment_month, month_number, amount, payment_date, created_at: new Date().toISOString() };
+    const ref = await db.collection('festival_fund_payments').add(data);
+    res.json({ id: ref.id, ...data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/festival-fund/payments/:id', async (req, res) => {
+  try {
+    await db.collection('festival_fund_payments').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/festival-fund/stats', async (req, res) => {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7);
+    const [custSnap, paySnap] = await Promise.all([
+      db.collection('festival_fund_customers').where('status', '==', 'active').get(),
+      db.collection('festival_fund_payments').where('payment_month', '==', month).get()
+    ]);
+    const customers = custSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const paidIds = new Set(payments.map(p => p.customer_id));
+    const due = customers.filter(c => (c.payment_months || []).includes(month));
+    const paid = due.filter(c => paidIds.has(c.id));
+    const unpaid = due.filter(c => !paidIds.has(c.id));
+    res.json({
+      total_customers: customers.length,
+      scheme1_count: customers.filter(c => c.scheme === 1).length,
+      scheme2_count: customers.filter(c => c.scheme === 2).length,
+      due_this_month: due.length,
+      paid_this_month: paid.length,
+      unpaid_this_month: unpaid.length,
+      collected_amount: payments.reduce((s, p) => s + (p.amount || 0), 0),
+      pending_amount: unpaid.reduce((s, c) => s + c.scheme_amount, 0),
+      current_month: month
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

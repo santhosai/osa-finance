@@ -27,6 +27,14 @@ function ModuleSelector({ onSelectModule }) {
       subtitle: 'Vehicle Loans & EMI',
       color: '#0d9488',
       gradient: 'linear-gradient(135deg, #0d9488 0%, #065f46 100%)'
+    },
+    {
+      id: 'festival-fund',
+      icon: '🎉',
+      title: 'Festival Fund',
+      subtitle: '10-Month Savings Scheme',
+      color: '#d97706',
+      gradient: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
     }
   ];
 
