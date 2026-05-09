@@ -46,15 +46,7 @@ function Dashboard({ navigateTo }) {
   const [showBulkWhatsApp, setShowBulkWhatsApp] = useState(false);
   const [showReports, setShowReports] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(() => {
-    // Auto-select the most recent past Sunday
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0=Sun
-    const diff = dayOfWeek === 0 ? 0 : -dayOfWeek;
-    const sunday = new Date(today);
-    sunday.setDate(today.getDate() + diff);
-    return sunday.toISOString().split('T')[0];
-  });
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMonthlyFinanceMonth, setSelectedMonthlyFinanceMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
   const [weeklyPaymentsData, setWeeklyPaymentsData] = useState({ paidLoans: [], unpaidLoans: [], loading: true });
   const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0); // To trigger re-fetch
@@ -3252,16 +3244,7 @@ function Dashboard({ navigateTo }) {
               {['Sunday', 'Thursday'].map(day => (
                 <button
                   key={day}
-                  onClick={() => {
-                    setWeeklyCollectionDay(day);
-                    // Auto-jump to nearest past occurrence of this day
-                    const targetDay = day === 'Sunday' ? 0 : 4;
-                    const today = new Date();
-                    const diff = (today.getDay() - targetDay + 7) % 7;
-                    const nearest = new Date(today);
-                    nearest.setDate(today.getDate() - diff);
-                    setSelectedDate(nearest.toISOString().split('T')[0]);
-                  }}
+                  onClick={() => setWeeklyCollectionDay(day)}
                   style={{
                     flex: 1,
                     padding: '6px 12px',
