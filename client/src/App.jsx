@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { API_URL } from './config';
 
 // Small/critical components loaded immediately (needed on first render)
 import Login from './components/Login';
@@ -359,9 +360,16 @@ function PWAUpdateBanner() {
 }
 
 // Main App component with public routes
+// Warm up the server the moment the app loads (fixes cold-start blank screen)
+function ServerWarmup() {
+  useEffect(() => { fetch(`${API_URL}/health`).catch(() => {}); }, []);
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <ServerWarmup />
       <PWAUpdateBanner />
       <Routes>
         {/* Public routes - no authentication required */}

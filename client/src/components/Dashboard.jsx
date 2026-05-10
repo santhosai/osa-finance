@@ -86,10 +86,12 @@ function Dashboard({ navigateTo }) {
   const [notificationStatus, setNotificationStatus] = useState('unknown'); // 'unknown', 'enabled', 'disabled', 'error'
 
   // Use SWR for automatic caching and re-fetching
-  const { data: stats, error, isLoading, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
-    refreshInterval: 30000, // Auto-refresh every 30 seconds
-    revalidateOnFocus: true, // Auto-refresh when user returns to tab
-    dedupingInterval: 2000, // Prevent duplicate requests within 2s
+  const { data: stats, error, isLoading, isValidating, mutate } = useSWR(`${API_URL}/stats`, fetcher, {
+    refreshInterval: 30000,
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
+    errorRetryCount: 6,
+    errorRetryInterval: 2000,
   });
 
   // Fetch customers with loans for the table
@@ -1579,8 +1581,8 @@ function Dashboard({ navigateTo }) {
     }
   };
 
-  // Show loading screen while initial data loads
-  if (isLoading && !stats) {
+  // Show loading screen while initial data loads or while retrying after error
+  if ((isLoading || isValidating) && !stats) {
     return (
       <div style={{
         display: 'flex',
@@ -1605,8 +1607,8 @@ function Dashboard({ navigateTo }) {
     );
   }
 
-  // Show error if API fails
-  if (error && !stats) {
+  // Show error if API fails after all retries
+  if (error && !stats && !isValidating) {
     return (
       <div style={{
         display: 'flex',
