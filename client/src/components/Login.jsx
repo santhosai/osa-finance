@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 import './Login.css';
 
@@ -6,6 +6,8 @@ import './Login.css';
 const PASSWORD_VERSION = '2025-01-27-v2';
 
 function Login({ onLoginSuccess }) {
+  useEffect(() => { fetch(`${API_URL}/health`).catch(() => {}); }, []);
+
   const [mode, setMode] = useState('login'); // 'login', 'register', 'admin'
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
