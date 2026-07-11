@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import useSWR from 'swr';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import AddCustomerModal from './AddCustomerModal';
@@ -472,6 +472,15 @@ function Dashboard({ navigateTo }) {
 
   // Fetch weekly payments data when selectedDate or customers change
   const customersLength = customers?.length || 0;
+  // Signature that changes whenever any loan's balance/status changes (not just when the
+  // customer count changes) — makes the Sunday paid list re-check itself after a payment
+  // is recorded elsewhere, e.g. from inside a customer's loan page.
+  const weeklyLoansSignature = useMemo(() => {
+    if (!Array.isArray(customers)) return '';
+    return customers
+      .map(c => (c.loans || []).map(l => `${l.loan_id}:${l.balance}:${l.status}`).join(','))
+      .join('|');
+  }, [customers]);
   useEffect(() => {
     if (customersLength === 0) return;
 
@@ -510,7 +519,7 @@ function Dashboard({ navigateTo }) {
       customers.forEach(customer => {
         if (!customer.loans || customer.loans.length === 0) return;
         customer.loans.forEach(loan => {
-          if (loan.status === 'closed' || loan.loan_type !== 'Weekly' || loan.balance <= 0) return;
+          if (loan.loan_type !== 'Weekly') return;
 
           // Filter by collection day (default Sunday for backward compat)
           const loanCollectionDay = loan.collection_day || 'Sunday';
@@ -528,6 +537,9 @@ function Dashboard({ navigateTo }) {
 
           // Show ALL loans with balance > 0 every Sunday (no more week 10 limit)
           // They owe money, so they should pay!
+          // Closed/zero-balance loans are kept here too — they're only kept in the
+          // final list below if their closing payment was made on this exact date,
+          // so a customer's final payment still counts toward today's Paid total.
           loansToCheck.push({ customer, loan, weekNumber });
         });
       });
@@ -552,6 +564,12 @@ function Dashboard({ navigateTo }) {
           const totalWeeks = 10;
           const payment = paidLoanPayments.get(loan.loan_id);
           const isPaid = !!payment;
+
+          // Closed/zero-balance loans only belong in this date's list if they were
+          // paid off on this exact date (their final payment) — otherwise they have
+          // nothing due here and should stay off both the Paid and Unpaid lists.
+          const isClosedLoan = loan.status === 'closed' || loan.balance <= 0;
+          if (isClosedLoan && !isPaid) return;
 
           // For paid loans, use the actual payment data (balance_after, week_number)
           // For unpaid loans, use the calculated values
@@ -587,7 +605,7 @@ function Dashboard({ navigateTo }) {
 
     fetchWeeklyPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, customersLength, paymentsRefreshKey, weeklyCollectionDay]);
+  }, [selectedDate, weeklyLoansSignature, paymentsRefreshKey, weeklyCollectionDay]);
 
   // Fetch weekly diagnostic data for overview
   useEffect(() => {
