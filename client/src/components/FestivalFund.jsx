@@ -978,26 +978,79 @@ th{background:#1e293b;color:white;font-size:10px;}
             </div>
           )}
 
-          {/* This month's Paid / Unpaid preview */}
+          {/* This month's Paid / Unpaid — full list with actions, same as Monthly Payments */}
           <div style={S.card}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
               <span style={{ fontSize:13, fontWeight:700 }}>✅ {fmtFull(selMonth)} — Paid / Unpaid</span>
-              <button onClick={() => nav('monthly')} style={{ background:'none', border:'none', color:'#f59e0b', fontSize:11, fontWeight:700, cursor:'pointer' }}>View All →</button>
+              <MonthPicker />
             </div>
-            <div style={{ display:'flex', gap:10 }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:10, fontWeight:700, color:'#4ade80', marginBottom:6 }}>✓ PAID ({paidThisMonth.length})</div>
-                {paidThisMonth.slice(0, 5).map(c => (
-                  <div key={c.id} style={{ fontSize:11, color:'#cbd5e1', padding:'4px 0', borderBottom:'1px solid #1e293b' }}>{c.name}</div>
-                ))}
-                {paidThisMonth.length === 0 && <div style={{ fontSize:10, color:'#64748b' }}>—</div>}
+
+            {dueThisMonth.length === 0 && !loading && (
+              <div style={{ textAlign:'center',color:'#64748b',padding:'20px 0',fontSize:13 }}>No payments due for this month</div>
+            )}
+
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:16 }}>
+              {/* PAID column */}
+              <div>
+                <div style={{ fontSize:10,fontWeight:700,color:'#4ade80',padding:'5px 0',marginBottom:5,borderBottom:'1px solid #334155' }}>
+                  ✓ PAID ({paidThisMonth.length})
+                </div>
+                {paidThisMonth.map(c => {
+                  const pay = paymentMap[c.id]?.[selMonth];
+                  const mNum = (c.payment_months||[]).indexOf(selMonth) + 1;
+                  return (
+                    <div key={c.id} style={S.crow('paid')}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12,fontWeight:700 }}>
+                          {c.name}
+                          <span style={{ ...S.badge2(c.scheme===1?'#1e3a5f':'#3b1e5f', c.scheme===1?'#93c5fd':'#c4b5fd'), marginLeft:5 }}>S{c.scheme} ₹{c.scheme_amount/1000}K</span>
+                        </div>
+                        <div style={{ fontSize:9,color:'#94a3b8',marginTop:2 }}>
+                          {c.father_name} | {c.mobile} | M{mNum}/10 | Paid: {pay ? fmtDate(pay.payment_date) : ''} {pay?.payment_mode ? `(${pay.payment_mode.toUpperCase()})` : ''}
+                        </div>
+                      </div>
+                      <div style={{ ...S.row, flexWrap:'wrap' }}>
+                        <span style={{ background:'#14532d',color:'#4ade80',padding:'3px 6px',borderRadius:5,fontSize:9,fontWeight:700 }}>✓</span>
+                        <button style={S.btn('#25d366')} onClick={() => sendWhatsAppMsg(c, pay, 'received')}>WA</button>
+                        <button style={S.btn('#475569')} onClick={() => printReceipt(c, pay)}>🖨</button>
+                        <button style={S.btn('#b45309')} onClick={() => undoPayment(pay.id, c.name)}>Undo</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {paidThisMonth.length === 0 && !loading && (
+                  <div style={{ textAlign:'center',color:'#64748b',padding:'12px 0',fontSize:12 }}>—</div>
+                )}
               </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:10, fontWeight:700, color:'#f87171', marginBottom:6 }}>✗ UNPAID ({unpaidThisMonth.length})</div>
-                {unpaidThisMonth.slice(0, 5).map(c => (
-                  <div key={c.id} style={{ fontSize:11, color:'#cbd5e1', padding:'4px 0', borderBottom:'1px solid #1e293b' }}>{c.name}</div>
-                ))}
-                {unpaidThisMonth.length === 0 && <div style={{ fontSize:10, color:'#64748b' }}>—</div>}
+
+              {/* UNPAID column */}
+              <div>
+                <div style={{ fontSize:10,fontWeight:700,color:'#f87171',padding:'5px 0',marginBottom:5,borderBottom:'1px solid #334155' }}>
+                  ✗ UNPAID ({unpaidThisMonth.length})
+                </div>
+                {unpaidThisMonth.map(c => {
+                  const mNum = (c.payment_months||[]).indexOf(selMonth) + 1;
+                  return (
+                    <div key={c.id} style={S.crow('unpaid')}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12,fontWeight:700 }}>
+                          {c.name}
+                          <span style={{ ...S.badge2(c.scheme===1?'#1e3a5f':'#3b1e5f', c.scheme===1?'#93c5fd':'#c4b5fd'), marginLeft:5 }}>S{c.scheme} ₹{c.scheme_amount/1000}K</span>
+                        </div>
+                        <div style={{ fontSize:9,color:'#94a3b8',marginTop:2 }}>
+                          {c.father_name} | {c.mobile} | M{mNum}/10 | Due: ₹{c.scheme_amount.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                      <div style={{ ...S.row, flexWrap:'wrap' }}>
+                        <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickMode('cash'); setQuickPay({ customer: c }); }}>Pay</button>
+                        <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {unpaidThisMonth.length === 0 && !loading && (
+                  <div style={{ textAlign:'center',color:'#64748b',padding:'12px 0',fontSize:12 }}>—</div>
+                )}
               </div>
             </div>
           </div>
