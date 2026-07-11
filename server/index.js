@@ -5609,10 +5609,12 @@ app.get('/api/balance-check/:phone', async (req, res) => {
 
 // ============ FESTIVAL FUND ROUTES ============
 
+// The join month itself is month 1 of the 10-month schedule — someone who joins in
+// July and pays any day in July has made their first payment, not a "late" one.
 function getFestivalPaymentMonths(joinMonth) {
   const [y, m] = joinMonth.split('-').map(Number);
   const months = [];
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 0; i <= 9; i++) {
     const d = new Date(y, m - 1 + i, 1);
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
@@ -5628,12 +5630,16 @@ app.get('/api/festival-fund/customers', async (req, res) => {
 
 app.post('/api/festival-fund/customers', async (req, res) => {
   try {
-    const { name, father_name, mobile, spouse_name, scheme, referred_by } = req.body;
+    const { name, father_name, mobile, spouse_name, scheme, referred_by, join_month } = req.body;
     if (!name || !father_name || !mobile || !scheme)
       return res.status(400).json({ error: 'name, father_name, mobile and scheme are required' });
+    if (join_month && !/^\d{4}-\d{2}$/.test(join_month))
+      return res.status(400).json({ error: 'join_month must be in YYYY-MM format' });
     const schemeAmount = scheme === 1 ? 1000 : 2000;
     const now = new Date();
-    const joinMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    // join_month is staff-selectable (e.g. registering someone now for a scheme
+    // that actually starts next month) — default to the current month if omitted.
+    const joinMonth = join_month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const data = {
       name, father_name, mobile,
       spouse_name: spouse_name || '',

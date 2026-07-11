@@ -51,10 +51,12 @@ function monthOptions() {
   return opts;
 }
 
+// The join month itself is month 1 — someone who joins in July and pays any day in
+// July has made their first payment, not a "late" one.
 function getFestivalPaymentMonths(joinMonth) {
   const [y, m] = joinMonth.split('-').map(Number);
   const months = [];
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 0; i <= 9; i++) {
     const d = new Date(y, m - 1 + i, 1);
     months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
@@ -165,7 +167,7 @@ export default function FestivalFund({ navigateTo }) {
   const [msg, setMsg]                 = useState('');
 
   // Add-customer form
-  const [form, setForm] = useState({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'' });
+  const [form, setForm] = useState({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'', join_month:currentMonth() });
   const [rulesOpen, setRulesOpen] = useState(false);
   const [contactPickerSupported] = useState(typeof navigator !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window);
 
@@ -256,7 +258,7 @@ export default function FestivalFund({ navigateTo }) {
       const data = await r.json();
       if (!r.ok) return flash(data.error || 'Failed');
       flash(`✅ ${data.name} registered!`);
-      setForm({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'' });
+      setForm({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'', join_month:currentMonth() });
       fetchAll();
       setSection('monthly');
     } catch (e) { flash(e.message); }
@@ -1043,9 +1045,13 @@ th{background:#1e293b;color:white;font-size:10px;}
             </div>
             <button onClick={printMonthlyAudit} style={S.primaryBtn('linear-gradient(135deg,#7c3aed,#6d28d9)')}>🖨️ Print Monthly Audit</button>
 
-            {/* PAID */}
-            {paidThisMonth.length > 0 && (
-              <>
+            {dueThisMonth.length === 0 && !loading && (
+              <div style={{ textAlign:'center',color:'#64748b',padding:'20px 0',fontSize:13 }}>No payments due for this month</div>
+            )}
+
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:16 }}>
+              {/* PAID column */}
+              <div>
                 <div style={{ fontSize:10,fontWeight:700,color:'#4ade80',padding:'5px 0',marginBottom:5,borderBottom:'1px solid #334155' }}>
                   ✓ PAID ({paidThisMonth.length})
                 </div>
@@ -1063,7 +1069,7 @@ th{background:#1e293b;color:white;font-size:10px;}
                           {c.father_name} | {c.mobile} | M{mNum}/10 | Paid: {pay ? fmtDate(pay.payment_date) : ''} {pay?.payment_mode ? `(${pay.payment_mode.toUpperCase()})` : ''}
                         </div>
                       </div>
-                      <div style={S.row}>
+                      <div style={{ ...S.row, flexWrap:'wrap' }}>
                         <span style={{ background:'#14532d',color:'#4ade80',padding:'3px 6px',borderRadius:5,fontSize:9,fontWeight:700 }}>✓</span>
                         <button style={S.btn('#25d366')} onClick={() => sendWhatsAppMsg(c, pay, 'received')}>WA</button>
                         <button style={S.btn('#475569')} onClick={() => printReceipt(c, pay)}>🖨</button>
@@ -1072,13 +1078,14 @@ th{background:#1e293b;color:white;font-size:10px;}
                     </div>
                   );
                 })}
-              </>
-            )}
+                {paidThisMonth.length === 0 && !loading && (
+                  <div style={{ textAlign:'center',color:'#64748b',padding:'12px 0',fontSize:12 }}>—</div>
+                )}
+              </div>
 
-            {/* UNPAID */}
-            {unpaidThisMonth.length > 0 && (
-              <>
-                <div style={{ fontSize:10,fontWeight:700,color:'#f87171',padding:'5px 0',marginTop:10,marginBottom:5,borderBottom:'1px solid #334155' }}>
+              {/* UNPAID column */}
+              <div>
+                <div style={{ fontSize:10,fontWeight:700,color:'#f87171',padding:'5px 0',marginBottom:5,borderBottom:'1px solid #334155' }}>
                   ✗ UNPAID ({unpaidThisMonth.length})
                 </div>
                 {unpaidThisMonth.map(c => {
@@ -1094,19 +1101,18 @@ th{background:#1e293b;color:white;font-size:10px;}
                           {c.father_name} | {c.mobile} | M{mNum}/10 | Due: ₹{c.scheme_amount.toLocaleString('en-IN')}
                         </div>
                       </div>
-                      <div style={S.row}>
+                      <div style={{ ...S.row, flexWrap:'wrap' }}>
                         <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickMode('cash'); setQuickPay({ customer: c }); }}>Pay</button>
                         <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
                       </div>
                     </div>
                   );
                 })}
-              </>
-            )}
-
-            {dueThisMonth.length === 0 && !loading && (
-              <div style={{ textAlign:'center',color:'#64748b',padding:'20px 0',fontSize:13 }}>No payments due for this month</div>
-            )}
+                {unpaidThisMonth.length === 0 && !loading && (
+                  <div style={{ textAlign:'center',color:'#64748b',padding:'12px 0',fontSize:12 }}>—</div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1183,11 +1189,22 @@ th{background:#1e293b;color:white;font-size:10px;}
               ))}
             </div>
 
+            <label style={S.label}>
+              சேரும் மாதம் (Join Month) <span style={{ color:'#f87171' }}>*</span>
+              <span style={{ color:'#475569', fontWeight:400 }}> — இதுவே மாதம் 1</span>
+            </label>
+            <select
+              style={S.input}
+              value={form.join_month}
+              onChange={e => setForm(f => ({ ...f, join_month:e.target.value }))}
+            >
+              {monthOptions().map(m => <option key={m} value={m}>{fmtFull(m)}</option>)}
+            </select>
+
             <div style={{ background:'#0f172a',borderRadius:8,padding:'10px 12px',marginBottom:14,border:'1px solid #334155' }}>
-              <div style={{ fontSize:10,color:'#94a3b8' }}>Join Month (auto)</div>
-              <div style={{ fontSize:14,fontWeight:700,color:'#f59e0b' }}>{fmtFull(currentMonth())}</div>
-              <div style={{ fontSize:10,color:'#64748b',marginTop:2 }}>
-                Payments: {fmtFull((() => { const d=new Date(); d.setMonth(d.getMonth()+1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })())} → 10 months
+              <div style={{ fontSize:10,color:'#94a3b8' }}>Payment Schedule (Month 1 → 10)</div>
+              <div style={{ fontSize:12,fontWeight:700,color:'#f59e0b',marginTop:3 }}>
+                {fmtFull(form.join_month)} → {fmtFull(getFestivalPaymentMonths(form.join_month)[9])}
               </div>
             </div>
 
