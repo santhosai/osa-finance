@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { jsPDF } from 'jspdf';
 import { API_URL } from '../config';
+import { THERMAL_COMMANDS, printViaBluetooth } from '../utils/thermalPrint';
 
 const PHONE = '8667510724';
 
@@ -551,6 +553,40 @@ h2{font-size:13px;margin:4px 0;}
     }, 600);
   };
 
+  // ── Bluetooth thermal receipt (same printer/mechanism as the main Finance module) ──
+  const printReceiptBluetooth = (customer, payment) => {
+    const monthIdx = (customer.payment_months || []).indexOf(payment.payment_month);
+    const isPayout = payment.payment_month === 'payout';
+    let receipt = THERMAL_COMMANDS.INIT;
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += THERMAL_COMMANDS.BOLD_ON + THERMAL_COMMANDS.DOUBLE_HEIGHT;
+    receipt += 'OM SAI MURUGAN\nFINANCE\n';
+    receipt += THERMAL_COMMANDS.NORMAL_SIZE + THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += isPayout ? '** FESTIVAL PAYOUT **\n' : '** FESTIVAL FUND RECEIPT **\n';
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+    receipt += THERMAL_COMMANDS.ALIGN_LEFT;
+    receipt += `Name: ${customer.name}\n`;
+    receipt += `Father: ${customer.father_name}\n`;
+    receipt += `Mobile: ${customer.mobile}\n`;
+    receipt += `Scheme: ${customer.scheme} (Rs.${customer.scheme_amount.toLocaleString('en-IN')}/mo)\n`;
+    receipt += isPayout ? 'Payout / Gift Handover\n' : `Month: ${fmtFull(payment.payment_month)} (${monthIdx+1}/10)\n`;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += `Amount: Rs.${(payment.amount||0).toLocaleString('en-IN')}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += `Mode: ${(payment.payment_mode||'cash').toUpperCase()}\n`;
+    receipt += `Date: ${fmtDate(payment.payment_date)}\n`;
+    receipt += THERMAL_COMMANDS.LINE;
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += `Ph: ${PHONE}\n`;
+    receipt += 'Thank you!\n';
+    receipt += THERMAL_COMMANDS.FEED;
+    receipt += THERMAL_COMMANDS.PARTIAL_CUT;
+    printViaBluetooth(receipt);
+  };
+
   // ── Print monthly audit ───────────────────────────────────────────────────
   const printMonthlyAudit = () => {
     const paidRows = paidThisMonth.map((c, i) => {
@@ -609,64 +645,119 @@ th{background:#1e293b;color:white;}
     }, 600);
   };
 
-  // ── PDF export ────────────────────────────────────────────────────────────
-  const exportPDF = () => {
-    const paidRows = paidThisMonth.map((c, i) => {
-      const pay = paymentMap[c.id]?.[selMonth];
-      const mNum = (c.payment_months||[]).indexOf(selMonth) + 1;
-      return `<tr style="background:${i%2===0?'#f0fdf4':'white'}">
-        <td>${i+1}</td><td>${c.name}</td><td>${c.father_name}</td><td>${c.mobile}</td>
-        <td>S${c.scheme}</td><td>M${mNum}/10</td>
-        <td>₹${c.scheme_amount.toLocaleString('en-IN')}</td>
-        <td>${pay ? fmtDate(pay.payment_date) : '-'}</td>
-        <td style="color:#15803d;font-weight:700;">✓ PAID</td>
-      </tr>`;
-    }).join('');
-    const unpaidRows = unpaidThisMonth.map((c, i) => {
-      const mNum = (c.payment_months||[]).indexOf(selMonth) + 1;
-      return `<tr style="background:${i%2===0?'#fef2f2':'white'}">
-        <td>${paidThisMonth.length+i+1}</td><td>${c.name}</td><td>${c.father_name}</td><td>${c.mobile}</td>
-        <td>S${c.scheme}</td><td>M${mNum}/10</td>
-        <td>₹${c.scheme_amount.toLocaleString('en-IN')}</td>
-        <td>-</td>
-        <td style="color:#dc2626;font-weight:700;">✗ UNPAID</td>
-      </tr>`;
-    }).join('');
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>
-@page{size:A4 landscape;margin:10mm}
-body{font-family:Arial,sans-serif;font-size:10px;}
-h2{text-align:center;font-size:14px;margin:0 0 3px;}
-.sub{text-align:center;font-size:10px;color:#555;margin-bottom:10px;}
-table{width:100%;border-collapse:collapse;}
-th,td{border:1px solid #ddd;padding:5px 6px;text-align:left;}
-th{background:#1e293b;color:white;font-size:10px;}
-.sum{display:inline-block;background:#f8fafc;border:1px solid #ddd;border-radius:6px;padding:6px 14px;text-align:center;margin:0 6px 10px;}
-.sum strong{display:block;font-size:15px;}
-</style></head><body>
-<h2>OM SAI MURUGAN FINANCE — Festival Fund</h2>
-<div class="sub">Monthly Report: ${fmtFull(selMonth)} &nbsp;|&nbsp; Generated: ${fmtDate(todayISO())}</div>
-<div style="text-align:center;margin-bottom:10px;">
-  <span class="sum"><strong>${dueThisMonth.length}</strong>Total Due</span>
-  <span class="sum" style="color:#15803d"><strong>${paidThisMonth.length}</strong>Paid</span>
-  <span class="sum" style="color:#dc2626"><strong>${unpaidThisMonth.length}</strong>Unpaid</span>
-  <span class="sum"><strong>₹${(stats?.collected_amount||0).toLocaleString('en-IN')}</strong>Collected</span>
-  <span class="sum" style="color:#dc2626"><strong>₹${(stats?.pending_amount||0).toLocaleString('en-IN')}</strong>Pending</span>
-</div>
-<table><thead><tr><th>#</th><th>Name</th><th>Father</th><th>Mobile</th><th>Scheme</th><th>Month</th><th>Amount</th><th>Paid On</th><th>Status</th></tr></thead>
-<tbody>${paidRows}${unpaidRows}</tbody></table>
-</body></html>`;
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;';
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    setTimeout(() => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => { try { document.body.removeChild(iframe); } catch(_){} }, 2000);
-    }, 600);
+  // ── Bluetooth thermal monthly audit (same printer/mechanism as the main Finance module) ──
+  const printMonthlyAuditBluetooth = () => {
+    let receipt = THERMAL_COMMANDS.INIT;
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += THERMAL_COMMANDS.BOLD_ON + THERMAL_COMMANDS.DOUBLE_HEIGHT;
+    receipt += 'OM SAI MURUGAN\nFINANCE\n';
+    receipt += THERMAL_COMMANDS.NORMAL_SIZE + THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += '** FESTIVAL FUND AUDIT **\n';
+    receipt += `** ${fmtFull(selMonth)} **\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+
+    receipt += THERMAL_COMMANDS.ALIGN_LEFT;
+    receipt += `Paid: ${paidThisMonth.length} | Unpaid: ${unpaidThisMonth.length}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_ON;
+    receipt += `Collected: Rs.${(stats?.collected_amount||0).toLocaleString('en-IN')}\n`;
+    receipt += THERMAL_COMMANDS.BOLD_OFF;
+    receipt += THERMAL_COMMANDS.LINE;
+
+    if (paidThisMonth.length > 0) {
+      receipt += THERMAL_COMMANDS.BOLD_ON + `PAID (${paidThisMonth.length}):\n` + THERMAL_COMMANDS.BOLD_OFF;
+      paidThisMonth.forEach((c, i) => {
+        const pay = paymentMap[c.id]?.[selMonth];
+        receipt += `${i+1}.${c.name.substring(0,20)}\n`;
+        receipt += `  Rs.${(pay?.amount||0).toLocaleString('en-IN')}\n`;
+      });
+      receipt += THERMAL_COMMANDS.DASHED;
+    }
+
+    if (unpaidThisMonth.length > 0) {
+      receipt += THERMAL_COMMANDS.BOLD_ON + `UNPAID (${unpaidThisMonth.length}):\n` + THERMAL_COMMANDS.BOLD_OFF;
+      unpaidThisMonth.forEach((c, i) => {
+        receipt += `${i+1}.${c.name.substring(0,20)}\n`;
+        receipt += `  Rs.${c.scheme_amount.toLocaleString('en-IN')}\n`;
+      });
+      receipt += THERMAL_COMMANDS.DASHED;
+    }
+
+    receipt += THERMAL_COMMANDS.ALIGN_CENTER;
+    receipt += `Ph: ${PHONE}\n`;
+    receipt += THERMAL_COMMANDS.FEED;
+    receipt += THERMAL_COMMANDS.PARTIAL_CUT;
+    printViaBluetooth(receipt);
+  };
+
+  // ── Downloadable monthly report (real PDF file saved locally, not a print dialog) ──
+  const downloadMonthlyReportPDF = () => {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const m = 12, pw = 297;
+    doc.setFontSize(15); doc.setFont('helvetica', 'bold');
+    doc.text('OM SAI MURUGAN FINANCE', pw / 2, m + 4, { align: 'center' });
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`Festival Fund - Monthly Report: ${fmtFull(selMonth)}`, pw / 2, m + 11, { align: 'center' });
+    doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+    doc.text(`Generated: ${fmtDate(todayISO())}`, pw / 2, m + 16, { align: 'center' });
+
+    let y = m + 24;
+    doc.setFillColor(240, 253, 244); doc.rect(m, y, 60, 12, 'F');
+    doc.setFillColor(254, 242, 242); doc.rect(m + 65, y, 60, 12, 'F');
+    doc.setFillColor(248, 250, 252); doc.rect(m + 130, y, 60, 12, 'F');
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(21, 128, 61);
+    doc.text(`Paid: ${paidThisMonth.length}`, m + 30, y + 7.5, { align: 'center' });
+    doc.setTextColor(220, 38, 38);
+    doc.text(`Unpaid: ${unpaidThisMonth.length}`, m + 95, y + 7.5, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Collected: Rs.${(stats?.collected_amount||0).toLocaleString('en-IN')}`, m + 160, y + 7.5, { align: 'center' });
+
+    y += 20;
+    const rows = [
+      ...paidThisMonth.map(c => ({ c, status: 'PAID', pay: paymentMap[c.id]?.[selMonth] })),
+      ...unpaidThisMonth.map(c => ({ c, status: 'UNPAID', pay: null }))
+    ];
+    const cols = [
+      { label: '#', x: m + 4, w: 8 },
+      { label: 'Name', x: m + 14, w: 45 },
+      { label: 'Father', x: m + 60, w: 40 },
+      { label: 'Mobile', x: m + 102, w: 28 },
+      { label: 'Scheme', x: m + 132, w: 18 },
+      { label: 'Month', x: m + 152, w: 16 },
+      { label: 'Amount', x: m + 190, w: 22, align: 'right' },
+      { label: 'Paid On', x: m + 215, w: 26 },
+      { label: 'Mode', x: m + 243, w: 18 },
+      { label: 'Status', x: m + 263, w: 22 }
+    ];
+    doc.setFillColor(30, 41, 59); doc.rect(m, y, pw - m * 2, 7, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
+    cols.forEach(col => doc.text(col.label, col.x, y + 5, col.align ? { align: col.align } : undefined));
+    y += 7; doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+
+    rows.forEach((row, idx) => {
+      if (y > 195) { doc.addPage(); y = m; }
+      if (idx % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(m, y, pw - m * 2, 6.5, 'F'); }
+      doc.setTextColor(0, 0, 0);
+      const mNum = (row.c.payment_months || []).indexOf(selMonth) + 1;
+      doc.text(String(idx + 1), m + 4, y + 4.5);
+      doc.text(row.c.name.substring(0, 22), m + 14, y + 4.5);
+      doc.text(row.c.father_name.substring(0, 18), m + 60, y + 4.5);
+      doc.text(row.c.mobile, m + 102, y + 4.5);
+      doc.text(`S${row.c.scheme}`, m + 132, y + 4.5);
+      doc.text(`M${mNum}/10`, m + 152, y + 4.5);
+      doc.text(`Rs.${row.c.scheme_amount.toLocaleString('en-IN')}`, m + 212, y + 4.5, { align: 'right' });
+      doc.text(row.pay ? fmtDate(row.pay.payment_date) : '-', m + 215, y + 4.5);
+      doc.text(row.pay?.payment_mode ? row.pay.payment_mode.toUpperCase() : '-', m + 243, y + 4.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(row.status === 'PAID' ? 21 : 220, row.status === 'PAID' ? 128 : 38, row.status === 'PAID' ? 61 : 38);
+      doc.text(row.status, m + 263, y + 4.5);
+      doc.setFont('helvetica', 'normal');
+      y += 6.5;
+    });
+
+    doc.save(`FestivalFund_${selMonth}.pdf`);
   };
 
   // ── Nav helper ────────────────────────────────────────────────────────────
@@ -946,7 +1037,11 @@ th{background:#1e293b;color:white;font-size:10px;}
               <div style={{ ...S.sumItem, borderLeft:'1px solid #334155' }}><div style={{ fontSize:14,fontWeight:700,color:'#f87171' }}>₹{(stats?.pending_amount||0).toLocaleString('en-IN')}</div><div style={{ fontSize:9,color:'#94a3b8' }}>Pending ({stats?.unpaid_this_month||0})</div></div>
               <div style={{ ...S.sumItem, borderLeft:'1px solid #334155' }}><div style={{ fontSize:14,fontWeight:700,color:'#fbbf24' }}>₹{((stats?.collected_amount||0)+(stats?.pending_amount||0)).toLocaleString('en-IN')}</div><div style={{ fontSize:9,color:'#94a3b8' }}>Total Due</div></div>
             </div>
-            <button onClick={printMonthlyAudit} style={S.primaryBtn('linear-gradient(135deg,#7c3aed,#6d28d9)')}>🖨️ Print Monthly Audit</button>
+            <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+              <button onClick={printMonthlyAudit} style={{ ...S.primaryBtn('linear-gradient(135deg,#7c3aed,#6d28d9)'), flex:1, marginBottom:0 }}>🖨️ Print (Browser)</button>
+              <button onClick={printMonthlyAuditBluetooth} style={{ ...S.primaryBtn('linear-gradient(135deg,#0369a1,#0c4a6e)'), flex:1, marginBottom:0 }}>📶 Bluetooth Print</button>
+            </div>
+            <button onClick={downloadMonthlyReportPDF} style={S.primaryBtn('linear-gradient(135deg,#059669,#047857)')}>⬇️ Download Report (PDF)</button>
             <button onClick={() => nav('addcust')} style={S.primaryBtn('linear-gradient(135deg,#d97706,#b45309)')}>➕ Add New Customer</button>
           </div>
 
@@ -1013,6 +1108,7 @@ th{background:#1e293b;color:white;font-size:10px;}
                         <span style={{ background:'#14532d',color:'#4ade80',padding:'3px 6px',borderRadius:5,fontSize:9,fontWeight:700 }}>✓</span>
                         <button style={S.btn('#25d366')} onClick={() => sendWhatsAppMsg(c, pay, 'received')}>WA</button>
                         <button style={S.btn('#475569')} onClick={() => printReceipt(c, pay)}>🖨</button>
+                        <button style={S.btn('#0369a1')} onClick={() => printReceiptBluetooth(c, pay)}>📶</button>
                         <button style={S.btn('#b45309')} onClick={() => undoPayment(pay.id, c.name)}>Undo</button>
                       </div>
                     </div>
@@ -1096,7 +1192,11 @@ th{background:#1e293b;color:white;font-size:10px;}
               <div style={{ ...S.sumItem,borderLeft:'1px solid #334155' }}><div style={{ fontSize:16,fontWeight:700,color:'#f87171' }}>{unpaidThisMonth.length}</div><div style={{ fontSize:9,color:'#94a3b8' }}>Unpaid</div></div>
               <div style={{ ...S.sumItem,borderLeft:'1px solid #334155' }}><div style={{ fontSize:16,fontWeight:700,color:'#fbbf24' }}>{dueThisMonth.length}</div><div style={{ fontSize:9,color:'#94a3b8' }}>Total</div></div>
             </div>
-            <button onClick={printMonthlyAudit} style={S.primaryBtn('linear-gradient(135deg,#7c3aed,#6d28d9)')}>🖨️ Print Monthly Audit</button>
+            <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+              <button onClick={printMonthlyAudit} style={{ ...S.primaryBtn('linear-gradient(135deg,#7c3aed,#6d28d9)'), flex:1, marginBottom:0 }}>🖨️ Print (Browser)</button>
+              <button onClick={printMonthlyAuditBluetooth} style={{ ...S.primaryBtn('linear-gradient(135deg,#0369a1,#0c4a6e)'), flex:1, marginBottom:0 }}>📶 Bluetooth Print</button>
+            </div>
+            <button onClick={downloadMonthlyReportPDF} style={S.primaryBtn('linear-gradient(135deg,#059669,#047857)')}>⬇️ Download Report (PDF)</button>
 
             {dueThisMonth.length === 0 && !loading && (
               <div style={{ textAlign:'center',color:'#64748b',padding:'20px 0',fontSize:13 }}>No payments due for this month</div>
@@ -1126,6 +1226,7 @@ th{background:#1e293b;color:white;font-size:10px;}
                         <span style={{ background:'#14532d',color:'#4ade80',padding:'3px 6px',borderRadius:5,fontSize:9,fontWeight:700 }}>✓</span>
                         <button style={S.btn('#25d366')} onClick={() => sendWhatsAppMsg(c, pay, 'received')}>WA</button>
                         <button style={S.btn('#475569')} onClick={() => printReceipt(c, pay)}>🖨</button>
+                        <button style={S.btn('#0369a1')} onClick={() => printReceiptBluetooth(c, pay)}>📶</button>
                         <button style={S.btn('#b45309')} onClick={() => undoPayment(pay.id, c.name)}>Undo</button>
                       </div>
                     </div>
@@ -1613,6 +1714,7 @@ th{background:#1e293b;color:white;font-size:10px;}
                             {pay.payment_mode && <span style={S.badge2('#0f172a','#64748b')}>{pay.payment_mode.toUpperCase()}</span>}
                             <span style={{ fontSize:11, fontWeight:700, color:'#f59e0b' }}>₹{(pay.amount||0).toLocaleString('en-IN')}</span>
                             <button style={S.btn('#475569')} onClick={() => printReceipt(c, pay)}>🖨</button>
+                        <button style={S.btn('#0369a1')} onClick={() => printReceiptBluetooth(c, pay)}>📶</button>
                           </div>
                         </div>
                       );
