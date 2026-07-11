@@ -2,7 +2,7 @@ name: Deploy Server to Vercel
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - 'server/**'
   workflow_dispatch:
