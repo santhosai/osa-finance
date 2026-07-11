@@ -5,7 +5,7 @@ import db, { messaging } from './firestore.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ⚡ DEPLOYMENT v4.1.0 - Feb 11, 2026 - AUTO FINANCE MODULE ADDED
+// ⚡ DEPLOYMENT v4.1.1 - Jul 12, 2026 - Sunday paid-list now includes today's closing payments
 // Finance (Weekly/Monthly) + Chit Fund + Auto Finance (Vehicle Loans with EMI)
 // CONFIRMED: NO phone uniqueness check - Duplicate phones ARE ALLOWED
 // Using Firestore (NOT SQLite) - NO UNIQUE constraint on phone field
