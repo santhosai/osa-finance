@@ -51,10 +51,13 @@ app.get('/api/customers', async (req, res) => {
     const pageSize = limit ? parseInt(limit) : null; // null = no pagination (fetch all)
     const pageNum = page ? parseInt(page) : 1;
 
-    // OPTIMIZED: Fetch all data in parallel (3 queries instead of N+1)
-    const [customersSnapshot, loansSnapshot, paymentsSnapshot] = await Promise.all([
+    // OPTIMIZED: Fetch all data in parallel (4 queries instead of N+1)
+    const [customersSnapshot, activeLoansSnapshot, recentlyClosedLoansSnapshot, paymentsSnapshot] = await Promise.all([
       db.collection('customers').get(),
       db.collection('loans').where('status', '==', 'active').get(),
+      // Include loans closed recently so a customer's final payment still shows up
+      // as "paid" on the day it was made, instead of vanishing the moment it closes the loan.
+      db.collection('loans').where('status', '==', 'closed').get(),
       db.collection('payments').get()
     ]);
 
@@ -69,9 +72,25 @@ app.get('/api/customers', async (req, res) => {
       }
     });
 
+    // Only keep closed loans whose last payment was within this window — keeps the
+    // response payload from growing with years of old closed loans while still
+    // covering "did today's final payment show up" checks.
+    const RECENT_CLOSED_WINDOW_DAYS = 3;
+    const recentClosedCutoff = new Date();
+    recentClosedCutoff.setDate(recentClosedCutoff.getDate() - RECENT_CLOSED_WINDOW_DAYS);
+    const recentClosedCutoffStr = recentClosedCutoff.toISOString().split('T')[0];
+
+    const loanDocsToInclude = [...activeLoansSnapshot.docs];
+    recentlyClosedLoansSnapshot.docs.forEach(loanDoc => {
+      const lastPaid = lastPaymentByLoan[loanDoc.id];
+      if (lastPaid && lastPaid >= recentClosedCutoffStr) {
+        loanDocsToInclude.push(loanDoc);
+      }
+    });
+
     // Build loans lookup: customer_id -> array of loans
     const loansByCustomer = {};
-    loansSnapshot.docs.forEach(loanDoc => {
+    loanDocsToInclude.forEach(loanDoc => {
       const loanData = loanDoc.data();
       const customerId = loanData.customer_id;
       if (!loansByCustomer[customerId]) {
@@ -114,7 +133,7 @@ app.get('/api/customers', async (req, res) => {
       customers.push({
         ...customerData,
         loans: loans,
-        total_active_loans: loans.length,
+        total_active_loans: loans.filter(loan => loan.status === 'active').length,
         total_balance: totalBalance
       });
     }
