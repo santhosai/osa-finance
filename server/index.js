@@ -5628,9 +5628,16 @@ app.get('/api/festival-fund/customers', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// A batch spans the join year through the next (e.g. join_month 2026-07 -> "2026-2027"),
+// since the 10-month schedule always crosses at most one calendar-year boundary.
+function computeBatchLabel(joinMonth) {
+  const year = Number(joinMonth.split('-')[0]);
+  return `${year}-${year + 1}`;
+}
+
 app.post('/api/festival-fund/customers', async (req, res) => {
   try {
-    const { name, father_name, mobile, spouse_name, scheme, referred_by, join_month } = req.body;
+    const { name, father_name, mobile, spouse_name, scheme, referred_by, join_month, batch } = req.body;
     if (!name || !father_name || !mobile || !scheme)
       return res.status(400).json({ error: 'name, father_name, mobile and scheme are required' });
     if (join_month && !/^\d{4}-\d{2}$/.test(join_month))
@@ -5647,6 +5654,7 @@ app.post('/api/festival-fund/customers', async (req, res) => {
       join_month: joinMonth,
       payment_months: getFestivalPaymentMonths(joinMonth),
       referred_by: referred_by || null,
+      batch: batch || computeBatchLabel(joinMonth),
       created_at: now.toISOString(),
       status: 'active'
     };
@@ -5657,11 +5665,12 @@ app.post('/api/festival-fund/customers', async (req, res) => {
 
 app.put('/api/festival-fund/customers/:id', async (req, res) => {
   try {
-    const { name, father_name, mobile, spouse_name, referred_by, status } = req.body;
+    const { name, father_name, mobile, spouse_name, referred_by, status, batch } = req.body;
     if (!name || !father_name || !mobile)
       return res.status(400).json({ error: 'name, father_name and mobile are required' });
     const update = { name, father_name, mobile, spouse_name: spouse_name || '', referred_by: referred_by || null };
     if (status) update.status = status;
+    if (batch) update.batch = batch;
     await db.collection('festival_fund_customers').doc(req.params.id).update(update);
     const doc = await db.collection('festival_fund_customers').doc(req.params.id).get();
     res.json({ id: doc.id, ...doc.data() });
@@ -5763,6 +5772,38 @@ app.get('/api/festival-fund/stats', async (req, res) => {
       mode_breakdown: modeBreakdown,
       current_month: month
     });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Public, read-only self-service lookup by phone number (no login required — same
+// pattern as /api/balance-check for loan customers). Returns every enrollment for
+// that phone across all batches/years, so a returning member sees their full history.
+app.get('/api/festival-fund/balance-check/:phone', async (req, res) => {
+  try {
+    const phone = req.params.phone;
+    const [custSnap, paySnap] = await Promise.all([
+      db.collection('festival_fund_customers').where('mobile', '==', phone).get(),
+      db.collection('festival_fund_payments').get()
+    ]);
+    if (custSnap.empty) return res.status(404).json({ error: 'No member found with this phone number' });
+
+    const allPayments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const enrollments = custSnap.docs.map(doc => {
+      const c = { id: doc.id, ...doc.data() };
+      const payments = allPayments
+        .filter(p => p.customer_id === c.id)
+        .sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
+      const paidMonths = new Set(payments.filter(p => p.month_number <= 10).map(p => p.payment_month));
+      const paidCount = (c.payment_months || []).filter(m => paidMonths.has(m)).length;
+      const payout = payments.find(p => p.month_number === 11) || null;
+      return {
+        name: c.name, scheme: c.scheme, scheme_amount: c.scheme_amount,
+        batch: c.batch || null, join_month: c.join_month, status: c.status,
+        paid_count: paidCount, total_months: 10, payments, payout
+      };
+    }).sort((a, b) => (b.join_month || '').localeCompare(a.join_month || ''));
+
+    res.json({ phone, enrollments });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

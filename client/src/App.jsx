@@ -7,6 +7,7 @@ import Login from './components/Login';
 import ModuleSelector from './components/ModuleSelector';
 import ErrorBoundary from './components/ErrorBoundary';
 import BalanceCheck from './components/BalanceCheck';
+import FestivalBalanceCheck from './components/FestivalBalanceCheck';
 import LandingPage from './components/LandingPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -375,6 +376,7 @@ function App() {
         {/* Public routes - no authentication required */}
         <Route path="/website" element={<LandingPage />} />
         <Route path="/balance-check" element={<BalanceCheck />} />
+        <Route path="/festival-balance-check" element={<FestivalBalanceCheck />} />
 
         {/* All other routes require authentication */}
         <Route path="/*" element={<AppContent />} />

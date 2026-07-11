@@ -65,6 +65,13 @@ function getFestivalPaymentMonths(joinMonth) {
   return months;
 }
 
+// A batch spans the join year through the next (e.g. join_month 2026-07 -> "2026-2027"),
+// since the 10-month schedule always crosses at most one calendar-year boundary.
+function computeBatchLabel(joinMonth) {
+  const year = Number(joinMonth.split('-')[0]);
+  return `${year}-${year + 1}`;
+}
+
 // How many of the 10 scheduled months have already occurred, as of today
 function monthsElapsed(paymentMonths) {
   if (!paymentMonths || paymentMonths.length === 0) return 0;
@@ -168,8 +175,13 @@ export default function FestivalFund({ navigateTo }) {
   const [saving, setSaving]           = useState(false);
   const [msg, setMsg]                 = useState('');
 
+  // Batch (year cycle) — which batch's members are currently shown; persisted across visits
+  const [currentBatch, setCurrentBatch] = useState(() => localStorage.getItem('ffCurrentBatch') || computeBatchLabel(currentMonth()));
+  const [showNewBatchModal, setShowNewBatchModal] = useState(false);
+  const [newBatchInput, setNewBatchInput] = useState('');
+
   // Add-customer form
-  const [form, setForm] = useState({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'', join_month:currentMonth() });
+  const [form, setForm] = useState({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'', join_month:currentMonth(), batch:currentBatch });
   const [rulesOpen, setRulesOpen] = useState(false);
   const [contactPickerSupported] = useState(typeof navigator !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window);
 
@@ -208,6 +220,7 @@ export default function FestivalFund({ navigateTo }) {
   }, [selMonth]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => { localStorage.setItem('ffCurrentBatch', currentBatch); }, [currentBatch]);
 
   // ── Derived data ──────────────────────────────────────────────────────────
   const paymentMap = {};
@@ -216,9 +229,15 @@ export default function FestivalFund({ navigateTo }) {
     paymentMap[p.customer_id][p.payment_month] = p;
   });
 
+  // Batch (year cycle) scoping — falls back to deriving the batch from join_month for
+  // any older record that predates the batch field, so nothing silently disappears.
+  const batchOf = (c) => c.batch || computeBatchLabel(c.join_month || currentMonth());
+  const allBatches = [...new Set(customers.map(batchOf))].sort().reverse();
+  const batchCustomers = customers.filter(c => batchOf(c) === currentBatch);
+
   // Removed (rule-3 defaulter) members are kept for history but excluded from active lists
-  const activeCustomers  = customers.filter(c => c.status !== 'removed');
-  const removedCustomers = customers.filter(c => c.status === 'removed');
+  const activeCustomers  = batchCustomers.filter(c => c.status !== 'removed');
+  const removedCustomers = batchCustomers.filter(c => c.status === 'removed');
 
   const dueThisMonth = activeCustomers.filter(c => (c.payment_months || []).includes(selMonth));
   const paidThisMonth   = dueThisMonth.filter(c =>  paymentMap[c.id]?.[selMonth]);
@@ -260,7 +279,7 @@ export default function FestivalFund({ navigateTo }) {
       const data = await r.json();
       if (!r.ok) return flash(data.error || 'Failed');
       flash(`✅ ${data.name} registered!`);
-      setForm({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'', join_month:currentMonth() });
+      setForm({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'', join_month:currentMonth(), batch:currentBatch });
       fetchAll();
       setSection('monthly');
     } catch (e) { flash(e.message); }
@@ -434,8 +453,23 @@ export default function FestivalFund({ navigateTo }) {
     }
   };
 
-  // ── WhatsApp ──────────────────────────────────────────────────────────────
-  const sendWhatsAppMsg = (customer, payment, type) => {
+  // ── Messaging (shared text, sent via WhatsApp or plain SMS) ─────────────────
+  const balanceCheckLink = (mobile) => `https://osa-finance.vercel.app/festival-balance-check?phone=${mobile}`;
+
+  const msgFooter = (customer) =>
+`----------------------
+🔗 உங்கள் திருவிழா சேமிப்பு விவரம் இங்கே
+${balanceCheckLink(customer.mobile)}
+------------------
+🙏 நன்றி!
+
+🌿 "சிறு சேமிப்பு இன்று... பெரிய நிம்மதி நாளை."
+
+– Santhosh Kumar
+OM SAI MURUGAN FINANCE
+📞 ${PHONE}`;
+
+  const buildFestivalMessage = (customer, payment, type) => {
     const monthIdx = (customer.payment_months || []).indexOf(payment.payment_month);
     const mNum = monthIdx + 1;
     const remaining = 10 - mNum;
@@ -443,10 +477,8 @@ export default function FestivalFund({ navigateTo }) {
     const nextMonth = customer.payment_months?.[nextMonthIdx];
     const schemeInfo = SCHEME_INFO[customer.scheme] || {};
 
-    let text = '';
     if (type === 'payout') {
-      text =
-`🎉 *OM SAI MURUGAN FINANCE*
+      return `🎉 *OM SAI MURUGAN FINANCE*
 *Festival Fund – Payout*
 
 வணக்கம் ${customer.name} அவர்களே,
@@ -456,11 +488,11 @@ export default function FestivalFund({ navigateTo }) {
 தேதி: ${fmtDate(payment.payment_date)}
 திருவிழா வாழ்த்துக்கள்! 🎉
 
-– *OM SAI MURUGAN FINANCE*
-  📞 ${PHONE}`;
-    } else if (type === 'received') {
-      text =
-`🎉 *OM SAI MURUGAN FINANCE*
+${msgFooter(customer)}`;
+    }
+
+    if (type === 'received') {
+      return `🎉 *OM SAI MURUGAN FINANCE*
 *Festival Fund – Payment Received*
 
 ✅ பணம் பெறப்பட்டது
@@ -478,11 +510,10 @@ export default function FestivalFund({ navigateTo }) {
 📊 முன்னேற்றம்: ${mNum}/10 months ✓
 ${remaining > 0 ? `⏳ மீதமுள்ளது: ${remaining} months\n🙏 நன்றி! அடுத்த மாதம்: ${nextMonth ? fmtFull(nextMonth) : ''}` : `🎊 அனைத்து மாதங்களும் முடிந்தன! திருவிழா அன்று உங்கள் பரிசு வழங்கப்படும்.`}
 
-– *OM SAI MURUGAN FINANCE*
-  📞 ${PHONE}`;
-    } else {
-      text =
-`🔔 *OM SAI MURUGAN FINANCE*
+${msgFooter(customer)}`;
+    }
+
+    return `🔔 *OM SAI MURUGAN FINANCE*
 *Festival Fund – Payment Reminder*
 
 ⚠️ நினைவூட்டல்
@@ -499,13 +530,23 @@ ${remaining > 0 ? `⏳ மீதமுள்ளது: ${remaining} months\n🙏
 
 🙏 தயவுசெய்து இந்த மாதம் செலுத்துங்கள்.
 
-– *OM SAI MURUGAN FINANCE*
-  📞 ${PHONE}`;
-    }
+${msgFooter(customer)}`;
+  };
+
+  const sendWhatsAppMsg = (customer, payment, type) => {
+    const text = buildFestivalMessage(customer, payment, type);
     window.open(`https://wa.me/91${customer.mobile}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
+  // Plain SMS via the phone's own SMS app — free, no gateway/DLT registration needed,
+  // just a fallback for members without WhatsApp. Staff still taps Send manually.
+  const sendSMS = (customer, payment, type) => {
+    const text = buildFestivalMessage(customer, payment, type);
+    window.open(`sms:${customer.mobile}?body=${encodeURIComponent(text)}`, '_blank');
+  };
+
   const sendReminderWA = (customer) => sendWhatsAppMsg(customer, { payment_month: selMonth }, 'reminder');
+  const sendReminderSMS = (customer) => sendSMS(customer, { payment_month: selMonth }, 'reminder');
 
   const sendAllReminders = () => {
     unpaidThisMonth.forEach((c, i) => {
@@ -991,6 +1032,61 @@ th{background:#1e293b;color:white;}
         )}
       </div>
 
+      {/* Batch bar — which year cycle is currently shown */}
+      <div style={{ background:'#1e293b', padding:'8px 14px', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid #334155' }}>
+        <span style={{ fontSize:11, color:'#94a3b8' }}>📦 Batch:</span>
+        <select
+          value={currentBatch}
+          onChange={e => setCurrentBatch(e.target.value)}
+          style={{ background:'#0f172a',border:'1px solid #334155',color:'#f59e0b',padding:'5px 10px',borderRadius:8,fontSize:12,fontWeight:700 }}
+        >
+          {allBatches.map(b => <option key={b} value={b}>{b} Batch</option>)}
+          {!allBatches.includes(currentBatch) && <option value={currentBatch}>{currentBatch} Batch</option>}
+        </select>
+        <button
+          onClick={() => { setNewBatchInput(computeBatchLabel(`${Number(currentBatch.split('-')[0])+1}-01`)); setShowNewBatchModal(true); }}
+          style={{ marginLeft:'auto', background:'none', border:'1px dashed #f59e0b', color:'#f59e0b', padding:'5px 10px', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer' }}
+        >
+          + New Batch
+        </button>
+      </div>
+
+      {/* Start New Batch modal */}
+      {showNewBatchModal && (
+        <div style={S.modal} onClick={() => setShowNewBatchModal(false)}>
+          <div style={{ ...S.modalBox, maxWidth:320 }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding:'16px 18px', background:'linear-gradient(135deg,#d97706,#b45309)', borderRadius:'16px 16px 0 0' }}>
+              <div style={{ fontSize:16, fontWeight:700, color:'white' }}>📦 Start New Batch</div>
+            </div>
+            <div style={{ padding:'16px 18px' }}>
+              <label style={S.label}>Batch Label (e.g. 2027-2028)</label>
+              <input style={S.input} value={newBatchInput} onChange={e => setNewBatchInput(e.target.value)} placeholder="2027-2028" />
+              <div style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
+                New members you add will default to this batch. Existing members stay in their own batch.
+              </div>
+              <button
+                style={S.primaryBtn('linear-gradient(135deg,#d97706,#b45309)')}
+                disabled={!newBatchInput.trim()}
+                onClick={() => {
+                  const label = newBatchInput.trim();
+                  setCurrentBatch(label);
+                  setForm(f => ({ ...f, batch: label }));
+                  setShowNewBatchModal(false);
+                }}
+              >
+                ✅ Start {newBatchInput.trim() || '...'}
+              </button>
+              <button
+                onClick={() => setShowNewBatchModal(false)}
+                style={{ width:'100%', padding:10, background:'none', border:'1px solid #334155', borderRadius:8, color:'#94a3b8', fontSize:12, cursor:'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── DASHBOARD ─────────────────────────────────────────── */}
       {section === 'dashboard' && (
         <div style={S.page}>
@@ -1120,6 +1216,7 @@ th{background:#1e293b;color:white;}
                       <div style={{ ...S.row, flexWrap:'wrap' }}>
                         <span style={{ background:'#14532d',color:'#4ade80',padding:'3px 6px',borderRadius:5,fontSize:9,fontWeight:700 }}>✓</span>
                         <button style={S.btn('#25d366')} onClick={() => sendWhatsAppMsg(c, pay, 'received')}>WA</button>
+                        <button style={S.btn('#475569')} onClick={() => sendSMS(c, pay, 'received')}>SMS</button>
                         <button style={S.btn('#475569')} onClick={() => printReceipt(c, pay)}>🖨</button>
                         <button style={S.btn('#0369a1')} onClick={() => printReceiptBluetooth(c, pay)}>📶</button>
                         <button style={S.btn('#b45309')} onClick={() => undoPayment(pay.id, c.name)}>Undo</button>
@@ -1153,6 +1250,7 @@ th{background:#1e293b;color:white;}
                       <div style={{ ...S.row, flexWrap:'wrap' }}>
                         <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickMode('cash'); setQuickPay({ customer: c }); }}>Pay</button>
                         <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
+                    <button style={S.btn('#475569')} onClick={() => sendReminderSMS(c)}>SMS</button>
                       </div>
                     </div>
                   );
@@ -1238,6 +1336,7 @@ th{background:#1e293b;color:white;}
                       <div style={{ ...S.row, flexWrap:'wrap' }}>
                         <span style={{ background:'#14532d',color:'#4ade80',padding:'3px 6px',borderRadius:5,fontSize:9,fontWeight:700 }}>✓</span>
                         <button style={S.btn('#25d366')} onClick={() => sendWhatsAppMsg(c, pay, 'received')}>WA</button>
+                        <button style={S.btn('#475569')} onClick={() => sendSMS(c, pay, 'received')}>SMS</button>
                         <button style={S.btn('#475569')} onClick={() => printReceipt(c, pay)}>🖨</button>
                         <button style={S.btn('#0369a1')} onClick={() => printReceiptBluetooth(c, pay)}>📶</button>
                         <button style={S.btn('#b45309')} onClick={() => undoPayment(pay.id, c.name)}>Undo</button>
@@ -1271,6 +1370,7 @@ th{background:#1e293b;color:white;}
                       <div style={{ ...S.row, flexWrap:'wrap' }}>
                         <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickMode('cash'); setQuickPay({ customer: c }); }}>Pay</button>
                         <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
+                    <button style={S.btn('#475569')} onClick={() => sendReminderSMS(c)}>SMS</button>
                       </div>
                     </div>
                   );
@@ -1363,7 +1463,7 @@ th{background:#1e293b;color:white;}
             <select
               style={S.input}
               value={form.join_month}
-              onChange={e => setForm(f => ({ ...f, join_month:e.target.value }))}
+              onChange={e => setForm(f => ({ ...f, join_month:e.target.value, batch:computeBatchLabel(e.target.value) }))}
             >
               {monthOptions().map(m => <option key={m} value={m}>{fmtFull(m)}</option>)}
             </select>
@@ -1373,6 +1473,7 @@ th{background:#1e293b;color:white;}
               <div style={{ fontSize:12,fontWeight:700,color:'#f59e0b',marginTop:3 }}>
                 {fmtFull(form.join_month)} → {fmtFull(getFestivalPaymentMonths(form.join_month)[9])}
               </div>
+              <div style={{ fontSize:10,color:'#94a3b8',marginTop:6 }}>Batch: <span style={{ color:'#fbbf24',fontWeight:700 }}>{form.batch}</span></div>
             </div>
 
             <button style={S.primaryBtn('linear-gradient(135deg,#d97706,#b45309)')} disabled={saving} onClick={addCustomer}>
@@ -1896,6 +1997,7 @@ th{background:#1e293b;color:white;}
                   <div style={S.row}>
                     <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickMode('cash'); setQuickPay({ customer: c }); }}>Pay</button>
                     <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
+                    <button style={S.btn('#475569')} onClick={() => sendReminderSMS(c)}>SMS</button>
                   </div>
                 </div>
               );
@@ -1931,6 +2033,7 @@ th{background:#1e293b;color:white;}
                   </div>
                   <div style={S.row}>
                     <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
+                    <button style={S.btn('#475569')} onClick={() => sendReminderSMS(c)}>SMS</button>
                     <button style={S.btn('#dc2626')} onClick={() => removeFromScheme(c)}>Remove</button>
                   </div>
                 </div>
