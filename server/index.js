@@ -5662,19 +5662,6 @@ app.put('/api/festival-fund/customers/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Mark the festival payout (₹ + gift) as handed over on completion, or undo it
-app.put('/api/festival-fund/customers/:id/payout', async (req, res) => {
-  try {
-    const { given, given_by } = req.body;
-    const update = given
-      ? { payout_given: true, payout_given_date: new Date().toISOString().slice(0, 10), payout_given_by: given_by || '' }
-      : { payout_given: false, payout_given_date: null, payout_given_by: null };
-    await db.collection('festival_fund_customers').doc(req.params.id).update(update);
-    const doc = await db.collection('festival_fund_customers').doc(req.params.id).get();
-    res.json({ id: doc.id, ...doc.data() });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 app.delete('/api/festival-fund/customers/:id', async (req, res) => {
   try {
     await db.collection('festival_fund_customers').doc(req.params.id).delete();
@@ -5692,17 +5679,40 @@ app.get('/api/festival-fund/payments', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// month_number 1-10 = a regular monthly collection (tied to a real calendar payment_month).
+// month_number 11 = the festival payout/gift handover — not tied to a calendar month, but
+// tracked as a real payment record (own date + mode) just like the other 10, per the scheme design.
 app.post('/api/festival-fund/payments', async (req, res) => {
   try {
     const { customer_id, payment_month, month_number, amount, payment_date, payment_mode } = req.body;
-    if (!customer_id || !payment_month || !month_number || !amount || !payment_date)
+    if (!customer_id || !month_number || !amount || !payment_date)
       return res.status(400).json({ error: 'All fields required' });
+    if (month_number !== 11 && !payment_month)
+      return res.status(400).json({ error: 'payment_month is required for monthly collections' });
+
     const existing = await db.collection('festival_fund_payments')
       .where('customer_id', '==', customer_id)
-      .where('payment_month', '==', payment_month).get();
+      .where('month_number', '==', month_number).get();
     if (!existing.empty)
-      return res.status(400).json({ error: 'Payment already recorded for this month' });
-    const data = { customer_id, payment_month, month_number, amount, payment_date, payment_mode: payment_mode || 'cash', created_at: new Date().toISOString() };
+      return res.status(400).json({ error: month_number === 11 ? 'Payout already recorded' : 'Payment already recorded for this month' });
+
+    if (month_number === 11) {
+      const custDoc = await db.collection('festival_fund_customers').doc(customer_id).get();
+      const custData = custDoc.exists ? custDoc.data() : null;
+      const paidSnap = await db.collection('festival_fund_payments')
+        .where('customer_id', '==', customer_id).get();
+      const paidCount = paidSnap.docs.filter(d => d.data().month_number <= 10).length;
+      if (!custData || paidCount < 10)
+        return res.status(400).json({ error: 'All 10 monthly payments must be completed before recording the payout' });
+    }
+
+    const data = {
+      customer_id,
+      payment_month: month_number === 11 ? 'payout' : payment_month,
+      month_number, amount, payment_date,
+      payment_mode: payment_mode || 'cash',
+      created_at: new Date().toISOString()
+    };
     const ref = await db.collection('festival_fund_payments').add(data);
     res.json({ id: ref.id, ...data });
   } catch (e) { res.status(500).json({ error: e.message }); }

@@ -177,6 +177,9 @@ export default function FestivalFund({ navigateTo }) {
   const [quickPay, setQuickPay]     = useState(null);
   const [quickDate, setQuickDate]   = useState(todayISO());
   const [quickMode, setQuickMode]   = useState('cash');
+  const [payoutTarget, setPayoutTarget] = useState(null); // customer object for the payout (month 11) modal
+  const [payoutDate, setPayoutDate]     = useState(todayISO());
+  const [payoutMode, setPayoutMode]     = useState('cash');
   const [detailCust, setDetailCust] = useState(null); // customer for detail/history modal
   const [editCust, setEditCust]     = useState(null); // customer being edited
   const [editForm, setEditForm]     = useState({ name:'', father_name:'', mobile:'', spouse_name:'', referred_by:'' });
@@ -232,10 +235,10 @@ export default function FestivalFund({ navigateTo }) {
     return isOverdue(c.payment_months, paidCount);
   });
 
-  // Completed 10/10 but the festival payout/gift hasn't been marked as handed over yet
+  // Completed 10/10 monthly payments but the festival payout (month 11) hasn't been recorded yet
   const payoutPending = activeCustomers.filter(c => {
     const paidCount = (c.payment_months||[]).filter(m => paymentMap[c.id]?.[m]).length;
-    return paidCount >= 10 && !c.payout_given;
+    return paidCount >= 10 && !paymentMap[c.id]?.['payout'];
   });
 
   // ── Handlers ─────────────────────────────────────────────────────────────
@@ -375,17 +378,29 @@ export default function FestivalFund({ navigateTo }) {
 
   const reactivateCustomer = (customer) => setCustomerStatus(customer, 'active');
 
-  // ── Festival payout / gift handover ─────────────────────────────────────────
-  const markPayout = async (customer, given) => {
+  // ── Festival payout / gift handover (month_number 11 — a real payment record,
+  // not a boolean flag, so it carries its own date/mode like the other 10 months) ──
+  const recordPayout = async () => {
+    if (!payoutTarget) return;
+    const customer = payoutTarget;
+    setSaving(true);
     try {
-      const r = await fetch(`${API_URL}/festival-fund/customers/${customer.id}/payout`, {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ given, given_by: localStorage.getItem('userName') || '' })
+      const r = await fetch(`${API_URL}/festival-fund/payments`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          customer_id: customer.id, month_number: 11,
+          amount: SCHEME_INFO[customer.scheme]?.payout || 0,
+          payment_date: payoutDate, payment_mode: payoutMode
+        })
       });
-      if (!r.ok) return flash('Failed to update payout status');
-      flash(given ? `🎁 ${customer.name} — பரிசு வழங்கப்பட்டது` : `Undone: payout for ${customer.name}`);
+      const data = await r.json();
+      if (!r.ok) return flash(data.error || 'Failed');
+      flash(`🎁 ${customer.name} — பரிசு வழங்கப்பட்டது`);
+      sendWhatsAppMsg(customer, data, 'payout');
+      setPayoutTarget(null);
       fetchAll();
     } catch (e) { flash(e.message); }
+    setSaving(false);
   };
 
   // ── Contact picker (Android Chrome/PWA only) ────────────────────────────────
@@ -422,9 +437,24 @@ export default function FestivalFund({ navigateTo }) {
     const remaining = 10 - mNum;
     const nextMonthIdx = monthIdx + 1;
     const nextMonth = customer.payment_months?.[nextMonthIdx];
+    const schemeInfo = SCHEME_INFO[customer.scheme] || {};
 
     let text = '';
-    if (type === 'received') {
+    if (type === 'payout') {
+      text =
+`🎉 *OM SAI MURUGAN FINANCE*
+*Festival Fund – Payout*
+
+வணக்கம் ${customer.name} அவர்களே,
+உங்கள் Scheme ${customer.scheme} முடிந்தது!
+தொகை ₹${(payment.amount||0).toLocaleString('en-IN')} மற்றும் ${schemeInfo.gift||''} வழங்கப்பட்டது.
+முறை: ${(payment.payment_mode||'cash').toUpperCase()}
+தேதி: ${fmtDate(payment.payment_date)}
+திருவிழா வாழ்த்துக்கள்! 🎉
+
+– *OM SAI MURUGAN FINANCE*
+  📞 ${PHONE}`;
+    } else if (type === 'received') {
       text =
 `🎉 *OM SAI MURUGAN FINANCE*
 *Festival Fund – Payment Received*
@@ -438,10 +468,11 @@ export default function FestivalFund({ navigateTo }) {
 💰 திட்டம்: Scheme ${customer.scheme} – ₹${customer.scheme_amount.toLocaleString('en-IN')}/மாதம்
 📅 மாதம்: ${fmtFull(payment.payment_month)} (மாதம் ${mNum} / 10)
 💵 செலுத்திய தொகை: ₹${(payment.amount||0).toLocaleString('en-IN')}
+🧾 முறை: ${(payment.payment_mode||'cash').toUpperCase()}
 📆 தேதி: ${fmtDate(payment.payment_date)}
 
 📊 முன்னேற்றம்: ${mNum}/10 months ✓
-${remaining > 0 ? `⏳ மீதமுள்ளது: ${remaining} months\n🙏 நன்றி! அடுத்த மாதம்: ${nextMonth ? fmtFull(nextMonth) : ''}` : `🎊 அனைத்து மாதங்களும் முடிந்தன! வாழ்த்துக்கள்!\n🎁 திருவிழாவில் உங்களுக்கு ₹${(SCHEME_INFO[customer.scheme]?.payout||0).toLocaleString('en-IN')} மற்றும் ${SCHEME_INFO[customer.scheme]?.gift||''} வழங்கப்படும்.`}
+${remaining > 0 ? `⏳ மீதமுள்ளது: ${remaining} months\n🙏 நன்றி! அடுத்த மாதம்: ${nextMonth ? fmtFull(nextMonth) : ''}` : `🎊 அனைத்து மாதங்களும் முடிந்தன! திருவிழா அன்று உங்கள் பரிசு வழங்கப்படும்.`}
 
 – *OM SAI MURUGAN FINANCE*
   📞 ${PHONE}`;
@@ -732,6 +763,60 @@ th{background:#1e293b;color:white;font-size:10px;}
               </button>
               <button
                 onClick={() => setQuickPay(null)}
+                style={{ width:'100%', padding:10, background:'none', border:'1px solid #334155', borderRadius:8, color:'#94a3b8', fontSize:12, cursor:'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PAYOUT MODAL (month 11 — festival payout + gift handover) ──────── */}
+      {payoutTarget && (
+        <div style={S.modal} onClick={() => setPayoutTarget(null)}>
+          <div style={{ ...S.modalBox, maxWidth:340 }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding:'16px 18px', background:'linear-gradient(135deg,#d97706,#b45309)', borderRadius:'16px 16px 0 0' }}>
+              <div style={{ fontSize:16, fontWeight:700, color:'white' }}>🎁 திருவிழா பரிசு வழங்கல்</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.75)', marginTop:2 }}>{payoutTarget.name}</div>
+            </div>
+            <div style={{ padding:'16px 18px' }}>
+              <div style={{ background:'#0f172a', borderRadius:10, padding:'10px 12px', marginBottom:14, border:'1px solid #334155' }}>
+                <div style={{ fontSize:15, fontWeight:700 }}>{payoutTarget.name}</div>
+                <div style={{ fontSize:10, color:'#94a3b8', marginTop:3 }}>Scheme {payoutTarget.scheme}</div>
+                <div style={{ fontSize:16, fontWeight:800, color:'#f59e0b', marginTop:6 }}>
+                  ₹{(SCHEME_INFO[payoutTarget.scheme]?.payout||0).toLocaleString('en-IN')} + {SCHEME_INFO[payoutTarget.scheme]?.gift}
+                </div>
+              </div>
+
+              <label style={S.label}>Date</label>
+              <input style={S.input} type="date" value={payoutDate} onChange={e => setPayoutDate(e.target.value)} />
+
+              <label style={S.label}>Payment Mode</label>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
+                {['cash','upi','bank'].map(mode => (
+                  <div key={mode}
+                    onClick={() => setPayoutMode(mode)}
+                    style={{
+                      padding:'8px 4px', borderRadius:8, cursor:'pointer', textAlign:'center', fontSize:11, fontWeight:700, textTransform:'uppercase',
+                      border:`2px solid ${payoutMode===mode?'#f59e0b':'#334155'}`,
+                      background: payoutMode===mode?'#1c1400':'#0f172a',
+                      color: payoutMode===mode?'#f59e0b':'#94a3b8'
+                    }}>
+                    {mode}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                style={S.primaryBtn('linear-gradient(135deg,#d97706,#b45309)')}
+                disabled={saving}
+                onClick={recordPayout}
+              >
+                {saving ? '⏳ Recording...' : '🎁 பரிசு வழங்கியதை பதிவு செய்யவும்'}
+              </button>
+              <button
+                onClick={() => setPayoutTarget(null)}
                 style={{ width:'100%', padding:10, background:'none', border:'1px solid #334155', borderRadius:8, color:'#94a3b8', fontSize:12, cursor:'pointer' }}
               >
                 Cancel
@@ -1369,24 +1454,27 @@ th{background:#1e293b;color:white;font-size:10px;}
                   </div>
                   {isCompleted && <span style={{ fontSize:22 }}>🎊</span>}
                 </div>
-                {isCompleted && (
-                  <div style={{ marginTop:8, padding:'8px 10px', background:'rgba(0,0,0,0.25)', borderRadius:8, fontSize:10, color:'#fde68a' }}>
-                    <div>🎁 திருவிழா பரிசு: ₹{SCHEME_INFO[c.scheme]?.payout.toLocaleString('en-IN')} + {SCHEME_INFO[c.scheme]?.gift}</div>
-                    {c.payout_given ? (
-                      <div style={{ marginTop:6, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                        <span style={{ color:'#4ade80', fontWeight:700 }}>✅ வழங்கப்பட்டது — {fmtDate(c.payout_given_date)}{c.payout_given_by ? ` (${c.payout_given_by})` : ''}</span>
-                        <button style={S.btn('#b45309')} onClick={() => markPayout(c, false)}>Undo</button>
-                      </div>
-                    ) : (
-                      <button
-                        style={{ ...S.primaryBtn('linear-gradient(135deg,#d97706,#b45309)'), marginTop:6, marginBottom:0, padding:9, fontSize:12 }}
-                        onClick={() => markPayout(c, true)}
-                      >
-                        🎁 பரிசு வழங்கப்பட்டதாக குறிக்கவும்
-                      </button>
-                    )}
-                  </div>
-                )}
+                {isCompleted && (() => {
+                  const payout = paymentMap[c.id]?.['payout'];
+                  return (
+                    <div style={{ marginTop:8, padding:'8px 10px', background:'rgba(0,0,0,0.25)', borderRadius:8, fontSize:10, color:'#fde68a' }}>
+                      <div>🎁 திருவிழா பரிசு: ₹{SCHEME_INFO[c.scheme]?.payout.toLocaleString('en-IN')} + {SCHEME_INFO[c.scheme]?.gift}</div>
+                      {payout ? (
+                        <div style={{ marginTop:6, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                          <span style={{ color:'#4ade80', fontWeight:700 }}>✅ வழங்கப்பட்டது — {fmtDate(payout.payment_date)} ({(payout.payment_mode||'cash').toUpperCase()})</span>
+                          <button style={S.btn('#b45309')} onClick={() => undoPayment(payout.id, c.name)}>Undo</button>
+                        </div>
+                      ) : (
+                        <button
+                          style={{ ...S.primaryBtn('linear-gradient(135deg,#d97706,#b45309)'), marginTop:6, marginBottom:0, padding:9, fontSize:12 }}
+                          onClick={() => { setPayoutDate(todayISO()); setPayoutMode('cash'); setPayoutTarget(c); }}
+                        >
+                          🎁 பரிசு வழங்கியதை பதிவு செய்யவும்
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
                 {/* Progress bar */}
                 <div style={{ marginTop:10 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
@@ -1415,6 +1503,29 @@ th{background:#1e293b;color:white;font-size:10px;}
                       </div>
                     );
                   })}
+                  {(() => {
+                    const payout = paymentMap[c.id]?.['payout'];
+                    const clickable = isCompleted && !payout;
+                    return (
+                      <div
+                        onClick={() => {
+                          if (!clickable) return;
+                          setPayoutDate(todayISO());
+                          setPayoutMode('cash');
+                          setPayoutTarget(c);
+                        }}
+                        style={{
+                          ...S.chip(payout ? 'done' : 'todo'),
+                          display:'flex', flexDirection:'column', alignItems:'center', minWidth:56,
+                          borderStyle:'dashed', cursor: clickable ? 'pointer' : 'default', opacity: isCompleted ? 1 : 0.4
+                        }}
+                      >
+                        <span style={{ fontSize:9, fontWeight:700 }}>🎁 M11</span>
+                        <span style={{ fontSize:8 }}>பரிசு</span>
+                        {payout && <span style={{ fontSize:7, color:'#4ade80' }}>{fmtDate(payout.payment_date)}</span>}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Paid history */}
@@ -1436,8 +1547,21 @@ th{background:#1e293b;color:white;font-size:10px;}
                         </div>
                       );
                     })}
+                    {paymentMap[c.id]?.['payout'] && (() => {
+                      const payout = paymentMap[c.id]['payout'];
+                      return (
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 8px', background:'#1c1400', borderRadius:6, marginBottom:4, border:'1px solid #92400e' }}>
+                          <span style={{ fontSize:11, color:'#fbbf24', fontWeight:600 }}>🎁 திருவிழா பரிசு</span>
+                          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                            <span style={{ fontSize:10, color:'#94a3b8' }}>{fmtDate(payout.payment_date)}</span>
+                            <span style={S.badge2('#0f172a','#64748b')}>{(payout.payment_mode||'cash').toUpperCase()}</span>
+                            <span style={{ fontSize:11, fontWeight:700, color:'#fbbf24' }}>₹{(payout.amount||0).toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div style={{ marginTop:8, padding:'6px 10px', background:'#0f172a', borderRadius:8, border:'1px solid #334155', display:'flex', justifyContent:'space-between' }}>
-                      <span style={{ fontSize:11, color:'#94a3b8' }}>Total Paid</span>
+                      <span style={{ fontSize:11, color:'#94a3b8' }}>Total Paid (Months 1-10)</span>
                       <span style={{ fontSize:13, fontWeight:800, color:'#f59e0b' }}>
                         ₹{(c.payment_months||[]).reduce((sum,m) => sum + (paymentMap[c.id]?.[m]?.amount||0), 0).toLocaleString('en-IN')}
                       </span>
