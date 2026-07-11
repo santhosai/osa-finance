@@ -405,8 +405,13 @@ export default function FestivalFund({ navigateTo }) {
       } else {
         setEditForm(f => ({ ...f, name: name || f.name, mobile: phone || f.mobile }));
       }
-    } catch (_) {
-      // User cancelled the picker or denied permission — nothing to do
+    } catch (err) {
+      // AbortError = user cancelled the picker — not an error worth surfacing.
+      // Anything else (NotAllowedError, SecurityError, etc.) means something's
+      // actually broken, so show it instead of failing silently.
+      if (err?.name !== 'AbortError') {
+        flash(`📇 Contacts பிழை: ${err?.message || err?.name || 'Unknown error'}`);
+      }
     }
   };
 
@@ -1031,14 +1036,17 @@ th{background:#1e293b;color:white;font-size:10px;}
               <div style={{ fontSize:11,color:'#94a3b8',marginTop:2 }}>Festival Fund – 10 Month Scheme</div>
             </div>
 
-            {contactPickerSupported && (
-              <button
-                type="button"
-                onClick={() => pickContact('add')}
-                style={{ width:'100%', padding:10, marginBottom:14, background:'#0f172a', border:'1px dashed #f59e0b', borderRadius:8, color:'#f59e0b', fontSize:12, fontWeight:600, cursor:'pointer' }}
-              >
-                📇 Contacts-ல் இருந்து தேர்வு செய்யவும்
-              </button>
+            <button
+              type="button"
+              onClick={() => pickContact('add')}
+              style={{ width:'100%', padding:10, marginBottom:14, background:'#0f172a', border:'1px dashed #f59e0b', borderRadius:8, color:'#f59e0b', fontSize:12, fontWeight:600, cursor:'pointer' }}
+            >
+              📇 Contacts-ல் இருந்து தேர்வு செய்யவும்
+            </button>
+            {!contactPickerSupported && (
+              <div style={{ fontSize:9, color:'#64748b', marginTop:-10, marginBottom:14 }}>
+                (Contacts picker Android Chrome-ல் மட்டும் வேலை செய்யும்)
+              </div>
             )}
 
             <label style={S.label}>Customer Name <span style={{ color:'#f87171' }}>*</span></label>
@@ -1482,14 +1490,17 @@ th{background:#1e293b;color:white;font-size:10px;}
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{editCust.name}</div>
             </div>
             <div style={{ padding:'16px 18px' }}>
-              {contactPickerSupported && (
-                <button
-                  type="button"
-                  onClick={() => pickContact('edit')}
-                  style={{ width:'100%', padding:10, marginBottom:14, background:'#0f172a', border:'1px dashed #f59e0b', borderRadius:8, color:'#f59e0b', fontSize:12, fontWeight:600, cursor:'pointer' }}
-                >
-                  📇 Contacts-ல் இருந்து தேர்வு செய்யவும்
-                </button>
+              <button
+                type="button"
+                onClick={() => pickContact('edit')}
+                style={{ width:'100%', padding:10, marginBottom:14, background:'#0f172a', border:'1px dashed #f59e0b', borderRadius:8, color:'#f59e0b', fontSize:12, fontWeight:600, cursor:'pointer' }}
+              >
+                📇 Contacts-ல் இருந்து தேர்வு செய்யவும்
+              </button>
+              {!contactPickerSupported && (
+                <div style={{ fontSize:9, color:'#64748b', marginTop:-10, marginBottom:14 }}>
+                  (Contacts picker Android Chrome-ல் மட்டும் வேலை செய்யும்)
+                </div>
               )}
 
               <label style={S.label}>Customer Name <span style={{ color:'#f87171' }}>*</span></label>

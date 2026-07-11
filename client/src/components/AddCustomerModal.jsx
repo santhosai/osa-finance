@@ -12,6 +12,10 @@ function AddCustomerModal({ onClose, onSuccess }) {
   }, []);
 
   const pickContact = async () => {
+    if (!isContactPickerSupported) {
+      alert('📇 Contacts picker இந்த சாதனத்தில்/browser-ல் ஆதரிக்கப்படவில்லை (Android Chrome மட்டும்).');
+      return;
+    }
     try {
       const props = ['name', 'tel'];
       const opts = { multiple: false };
@@ -35,7 +39,11 @@ function AddCustomerModal({ onClose, onSuccess }) {
       }
     } catch (error) {
       console.error('Error picking contact:', error);
-      // User cancelled or error occurred - do nothing
+      // AbortError = user cancelled the picker — not worth alerting about.
+      // Anything else means something's actually broken, so surface it.
+      if (error?.name !== 'AbortError') {
+        alert(`📇 Contacts பிழை: ${error?.message || error?.name || 'Unknown error'}`);
+      }
     }
   };
 
@@ -88,35 +96,38 @@ function AddCustomerModal({ onClose, onSuccess }) {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {isContactPickerSupported && (
-            <button
-              type="button"
-              onClick={pickContact}
-              style={{
-                width: '100%',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '12px',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                marginBottom: '16px',
-                boxShadow: '0 3px 8px rgba(59, 130, 246, 0.3)',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseOver={(e) => {
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 5px 12px rgba(59, 130, 246, 0.4)';
-              }}
-              onMouseOut={(e) => {
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 3px 8px rgba(59, 130, 246, 0.3)';
-              }}
-            >
-              📱 Pick from Phone Contacts
-            </button>
+          <button
+            type="button"
+            onClick={pickContact}
+            style={{
+              width: '100%',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '12px',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              marginBottom: isContactPickerSupported ? '16px' : '4px',
+              boxShadow: '0 3px 8px rgba(59, 130, 246, 0.3)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 5px 12px rgba(59, 130, 246, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 3px 8px rgba(59, 130, 246, 0.3)';
+            }}
+          >
+            📱 Pick from Phone Contacts
+          </button>
+          {!isContactPickerSupported && (
+            <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '16px' }}>
+              (Works on Android Chrome only)
+            </div>
           )}
 
           <div className="form-group">
