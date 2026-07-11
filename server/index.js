@@ -5,7 +5,7 @@ import db, { messaging } from './firestore.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ⚡ DEPLOYMENT v4.1.1 - Jul 12, 2026 - Sunday paid-list now includes today's closing payments
+// ⚡ DEPLOYMENT v4.1.2 - Jul 12, 2026 - Trigger first real deploy via newly connected Vercel Git integration
 // Finance (Weekly/Monthly) + Chit Fund + Auto Finance (Vehicle Loans with EMI)
 // CONFIRMED: NO phone uniqueness check - Duplicate phones ARE ALLOWED
 // Using Firestore (NOT SQLite) - NO UNIQUE constraint on phone field
