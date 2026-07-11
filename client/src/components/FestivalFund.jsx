@@ -763,6 +763,11 @@ th{background:#1e293b;color:white;}
   // ── Nav helper ────────────────────────────────────────────────────────────
   const nav = (s) => { setSection(s); setSidebarOpen(false); };
 
+  const handleLogout = () => {
+    localStorage.removeItem('isLoggedIn');
+    window.location.reload();
+  };
+
   const completedCustomers = activeCustomers.filter(c =>
     (c.payment_months||[]).every(m => paymentMap[c.id]?.[m])
   );
@@ -957,8 +962,16 @@ th{background:#1e293b;color:white;}
           })}
         </div>
 
-        <div style={{ padding:'12px 16px', borderTop:'1px solid #334155', fontSize:10, color:'#475569', textAlign:'center' }}>
-          OM SAI MURUGAN FINANCE
+        <div style={{ padding:'14px 16px', borderTop:'1px solid #334155' }}>
+          <button
+            onClick={handleLogout}
+            style={{ width:'100%', padding:10, background:'#dc2626', color:'white', border:'none', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:700 }}
+          >
+            🚪 Logout
+          </button>
+          <div style={{ marginTop:10, fontSize:10, color:'#475569', textAlign:'center' }}>
+            OM SAI MURUGAN FINANCE
+          </div>
         </div>
       </div>
 
