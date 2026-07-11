@@ -5708,6 +5708,52 @@ app.get('/api/festival-fund/stats', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Get closed Monthly Finance customers with full payment history
+// (Read-only; mirrors the active GET endpoint but filters on status='closed' and includes balance_after.)
+app.get('/api/monthly-finance/closed', async (req, res) => {
+  try {
+    const [customersSnap, paymentsSnap] = await Promise.all([
+      db.collection('monthly_finance_customers').where('status', '==', 'closed').get(),
+      db.collection('monthly_finance_payments').get()
+    ]);
+
+    const paymentsByCustomer = new Map();
+    paymentsSnap.docs.forEach(doc => {
+      const p = { id: doc.id, ...doc.data() };
+      const cid = p.customer_id;
+      if (!cid) return;
+      if (!paymentsByCustomer.has(cid)) paymentsByCustomer.set(cid, []);
+      paymentsByCustomer.get(cid).push(p);
+    });
+
+    const result = customersSnap.docs.map(doc => {
+      const data = { id: doc.id, ...doc.data() };
+      const payments = (paymentsByCustomer.get(doc.id) || [])
+        .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
+      const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+      const lastPayment = payments.length > 0 ? payments[0].payment_date : null;
+      return {
+        ...data,
+        payments,
+        total_payments: payments.length,
+        total_paid: totalPaid,
+        closed_date: lastPayment || data.updated_at || null
+      };
+    });
+
+    result.sort((a, b) => {
+      const da = a.closed_date ? new Date(a.closed_date).getTime() : 0;
+      const db = b.closed_date ? new Date(b.closed_date).getTime() : 0;
+      return db - da;
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching closed Monthly Finance customers:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

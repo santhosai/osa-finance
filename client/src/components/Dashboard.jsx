@@ -2155,6 +2155,28 @@ function Dashboard({ navigateTo }) {
             🔐 {t('adminProfit')}
           </button>
 
+          {/* Closed Loan History - NEW (opens standalone page) */}
+          <button
+            onClick={() => { setShowSidebar(false); window.open('/closed-loan-history.html', '_blank'); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'}
+          >
+            📚 Closed Loan History
+          </button>
+
           {/* Send Wishes */}
           <button
             onClick={() => { setShowSidebar(false); setShowSendWishes(true); }}

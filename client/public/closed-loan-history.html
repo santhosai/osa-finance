@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Closed Loan History</title>
+<link rel="icon" type="image/svg+xml" href="/icon-192.svg" />
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #f1f5f9;
+    color: #1e293b;
+    min-height: 100vh;
+  }
+
+  .header {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    padding: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .back-btn {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: white;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .header h1 {
+    margin: 0;
+    color: white;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .header-sub {
+    color: rgba(255,255,255,0.85);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .controls { display: grid; gap: 8px; }
+  .controls-row { display: flex; gap: 8px; }
+  .controls input, .controls select {
+    flex: 1;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    background: rgba(255,255,255,0.95);
+    color: #1e293b;
+    outline: none;
+    min-width: 0;
+  }
+  .controls select { flex: 0 0 auto; }
+
+  .content { padding: 16px; padding-bottom: 80px; }
+
+  .info-note {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    color: #78350f;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .summary-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .summary-card {
+    background: white;
+    border-radius: 10px;
+    padding: 10px 6px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .summary-card .val { font-size: 14px; font-weight: 700; color: #1e293b; }
+  .summary-card .lbl { font-size: 9px; color: #6b7280; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .loan-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+  }
+  .loan-card:active { transform: scale(0.99); }
+
+  .source-strip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 12px 12px 0 0;
+  }
+  .source-strip.archived { background: #10b981; }
+  .source-strip.closed { background: #3b82f6; }
+  .source-strip.monthly { background: #8b5cf6; }
+  .source-strip.vaddi { background: #d97706; }
+
+  .loan-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+  .customer-name { font-weight: 700; font-size: 16px; color: #1e293b; }
+  .customer-phone { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .loan-name-tag { font-size: 12px; color: #6366f1; margin-top: 4px; font-weight: 600; }
+  .badge-stack { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .type-pill {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .type-pill.type { background: #f0f9ff; color: #3b82f6; }
+  .type-pill.src-archived { background: #d1fae5; color: #065f46; }
+  .type-pill.src-closed { background: #dbeafe; color: #1e40af; }
+  .type-pill.src-monthly { background: #ede9fe; color: #5b21b6; }
+  .type-pill.src-vaddi { background: #fef3c7; color: #92400e; }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .stat {
+    text-align: center;
+    padding: 8px;
+    border-radius: 8px;
+  }
+  .stat .v { font-size: 14px; font-weight: 700; }
+  .stat .l { font-size: 10px; color: #6b7280; margin-top: 2px; }
+  .stat.principal { background: #f8fafc; }
+  .stat.principal .v { color: #1e293b; }
+  .stat.paid { background: #f0fdf4; }
+  .stat.paid .v { color: #10b981; }
+  .stat.interest { background: #fef3c7; }
+  .stat.interest .v { color: #d97706; }
+
+  .loan-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f1f5f9;
+    font-size: 11px;
+    color: #6b7280;
+  }
+  .view-link { color: #6366f1; font-weight: 600; }
+
+  .empty {
+    background: white;
+    border-radius: 12px;
+    padding: 60px 20px;
+    text-align: center;
+  }
+  .empty .ic { font-size: 56px; margin-bottom: 14px; }
+  .empty .ti { font-size: 17px; font-weight: 600; color: #1e293b; margin-bottom: 6px; }
+  .empty .sb { font-size: 13px; color: #6b7280; }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: #6b7280;
+  }
+  .loading .step { font-size: 12px; margin-top: 6px; color: #94a3b8; }
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 14px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .detail-overlay {
+    position: fixed;
+    inset: 0;
+    background: #f1f5f9;
+    z-index: 200;
+    overflow-y: auto;
+    display: none;
+  }
+  .detail-overlay.open { display: block; }
+
+  .detail-header {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    padding: 20px 16px;
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .detail-header h2 { margin: 0; font-size: 20px; }
+  .detail-header .ph { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+  .detail-actions {
+    display: flex;
+    gap: 8px;
+    margin: 12px 16px 0 16px;
+  }
+  .action-btn {
+    flex: 1;
+    background: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .action-btn.primary { background: #6366f1; color: white; }
+
+  .detail-section {
+    background: white;
+    margin: 12px 16px;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .detail-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+
+  .kv-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .kv .k { font-size: 11px; color: #6b7280; }
+  .kv .v { font-size: 14px; font-weight: 600; color: #1e293b; margin-top: 2px; }
+
+  /* Detailed timeline (with balance column) */
+  .timeline-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .timeline-table thead th {
+    text-align: left;
+    padding: 8px 6px;
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .timeline-table tbody td {
+    padding: 10px 6px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+  }
+  .timeline-table tbody tr:last-child td { border-bottom: none; }
+  .timeline-table td.date { font-size: 12px; color: #4b5563; white-space: nowrap; }
+  .timeline-table td.amount { font-weight: 700; color: #10b981; white-space: nowrap; }
+  .timeline-table td.balance { color: #4b5563; white-space: nowrap; }
+  .timeline-table td.method { font-size: 11px; }
+  .timeline-table .pill {
+    display: inline-block;
+    background: #f8fafc;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    color: #6b7280;
+  }
+  .nth-col { color: #9ca3af; font-size: 11px; }
+
+  .closed-banner {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 14px;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: 700;
+    margin-top: 12px;
+    font-size: 14px;
+    letter-spacing: 0.03em;
+  }
+  .closed-banner.vaddi { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); }
+  .closed-banner.closed { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
+  .closed-banner.monthly { background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); }
+
+  .error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    padding: 14px;
+    border-radius: 10px;
+    margin: 16px;
+    font-size: 14px;
+  }
+
+  @media (min-width: 720px) {
+    .content { max-width: 760px; margin: 0 auto; }
+    .header { padding: 16px 32px; }
+    .detail-section, .detail-actions { max-width: 760px; margin-left: auto; margin-right: auto; }
+  }
+
+  @media print {
+    .header, .detail-header, .detail-actions, .back-btn { display: none !important; }
+    body { background: white; }
+    .loan-card { box-shadow: none; border: 1px solid #e5e7eb; }
+    .detail-section { box-shadow: none; border: 1px solid #e5e7eb; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <button class="back-btn" id="backBtn" title="Back">←</button>
+    <div>
+      <h1>📚 Closed Loan History</h1>
+      <div class="header-sub" id="countSub">Loading…</div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="controls-row">
+      <input type="text" id="searchInput" placeholder="Search customer, phone, loan…" />
+    </div>
+    <div class="controls-row">
+      <select id="sourceFilter">
+        <option value="all">All sources</option>
+        <option value="archived">📦 Archived</option>
+        <option value="closed">✅ Closed (Weekly)</option>
+        <option value="monthly">📅 Closed (Monthly)</option>
+        <option value="vaddi">💰 Settled Interest</option>
+      </select>
+      <select id="yearFilter">
+        <option value="all">All years</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="content" id="content">
+  <div class="loading">
+    <div class="spinner"></div>
+    <div>Loading…</div>
+    <div class="step" id="loadStep">Fetching complete history snapshot</div>
+  </div>
+</div>
+
+<div class="detail-overlay" id="detailOverlay">
+  <div class="detail-header">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <button class="back-btn" id="detailBack">←</button>
+      <div>
+        <h2 id="dName">—</h2>
+        <div class="ph" id="dPhone">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="detail-actions">
+    <button class="action-btn primary" id="printBtn">🖨️ Print</button>
+    <button class="action-btn" id="copyBtn">📋 Copy summary</button>
+  </div>
+  <div id="detailBody"></div>
+</div>
+
+<script>
+  function getApiUrl() {
+    const h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1' ||
+        h.startsWith('192.168.') || h.startsWith('172.') || h.startsWith('10.')) {
+      return 'http://' + h + ':3000/api';
+    }
+    return 'https://server-santhosais-projects.vercel.app/api';
+  }
+  const API_URL = getApiUrl();
+
+  const fmtCurrency = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
+  const fmtDate = (d) => {
+    if (!d) return 'N/A';
+    const x = new Date(d);
+    if (isNaN(x)) return 'N/A';
+    return x.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const fmtDateShort = (d) => {
+    if (!d) return '—';
+    const x = new Date(d);
+    if (isNaN(x)) return '—';
+    return x.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+  };
+
+  let allItems = [];
+  let filterText = '';
+  let filterYear = 'all';
+  let filterSource = 'all';
+  let currentItem = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function sourceLabel(src) {
+    if (src === 'archived') return '📦 Archived';
+    if (src === 'closed') return '✅ Closed';
+    if (src === 'monthly') return '📅 Monthly';
+    if (src === 'vaddi') return '💰 Interest';
+    return src;
+  }
+
+  function applyFilters() {
+    const q = filterText.trim().toLowerCase();
+    return allItems.filter(l => {
+      if (filterSource !== 'all' && l._source !== filterSource) return false;
+      if (filterYear !== 'all') {
+        const dt = l._closedDate;
+        const y = dt ? new Date(dt).getFullYear() : null;
+        if (String(y) !== filterYear) return false;
+      }
+      if (!q) return true;
+      const hay = (
+        (l.customer_name || '') + ' ' +
+        (l.customer_phone || '') + ' ' +
+        (l.loan_name || '') + ' ' +
+        (l.id || '')
+      ).toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  function renderSummary(list) {
+    const counts = { archived: 0, closed: 0, monthly: 0, vaddi: 0 };
+    let totalPrincipal = 0, totalPaid = 0;
+    list.forEach(l => {
+      counts[l._source] = (counts[l._source] || 0) + 1;
+      totalPrincipal += Number(l.loan_amount || 0);
+      totalPaid += Number(l.total_paid || 0);
+    });
+    return `
+      <div class="summary-bar">
+        <div class="summary-card"><div class="val">${list.length}</div><div class="lbl">Total</div></div>
+        <div class="summary-card"><div class="val">${counts.archived}/${counts.closed}/${counts.monthly}/${counts.vaddi}</div><div class="lbl">Arc/Wk/Mo/Int</div></div>
+        <div class="summary-card"><div class="val">${fmtCurrency(totalPrincipal)}</div><div class="lbl">Principal</div></div>
+        <div class="summary-card"><div class="val">${fmtCurrency(totalPaid)}</div><div class="lbl">Collected</div></div>
+      </div>`;
+  }
+
+  function renderList() {
+    const list = applyFilters();
+    const totalAll = allItems.length;
+    $('countSub').textContent = `${list.length} record${list.length !== 1 ? 's' : ''}` +
+      (list.length !== totalAll ? ` (of ${totalAll})` : '');
+
+    if (totalAll === 0) {
+      $('content').innerHTML = `
+        <div class="empty">
+          <div class="ic">📦</div>
+          <div class="ti">Nothing to show yet</div>
+          <div class="sb">No closed loans, archived loans, or settled interest entries found.</div>
+        </div>`;
+      return;
+    }
+
+    const note = '';
+
+    if (list.length === 0) {
+      $('content').innerHTML = note + renderSummary(allItems) + `
+        <div class="empty">
+          <div class="ic">🔍</div>
+          <div class="ti">No matches</div>
+          <div class="sb">Try a different search term, source, or year.</div>
+        </div>`;
+      return;
+    }
+
+    const cards = list.map(item => {
+      const src = item._source;
+      const isVaddi = src === 'vaddi';
+      const interest = isVaddi
+        ? Math.max(0, Number(item.total_paid || 0))
+        : Math.max(0, Number(item.total_paid || 0) - Number(item.loan_amount || 0));
+      const loanNameTag = (item.loan_name && item.loan_name !== 'General Loan')
+        ? `<div class="loan-name-tag">${escapeHtml(item.loan_name)}</div>` : '';
+      const typeLabel = isVaddi ? 'Interest' : (item.loan_type || 'Weekly');
+      const dateLabel = src === 'archived' ? 'Archived' : (src === 'vaddi' ? 'Settled' : 'Closed');
+      const paymentCount = item.total_payments != null
+        ? item.total_payments
+        : (Array.isArray(item.payments) ? item.payments.length : 0);
+
+      return `
+        <div class="loan-card" data-id="${item._uid}">
+          <div class="source-strip ${src}"></div>
+          <div class="loan-card-top">
+            <div>
+              <div class="customer-name">${escapeHtml(item.customer_name || 'Unknown')}</div>
+              <div class="customer-phone">📞 ${escapeHtml(item.customer_phone || '—')}</div>
+              ${loanNameTag}
+            </div>
+            <div class="badge-stack">
+              <span class="type-pill type">${escapeHtml(typeLabel)}</span>
+              <span class="type-pill src-${src}">${sourceLabel(src)}</span>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat principal"><div class="v">${fmtCurrency(item.loan_amount)}</div><div class="l">Principal</div></div>
+            <div class="stat paid"><div class="v">${fmtCurrency(item.total_paid)}</div><div class="l">${isVaddi ? 'Interest Paid' : 'Total Paid'}</div></div>
+            <div class="stat interest"><div class="v">${fmtCurrency(interest)}</div><div class="l">${isVaddi ? 'Earnings' : 'Profit'}</div></div>
+          </div>
+          <div class="loan-card-footer">
+            <span>📅 ${dateLabel} ${fmtDate(item._closedDate)} · 💳 ${paymentCount} payment${paymentCount !== 1 ? 's' : ''}</span>
+            <span class="view-link">View →</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    $('content').innerHTML = note + renderSummary(list) + cards;
+
+    document.querySelectorAll('.loan-card').forEach(el => {
+      el.addEventListener('click', () => openDetail(el.dataset.id));
+    });
+  }
+
+  function buildTimelineRows(item) {
+    const isVaddi = item._source === 'vaddi';
+    const payments = Array.isArray(item.payments) ? [...item.payments] : [];
+    payments.sort((a, b) => {
+      const da = new Date(a._date || 0);
+      const db = new Date(b._date || 0);
+      return da - db;
+    });
+
+    if (payments.length === 0) {
+      return `<tr><td colspan="${isVaddi ? 4 : 5}" style="text-align:center;color:#6b7280;padding:20px;">
+        No payment records found.
+      </td></tr>`;
+    }
+
+    let running = isVaddi ? 0 : Number(item.loan_amount || 0);
+    let n = 0;
+    return payments.map(p => {
+      n++;
+      const amt = Number(p._amount || 0);
+      const dateStr = fmtDate(p._date);
+      const method = p._method || 'Cash';
+
+      if (isVaddi) {
+        running += amt; // running total of interest collected
+        return `
+          <tr>
+            <td class="nth-col">#${n}</td>
+            <td class="date">${dateStr}${p._month ? '<br><span class="pill">' + escapeHtml(p._month) + '</span>' : ''}</td>
+            <td class="amount">${fmtCurrency(amt)}</td>
+            <td class="balance">${fmtCurrency(running)}</td>
+          </tr>`;
+      } else {
+        const balanceAfter = p._balanceAfter != null ? Number(p._balanceAfter) : Math.max(0, running - amt);
+        running = balanceAfter;
+        return `
+          <tr>
+            <td class="nth-col">#${n}</td>
+            <td class="date">${dateStr}</td>
+            <td class="amount">${fmtCurrency(amt)}</td>
+            <td class="balance">${fmtCurrency(balanceAfter)}</td>
+            <td class="method"><span class="pill">${escapeHtml(method)}</span></td>
+          </tr>`;
+      }
+    }).join('');
+  }
+
+  function openDetail(uid) {
+    const item = allItems.find(l => l._uid === uid);
+    if (!item) return;
+    currentItem = item;
+    $('dName').textContent = item.customer_name || 'Unknown';
+    $('dPhone').textContent = '📞 ' + (item.customer_phone || '—');
+
+    const src = item._source;
+    const isVaddi = src === 'vaddi';
+    const interest = isVaddi
+      ? Math.max(0, Number(item.total_paid || 0))
+      : Math.max(0, Number(item.total_paid || 0) - Number(item.loan_amount || 0));
+
+    const bannerClass = src === 'archived' ? '' : src; // 'closed' | 'monthly' | 'vaddi'
+    const bannerText = src === 'archived'
+      ? '✓ LOAN CLOSED & ARCHIVED · ' + fmtDate(item._closedDate)
+      : (isVaddi
+        ? '✓ INTEREST SETTLED · ' + fmtDate(item._closedDate)
+        : (src === 'monthly'
+          ? '✓ MONTHLY FINANCE CLOSED · ' + fmtDate(item._closedDate)
+          : '✓ LOAN CLOSED · ' + fmtDate(item._closedDate)));
+
+    const summaryKVs = isVaddi ? `
+        <div class="kv"><div class="k">Entry ID</div><div class="v">${escapeHtml(item.id)}</div></div>
+        <div class="kv"><div class="k">Collection Day</div><div class="v">${escapeHtml(item.day || '—')}</div></div>
+        <div class="kv"><div class="k">Loan Date</div><div class="v">${fmtDate(item.loan_date || item.createdAt)}</div></div>
+        <div class="kv"><div class="k">Settled On</div><div class="v">${fmtDate(item._closedDate)}</div></div>
+        <div class="kv"><div class="k">Principal</div><div class="v">${fmtCurrency(item.loan_amount)}</div></div>
+        <div class="kv"><div class="k">Monthly Interest</div><div class="v">${fmtCurrency(item.amount)}</div></div>
+        ${item.interest_rate ? `<div class="kv"><div class="k">Interest Rate</div><div class="v">${escapeHtml(item.interest_rate)}%</div></div>` : ''}
+        ${item.collateral_type ? `<div class="kv"><div class="k">Collateral</div><div class="v">${escapeHtml(item.collateral_type)}</div></div>` : ''}
+        <div class="kv"><div class="k">Total Interest Collected</div><div class="v" style="color:#d97706">${fmtCurrency(item.total_paid)}</div></div>
+        <div class="kv"><div class="k">Monthly Payments</div><div class="v">${item.total_payments || 0}</div></div>
+        ${item.aadhar_number ? `<div class="kv" style="grid-column:1/-1"><div class="k">Aadhar</div><div class="v">${escapeHtml(item.aadhar_number)}</div></div>` : ''}
+      ` : `
+        <div class="kv"><div class="k">Loan ID</div><div class="v">${escapeHtml(item.original_loan_id || item.id)}</div></div>
+        <div class="kv"><div class="k">Type</div><div class="v">${escapeHtml(item.loan_type || 'Weekly')}</div></div>
+        <div class="kv"><div class="k">Loan Date</div><div class="v">${fmtDate(item.loan_given_date || item.loan_date || item.created_at)}</div></div>
+        <div class="kv"><div class="k">${src === 'archived' ? 'Archived' : 'Closed'} On</div><div class="v">${fmtDate(item._closedDate)}</div></div>
+        <div class="kv"><div class="k">Principal</div><div class="v">${fmtCurrency(item.loan_amount)}</div></div>
+        <div class="kv"><div class="k">Total Paid</div><div class="v" style="color:#10b981">${fmtCurrency(item.total_paid)}</div></div>
+        <div class="kv"><div class="k">Interest Earned</div><div class="v" style="color:#d97706">${fmtCurrency(interest)}</div></div>
+        <div class="kv"><div class="k">Total Payments</div><div class="v">${item.total_payments != null ? item.total_payments : (item.payments ? item.payments.length : 0)}</div></div>
+        ${item.weekly_amount ? `<div class="kv"><div class="k">Weekly Installment</div><div class="v">${fmtCurrency(item.weekly_amount)}</div></div>` : ''}
+        ${item.loan_name && item.loan_name !== 'General Loan' ? `<div class="kv" style="grid-column:1/-1"><div class="k">Loan Name</div><div class="v">${escapeHtml(item.loan_name)}</div></div>` : ''}
+      `;
+
+    const headers = isVaddi
+      ? `<tr><th>#</th><th>Date / Month</th><th>Amount</th><th>Running Total</th></tr>`
+      : `<tr><th>#</th><th>Date</th><th>Amount</th><th>Balance After</th><th>Method</th></tr>`;
+
+    $('detailBody').innerHTML = `
+      <div class="detail-section">
+        <h3>${isVaddi ? 'Interest Entry Summary' : 'Loan Summary'}</h3>
+        <div class="kv-grid">${summaryKVs}</div>
+      </div>
+      <div class="detail-section">
+        <h3>${isVaddi ? 'Monthly Payments' : 'Payment Timeline'} (${item.payments ? item.payments.length : 0})</h3>
+        <table class="timeline-table">
+          <thead>${headers}</thead>
+          <tbody>${buildTimelineRows(item)}</tbody>
+        </table>
+        <div class="closed-banner ${bannerClass}">${bannerText}</div>
+      </div>`;
+
+    $('detailOverlay').classList.add('open');
+    window.scrollTo(0, 0);
+  }
+
+  function closeDetail() {
+    $('detailOverlay').classList.remove('open');
+  }
+
+  function buildSummaryText(item) {
+    if (!item) return '';
+    const isVaddi = item._source === 'vaddi';
+    const lines = [];
+    lines.push('CLOSED LOAN HISTORY');
+    lines.push('─────────────────────');
+    lines.push('Customer: ' + (item.customer_name || 'Unknown'));
+    lines.push('Phone: ' + (item.customer_phone || '—'));
+    lines.push('Type: ' + (isVaddi ? 'Interest' : (item.loan_type || 'Weekly')));
+    lines.push('Principal: ' + fmtCurrency(item.loan_amount));
+    lines.push((isVaddi ? 'Interest Collected: ' : 'Total Paid: ') + fmtCurrency(item.total_paid));
+    lines.push((isVaddi ? 'Settled' : 'Closed') + ' On: ' + fmtDate(item._closedDate));
+    lines.push('');
+    lines.push('PAYMENTS:');
+    const payments = Array.isArray(item.payments) ? [...item.payments] : [];
+    payments.sort((a, b) => new Date(a._date || 0) - new Date(b._date || 0));
+    let running = isVaddi ? 0 : Number(item.loan_amount || 0);
+    payments.forEach((p, i) => {
+      const amt = Number(p._amount || 0);
+      if (isVaddi) {
+        running += amt;
+        lines.push(`${i+1}. ${fmtDate(p._date)}${p._month ? ' (' + p._month + ')' : ''}  ${fmtCurrency(amt)}  [total: ${fmtCurrency(running)}]`);
+      } else {
+        const bal = p._balanceAfter != null ? Number(p._balanceAfter) : Math.max(0, running - amt);
+        running = bal;
+        lines.push(`${i+1}. ${fmtDate(p._date)}  ${fmtCurrency(amt)}  ${p._method || 'Cash'}  [bal: ${fmtCurrency(bal)}]`);
+      }
+    });
+    return lines.join('\n');
+  }
+
+  function populateYearFilter() {
+    const years = new Set();
+    allItems.forEach(l => {
+      const d = l._closedDate;
+      if (d) {
+        const y = new Date(d).getFullYear();
+        if (!isNaN(y)) years.add(y);
+      }
+    });
+    const sorted = [...years].sort((a, b) => b - a);
+    const sel = $('yearFilter');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="all">All years</option>' +
+      sorted.map(y => `<option value="${y}">${y}</option>`).join('');
+    sel.value = sorted.includes(Number(prev)) ? prev : 'all';
+  }
+
+  function setStep(s) {
+    const el = $('loadStep');
+    if (el) el.textContent = s;
+  }
+
+  // ---- Normalizers (produce a unified record shape) ----
+
+  function normalizePayment(p, type) {
+    // type: 'loan' | 'vaddi'
+    if (type === 'vaddi') {
+      return {
+        ...p,
+        _amount: p.totalAmount || p.amount || 0,
+        _date: p.paidDate || p.date || p.createdAt,
+        _method: 'Monthly',
+        _month: p.month || null,
+      };
+    }
+    return {
+      ...p,
+      _amount: p.amount || p.payment_amount || 0,
+      _date: p.payment_date || p.date || p.created_at,
+      _method: p.payment_mode || p.payment_method || p.method || 'Cash',
+      _balanceAfter: p.balance_after != null ? p.balance_after : null,
+    };
+  }
+
+  function normalizeArchived(a) {
+    const payments = (a.payments || []).map(p => normalizePayment(p, 'loan'));
+    return {
+      ...a,
+      _source: 'archived',
+      _uid: 'a:' + a.id,
+      _closedDate: a.archived_at,
+      payments,
+      total_payments: a.total_payments != null ? a.total_payments : payments.length,
+    };
+  }
+
+  function normalizeClosedLoan(loan, customer, paymentsForLoan) {
+    const payments = paymentsForLoan.map(p => normalizePayment(p, 'loan'));
+    const totalPaid = Math.max(0, Number(loan.loan_amount || 0) - Number(loan.balance || 0));
+    // pick last payment date as a stand-in for "closed_date" since loans don't carry closed_at
+    let closedDate = loan.closed_at || loan.closedAt;
+    if (!closedDate && payments.length > 0) {
+      const ds = payments.map(p => p._date).filter(Boolean).sort();
+      closedDate = ds[ds.length - 1];
+    }
+    return {
+      ...loan,
+      _source: 'closed',
+      _uid: 'c:' + loan.id,
+      _closedDate: closedDate || loan.updated_at || loan.loan_given_date,
+      customer_name: customer ? customer.name : (loan.customer_name || 'Unknown'),
+      customer_phone: customer ? customer.phone : (loan.customer_phone || ''),
+      payments,
+      total_payments: payments.length,
+      total_paid: totalPaid,
+    };
+  }
+
+  function normalizeMonthly(c) {
+    const payments = (c.payments || []).map(p => normalizePayment(p, 'loan'));
+    const totalPaid = c.total_paid != null
+      ? Number(c.total_paid)
+      : Math.max(0, Number(c.loan_amount || 0) - Number(c.balance || 0));
+    return {
+      ...c,
+      _source: 'monthly',
+      _uid: 'm:' + c.id,
+      _closedDate: c.closed_date || c.updated_at || (payments.length > 0 ? payments[payments.length - 1]._date : null),
+      customer_name: c.name,
+      customer_phone: c.phone || '',
+      loan_amount: Number(c.loan_amount || 0),
+      loan_type: 'Monthly',
+      loan_name: c.loan_name || 'Monthly Finance',
+      monthly_amount: c.monthly_amount,
+      total_months: c.total_months,
+      payments,
+      total_payments: payments.length,
+      total_paid: totalPaid,
+    };
+  }
+
+  function normalizeVaddi(v, paymentsForEntry) {
+    const payments = paymentsForEntry.map(p => normalizePayment(p, 'vaddi'));
+    const principal = Number(v.principal_amount || v.amount || 0);
+    const totalCollected = payments.reduce((s, p) => s + Number(p._amount || 0), 0);
+    return {
+      ...v,
+      _source: 'vaddi',
+      _uid: 'v:' + v.id,
+      _closedDate: v.settledDate || v.settled_date || v.updatedAt,
+      customer_name: v.name,
+      customer_phone: v.phone || '',
+      loan_amount: principal,
+      loan_name: 'Interest · Day ' + (v.day || '?'),
+      loan_type: 'Interest',
+      payments,
+      total_payments: payments.length,
+      total_paid: totalCollected,
+    };
+  }
+
+  async function fetchJSON(url) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url);
+    return r.json();
+  }
+
+  async function load() {
+    try {
+      setStep('Fetching complete history snapshot…');
+
+      // /api/backup/complete returns everything in ONE call (all loans incl. closed, all payments, vaddi)
+      // /api/archived-loans gets archived snapshots (not in backup endpoint)
+      // /api/monthly-finance/closed gets closed monthly finance customers with their payment history
+      const [backup, archived, monthlyClosed] = await Promise.all([
+        fetchJSON(API_URL + '/backup/complete').catch(e => { console.warn('backup failed', e); return {}; }),
+        fetchJSON(API_URL + '/archived-loans').catch(e => { console.warn('archived failed', e); return []; }),
+        fetchJSON(API_URL + '/monthly-finance/closed').catch(e => { console.warn('monthly-closed failed', e); return []; }),
+      ]);
+
+      setStep('Processing data…');
+
+      const customers = backup.customers || [];
+      const loans = backup.loans || [];
+      const payments = backup.payments || [];
+      const vaddiEntries = backup.vaddi_entries || [];
+      const vaddiPayments = backup.vaddi_payments || [];
+
+      // Build lookups
+      const customerById = new Map(customers.map(c => [c.id, c]));
+      const paymentsByLoan = new Map();
+      payments.forEach(p => {
+        if (!paymentsByLoan.has(p.loan_id)) paymentsByLoan.set(p.loan_id, []);
+        paymentsByLoan.get(p.loan_id).push(p);
+      });
+      const paymentsByVaddi = new Map();
+      vaddiPayments.forEach(p => {
+        const eid = p.entryId || p.entry_id;
+        if (!eid) return;
+        if (!paymentsByVaddi.has(eid)) paymentsByVaddi.set(eid, []);
+        paymentsByVaddi.get(eid).push(p);
+      });
+
+      // 1. Archived loans
+      const normalizedArchived = (archived || []).map(normalizeArchived);
+      const archivedOriginalIds = new Set(
+        normalizedArchived.map(a => a.original_loan_id).filter(Boolean)
+      );
+
+      // 2. Closed weekly loans (status='closed', not already archived)
+      const closedLoans = loans
+        .filter(l => l.status === 'closed' && !archivedOriginalIds.has(l.id))
+        .map(l => normalizeClosedLoan(l, customerById.get(l.customer_id), paymentsByLoan.get(l.id) || []));
+
+      // 3. Closed Monthly Finance customers (from new dedicated endpoint)
+      const closedMonthly = (Array.isArray(monthlyClosed) ? monthlyClosed : [])
+        .map(normalizeMonthly);
+
+      // 4. Settled vaddi entries (status='settled')
+      const settledVaddi = vaddiEntries
+        .filter(v => v.status === 'settled')
+        .map(v => normalizeVaddi(v, paymentsByVaddi.get(v.id) || []));
+
+      allItems = [...normalizedArchived, ...closedLoans, ...closedMonthly, ...settledVaddi];
+
+      // Sort by closed/settled date desc
+      allItems.sort((a, b) => {
+        const da = a._closedDate ? new Date(a._closedDate).getTime() : 0;
+        const db = b._closedDate ? new Date(b._closedDate).getTime() : 0;
+        return db - da;
+      });
+
+      populateYearFilter();
+      renderList();
+    } catch (err) {
+      console.error(err);
+      $('content').innerHTML = `<div class="error">⚠️ Failed to load data.<br>${escapeHtml(err.message)}<br><br>API: ${API_URL}</div>`;
+      $('countSub').textContent = 'Error';
+    }
+  }
+
+  // Wire events
+  $('searchInput').addEventListener('input', (e) => { filterText = e.target.value; renderList(); });
+  $('yearFilter').addEventListener('change', (e) => { filterYear = e.target.value; renderList(); });
+  $('sourceFilter').addEventListener('change', (e) => { filterSource = e.target.value; renderList(); });
+  $('backBtn').addEventListener('click', () => {
+    if (document.referrer && document.referrer.startsWith(window.location.origin)) {
+      window.history.back();
+    } else {
+      window.location.href = '/';
+    }
+  });
+  $('detailBack').addEventListener('click', closeDetail);
+  $('printBtn').addEventListener('click', () => window.print());
+  $('copyBtn').addEventListener('click', async () => {
+    if (!currentItem) return;
+    try {
+      await navigator.clipboard.writeText(buildSummaryText(currentItem));
+      $('copyBtn').textContent = '✓ Copied';
+      setTimeout(() => { $('copyBtn').textContent = '📋 Copy summary'; }, 1500);
+    } catch (e) {
+      alert('Copy failed: ' + e.message);
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('detailOverlay').classList.contains('open')) closeDetail();
+  });
+
+  load();
+</script>
+
+</body>
+</html>

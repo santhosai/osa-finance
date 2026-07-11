@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Weekly Backup PDF Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 12px; background: #e5e7eb; padding: 20px; }
+
+    .page {
+      background: white;
+      width: 210mm;
+      margin: 0 auto;
+      padding: 10mm;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+
+    /* ── HEADER ── */
+    .pdf-header {
+      background: #1e293b;
+      color: white;
+      text-align: center;
+      padding: 10px 14px;
+      border-radius: 4px;
+      margin-bottom: 14px;
+    }
+    .pdf-header h1 { font-size: 15px; font-weight: bold; letter-spacing: 0.5px; }
+    .pdf-header p  { font-size: 10px; color: #94a3b8; margin-top: 3px; }
+
+    /* ── SECTION HEADER ── */
+    .section-header {
+      color: white;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: bold;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .section-sunday   { background: #2563eb; }
+    .section-thursday { background: #7c3aed; }
+
+    /* ── BIG SEPARATOR ── */
+    .big-separator {
+      background: #1e293b;
+      color: #94a3b8;
+      text-align: center;
+      padding: 8px;
+      font-size: 11px;
+      letter-spacing: 2px;
+      margin: 18px 0 14px;
+      border-radius: 4px;
+    }
+
+    /* ── CUSTOMER BLOCK (normal) ── */
+    .customer-block {
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #3b82f6;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      background: #f8fafc;
+      overflow: hidden;
+    }
+
+    /* ── CUSTOMER BLOCK (sakkara) ── */
+    .customer-block.sakkara {
+      border: 1px solid #fed7aa;
+      border-left: 4px solid #ea580c;
+      background: #fff7ed;
+    }
+
+    .customer-info {
+      padding: 8px 10px 6px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px 20px;
+    }
+
+    .info-row { display: flex; gap: 6px; font-size: 11px; }
+    .info-label { font-weight: bold; color: #475569; white-space: nowrap; min-width: 95px; }
+    .info-value { color: #1e293b; }
+
+    .customer-block .customer-num {
+      font-weight: bold;
+      font-size: 11px;
+      color: #3b82f6;
+      padding: 6px 10px 0;
+    }
+    .customer-block.sakkara .customer-num { color: #ea580c; }
+
+    /* ── PAYMENT TABLE ── */
+    .payment-section { padding: 0 10px 8px; }
+    .payment-label {
+      font-size: 10px;
+      font-weight: bold;
+      color: #64748b;
+      margin-bottom: 4px;
+      margin-top: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    thead tr { background: #3b82f6; color: white; }
+    .sakkara thead tr { background: #ea580c; }
+    th, td { padding: 4px 8px; text-align: left; }
+    tbody tr:nth-child(even) { background: #eff6ff; }
+    .sakkara tbody tr:nth-child(even) { background: #fff0e6; }
+    tbody tr:nth-child(odd)  { background: white; }
+    .no-payment { color: #94a3b8; font-style: italic; font-size: 10px; padding: 4px 8px; }
+
+    .note {
+      margin-top: 20px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .note strong { color: #1e293b; }
+  </style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="pdf-header">
+    <h1>OM SAI MURUGAN FINANCE — WEEKLY BACKUP</h1>
+    <p>Generated: 02/05/2026</p>
+  </div>
+
+  <!-- SUNDAY SECTION -->
+  <div class="section-header section-sunday">📅 SUNDAY LOANS &nbsp;(52 customers)</div>
+
+  <!-- Customer 1 — Normal -->
+  <div class="customer-block">
+    <div class="customer-num">#1</div>
+    <div class="customer-info">
+      <div class="info-row"><span class="info-label">Customer Name :</span><span class="info-value">Veeramani</span></div>
+      <div class="info-row"><span class="info-label">Phone :</span><span class="info-value">9087975113</span></div>
+      <div class="info-row"><span class="info-label">Loan Name :</span><span class="info-value">General Loan</span></div>
+      <div class="info-row"><span class="info-label">Loan Amount :</span><span class="info-value">Rs.5,000</span></div>
+      <div class="info-row"><span class="info-label">Weekly Amount :</span><span class="info-value">Rs.500</span></div>
+      <div class="info-row"><span class="info-label">Balance :</span><span class="info-value">Rs.3,000</span></div>
+      <div class="info-row"><span class="info-label">Status :</span><span class="info-value">Active</span></div>
+      <div class="info-row"><span class="info-label">Loan Given Date :</span><span class="info-value">01/02/2026</span></div>
+    </div>
+    <div class="payment-section">
+      <div class="payment-label">Payment Details:</div>
+      <table>
+        <thead><tr><th>Date</th><th>Amount</th><th>Balance</th></tr></thead>
+        <tbody>
+          <tr><td>08/02/2026</td><td>Rs.500</td><td>Rs.4,500</td></tr>
+          <tr><td>15/02/2026</td><td>Rs.500</td><td>Rs.4,000</td></tr>
+          <tr><td>01/03/2026</td><td>Rs.500</td><td>Rs.3,500</td></tr>
+          <tr><td>08/03/2026</td><td>Rs.500</td><td>Rs.3,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Customer 2 — Normal -->
+  <div class="customer-block">
+    <div class="customer-num">#2</div>
+    <div class="customer-info">
+      <div class="info-row"><span class="info-label">Customer Name :</span><span class="info-value">Archana - Soniya</span></div>
+      <div class="info-row"><span class="info-label">Phone :</span><span class="info-value">7639691758</span></div>
+      <div class="info-row"><span class="info-label">Loan Name :</span><span class="info-value">Archana</span></div>
+      <div class="info-row"><span class="info-label">Loan Amount :</span><span class="info-value">Rs.5,000</span></div>
+      <div class="info-row"><span class="info-label">Weekly Amount :</span><span class="info-value">Rs.500</span></div>
+      <div class="info-row"><span class="info-label">Balance :</span><span class="info-value">Rs.2,000</span></div>
+      <div class="info-row"><span class="info-label">Status :</span><span class="info-value">Active</span></div>
+      <div class="info-row"><span class="info-label">Loan Given Date :</span><span class="info-value">15/02/2026</span></div>
+    </div>
+    <div class="payment-section">
+      <div class="payment-label">Payment Details:</div>
+      <table>
+        <thead><tr><th>Date</th><th>Amount</th><th>Balance</th></tr></thead>
+        <tbody>
+          <tr><td>22/02/2026</td><td>Rs.500</td><td>Rs.4,500</td></tr>
+          <tr><td>01/03/2026</td><td>Rs.500</td><td>Rs.4,000</td></tr>
+          <tr><td>08/03/2026</td><td>Rs.500</td><td>Rs.3,500</td></tr>
+          <tr><td>15/03/2026</td><td>Rs.500</td><td>Rs.3,000</td></tr>
+          <tr><td>22/03/2026</td><td>Rs.500</td><td>Rs.2,500</td></tr>
+          <tr><td>29/03/2026</td><td>Rs.500</td><td>Rs.2,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Customer 3 — SAKKARA (orange) -->
+  <div class="customer-block sakkara">
+    <div class="customer-num">#3</div>
+    <div class="customer-info">
+      <div class="info-row"><span class="info-label">Customer Name :</span><span class="info-value" style="color:#ea580c;font-weight:bold;">Sakkara - Mugil</span></div>
+      <div class="info-row"><span class="info-label">Phone :</span><span class="info-value">9751364667</span></div>
+      <div class="info-row"><span class="info-label">Loan Name :</span><span class="info-value">Friend-2</span></div>
+      <div class="info-row"><span class="info-label">Loan Amount :</span><span class="info-value">Rs.10,000</span></div>
+      <div class="info-row"><span class="info-label">Weekly Amount :</span><span class="info-value">Rs.1,000</span></div>
+      <div class="info-row"><span class="info-label">Balance :</span><span class="info-value">Rs.2,000</span></div>
+      <div class="info-row"><span class="info-label">Status :</span><span class="info-value">Active</span></div>
+      <div class="info-row"><span class="info-label">Loan Given Date :</span><span class="info-value">15/02/2026</span></div>
+    </div>
+    <div class="payment-section sakkara">
+      <div class="payment-label">Payment Details:</div>
+      <table class="sakkara">
+        <thead class="sakkara"><tr style="background:#ea580c;color:white;"><th>Date</th><th>Amount</th><th>Balance</th></tr></thead>
+        <tbody>
+          <tr style="background:white;"><td>22/02/2026</td><td>Rs.1,000</td><td>Rs.9,000</td></tr>
+          <tr style="background:#fff0e6;"><td>01/03/2026</td><td>Rs.1,000</td><td>Rs.8,000</td></tr>
+          <tr style="background:white;"><td>08/03/2026</td><td>Rs.1,000</td><td>Rs.7,000</td></tr>
+          <tr style="background:#fff0e6;"><td>15/03/2026</td><td>Rs.1,000</td><td>Rs.6,000</td></tr>
+          <tr style="background:white;"><td>22/03/2026</td><td>Rs.1,000</td><td>Rs.5,000</td></tr>
+          <tr style="background:#fff0e6;"><td>29/03/2026</td><td>Rs.1,000</td><td>Rs.4,000</td></tr>
+          <tr style="background:white;"><td>05/04/2026</td><td>Rs.1,000</td><td>Rs.3,000</td></tr>
+          <tr style="background:#fff0e6;"><td>12/04/2026</td><td>Rs.1,000</td><td>Rs.2,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Customer 4 — Normal -->
+  <div class="customer-block">
+    <div class="customer-num">#4</div>
+    <div class="customer-info">
+      <div class="info-row"><span class="info-label">Customer Name :</span><span class="info-value">Jagan - Thala</span></div>
+      <div class="info-row"><span class="info-label">Phone :</span><span class="info-value">8098972696</span></div>
+      <div class="info-row"><span class="info-label">Loan Name :</span><span class="info-value">காங்கதி பழக்கடை</span></div>
+      <div class="info-row"><span class="info-label">Loan Amount :</span><span class="info-value">Rs.20,000</span></div>
+      <div class="info-row"><span class="info-label">Weekly Amount :</span><span class="info-value">Rs.2,000</span></div>
+      <div class="info-row"><span class="info-label">Balance :</span><span class="info-value">Rs.8,000</span></div>
+      <div class="info-row"><span class="info-label">Status :</span><span class="info-value">Active</span></div>
+      <div class="info-row"><span class="info-label">Loan Given Date :</span><span class="info-value">22/02/2026</span></div>
+    </div>
+    <div class="payment-section">
+      <div class="payment-label">Payment Details:</div>
+      <table>
+        <thead><tr><th>Date</th><th>Amount</th><th>Balance</th></tr></thead>
+        <tbody>
+          <tr><td>01/03/2026</td><td>Rs.2,000</td><td>Rs.18,000</td></tr>
+          <tr><td>08/03/2026</td><td>Rs.2,000</td><td>Rs.16,000</td></tr>
+          <tr><td>15/03/2026</td><td>Rs.2,000</td><td>Rs.14,000</td></tr>
+          <tr><td>22/03/2026</td><td>Rs.2,000</td><td>Rs.12,000</td></tr>
+          <tr><td>29/03/2026</td><td>Rs.2,000</td><td>Rs.10,000</td></tr>
+          <tr><td>05/04/2026</td><td>Rs.2,000</td><td>Rs.8,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:#94a3b8;font-size:10px;margin:6px 0 2px;">... more Sunday customers ...</div>
+
+  <!-- BIG SEPARATOR -->
+  <div class="big-separator">
+    ━━━━━━━━━━━━━━━━━━━━━━━━ THURSDAY LOANS ━━━━━━━━━━━━━━━━━━━━━━━━
+  </div>
+
+  <!-- THURSDAY SECTION -->
+  <div class="section-header section-thursday">📅 THURSDAY LOANS &nbsp;(28 customers)</div>
+
+  <!-- Customer 1 Thursday — SAKKARA (orange) -->
+  <div class="customer-block sakkara">
+    <div class="customer-num">#1</div>
+    <div class="customer-info">
+      <div class="info-row"><span class="info-label">Customer Name :</span><span class="info-value" style="color:#ea580c;font-weight:bold;">Sakkara - Siva</span></div>
+      <div class="info-row"><span class="info-label">Phone :</span><span class="info-value">6379317711</span></div>
+      <div class="info-row"><span class="info-label">Loan Name :</span><span class="info-value">General Loan</span></div>
+      <div class="info-row"><span class="info-label">Loan Amount :</span><span class="info-value">Rs.10,000</span></div>
+      <div class="info-row"><span class="info-label">Weekly Amount :</span><span class="info-value">Rs.1,000</span></div>
+      <div class="info-row"><span class="info-label">Balance :</span><span class="info-value">Rs.2,000</span></div>
+      <div class="info-row"><span class="info-label">Status :</span><span class="info-value">Active</span></div>
+      <div class="info-row"><span class="info-label">Loan Given Date :</span><span class="info-value">19/02/2026</span></div>
+    </div>
+    <div class="payment-section sakkara">
+      <div class="payment-label">Payment Details:</div>
+      <table>
+        <thead><tr style="background:#ea580c;color:white;"><th>Date</th><th>Amount</th><th>Balance</th></tr></thead>
+        <tbody>
+          <tr style="background:white;"><td>26/02/2026</td><td>Rs.1,000</td><td>Rs.9,000</td></tr>
+          <tr style="background:#fff0e6;"><td>05/03/2026</td><td>Rs.1,000</td><td>Rs.8,000</td></tr>
+          <tr style="background:white;"><td>12/03/2026</td><td>Rs.1,000</td><td>Rs.7,000</td></tr>
+          <tr style="background:#fff0e6;"><td>26/03/2026</td><td>Rs.1,000</td><td>Rs.6,000</td></tr>
+          <tr style="background:white;"><td>02/04/2026</td><td>Rs.1,000</td><td>Rs.5,000</td></tr>
+          <tr style="background:#fff0e6;"><td>09/04/2026</td><td>Rs.1,000</td><td>Rs.4,000</td></tr>
+          <tr style="background:white;"><td>16/04/2026</td><td>Rs.1,000</td><td>Rs.3,000</td></tr>
+          <tr style="background:#fff0e6;"><td>23/04/2026</td><td>Rs.1,000</td><td>Rs.2,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Customer 2 Thursday — Normal -->
+  <div class="customer-block" style="border-left-color:#7c3aed;">
+    <div class="customer-num" style="color:#7c3aed;">#2</div>
+    <div class="customer-info">
+      <div class="info-row"><span class="info-label">Customer Name :</span><span class="info-value">Parthipan</span></div>
+      <div class="info-row"><span class="info-label">Phone :</span><span class="info-value">7094901249</span></div>
+      <div class="info-row"><span class="info-label">Loan Name :</span><span class="info-value">General Loan</span></div>
+      <div class="info-row"><span class="info-label">Loan Amount :</span><span class="info-value">Rs.5,000</span></div>
+      <div class="info-row"><span class="info-label">Weekly Amount :</span><span class="info-value">Rs.500</span></div>
+      <div class="info-row"><span class="info-label">Balance :</span><span class="info-value">Rs.4,000</span></div>
+      <div class="info-row"><span class="info-label">Status :</span><span class="info-value">Active</span></div>
+      <div class="info-row"><span class="info-label">Loan Given Date :</span><span class="info-value">05/03/2026</span></div>
+    </div>
+    <div class="payment-section">
+      <div class="payment-label">Payment Details:</div>
+      <table>
+        <thead><tr style="background:#7c3aed;color:white;"><th>Date</th><th>Amount</th><th>Balance</th></tr></thead>
+        <tbody>
+          <tr><td>12/03/2026</td><td>Rs.500</td><td>Rs.4,500</td></tr>
+          <tr><td>19/03/2026</td><td>Rs.500</td><td>Rs.4,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:#94a3b8;font-size:10px;margin:6px 0 2px;">... more Thursday customers ...</div>
+
+  <div style="text-align:center;margin-top:16px;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;">
+    Generated by OM SAI MURUGAN FINANCE | Ph: 8667510724
+  </div>
+
+</div>
+
+<div class="note" style="width:210mm;margin:20px auto;">
+  <strong>Note:</strong> This is a preview of the PDF layout.<br>
+  • Normal customers → white/light blue background with blue left border<br>
+  • <span style="color:#ea580c;font-weight:bold;">Sakkara</span> customers → orange/cream background with orange left border<br>
+  • Sunday section uses blue theme, Thursday section uses purple theme<br>
+  • Actual PDF will be downloaded as <code>Weekly_Backup_2026-05-02.pdf</code>
+</div>
+
+</body>
+</html>

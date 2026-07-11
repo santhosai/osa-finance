@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Festival Fund – Preview</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, sans-serif; background:#0f172a; color:#f1f5f9; min-height:100vh; overflow-x:hidden; }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background:#1e293b; padding:13px 16px;
+    display:flex; align-items:center; gap:12px;
+    border-bottom:2px solid #f59e0b;
+    position:sticky; top:0; z-index:50;
+  }
+  .hamburger {
+    background:none; border:none; cursor:pointer;
+    display:flex; flex-direction:column; gap:4px; padding:4px;
+  }
+  .hamburger span {
+    display:block; width:22px; height:2px;
+    background:#f59e0b; border-radius:2px;
+    transition:all 0.3s;
+  }
+  .topbar-title { font-size:16px; font-weight:700; color:#f59e0b; }
+  .topbar-sub   { font-size:10px; color:#94a3b8; }
+  .topbar-right { margin-left:auto; font-size:11px; color:#94a3b8; }
+
+  /* ── SIDEBAR OVERLAY ── */
+  .sidebar-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,0.6);
+    z-index:100; opacity:0; pointer-events:none;
+    transition:opacity 0.3s;
+  }
+  .sidebar-overlay.open { opacity:1; pointer-events:all; }
+
+  /* ── SIDEBAR DRAWER ── */
+  .sidebar {
+    position:fixed; top:0; left:-260px; bottom:0; width:260px;
+    background:#1e293b; z-index:101;
+    transition:left 0.3s ease;
+    display:flex; flex-direction:column;
+    border-right:1px solid #334155;
+  }
+  .sidebar.open { left:0; }
+
+  .sidebar-head {
+    padding:20px 18px 16px;
+    background:linear-gradient(135deg,#d97706,#b45309);
+  }
+  .sidebar-head-icon { font-size:28px; margin-bottom:6px; }
+  .sidebar-head h2  { font-size:17px; font-weight:800; color:white; }
+  .sidebar-head p   { font-size:11px; color:rgba(255,255,255,0.75); margin-top:2px; }
+  .sidebar-close {
+    position:absolute; top:14px; right:14px;
+    background:rgba(255,255,255,0.2); border:none; color:white;
+    font-size:16px; cursor:pointer; padding:3px 9px; border-radius:6px;
+  }
+
+  /* ── NAV ITEMS ── */
+  .nav-section { padding:10px 0; flex:1; overflow-y:auto; }
+  .nav-label {
+    font-size:9px; font-weight:700; letter-spacing:1px;
+    color:#475569; padding:10px 18px 4px; text-transform:uppercase;
+  }
+  .nav-item {
+    display:flex; align-items:center; gap:12px;
+    padding:12px 18px; cursor:pointer; font-size:13px; font-weight:600;
+    color:#94a3b8; transition:all 0.2s; border-left:3px solid transparent;
+  }
+  .nav-item:hover  { background:#0f172a; color:#f1f5f9; }
+  .nav-item.active { background:#0f172a; color:#f59e0b; border-left-color:#f59e0b; }
+  .nav-item .nav-icon { font-size:16px; width:20px; text-align:center; }
+  .nav-item .nav-badge {
+    margin-left:auto; background:#dc2626; color:white;
+    font-size:10px; padding:1px 6px; border-radius:10px; font-weight:700;
+  }
+  .nav-item .nav-badge.green { background:#15803d; }
+
+  .nav-divider { height:1px; background:#334155; margin:6px 18px; }
+
+  .sidebar-footer {
+    padding:14px 18px;
+    border-top:1px solid #334155;
+    font-size:10px; color:#475569; text-align:center;
+  }
+
+  /* ── MAIN CONTENT ── */
+  .main { min-height:100vh; }
+  .screen { display:none; padding:14px; }
+  .screen.active { display:block; }
+
+  /* ── SHARED CARD ── */
+  .card {
+    background:#1e293b; border-radius:12px; padding:14px;
+    border:1px solid #334155; margin-bottom:12px;
+  }
+  .card-title { font-size:13px; font-weight:700; color:#f1f5f9; margin-bottom:10px; }
+
+  /* ── STATS ── */
+  .stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+  .stat-card {
+    background:#1e293b; border-radius:10px; padding:12px 8px;
+    text-align:center; border:1px solid #334155;
+  }
+  .stat-num { font-size:22px; font-weight:800; color:#f59e0b; }
+  .stat-lbl { font-size:9px; color:#94a3b8; margin-top:2px; }
+
+  .scheme-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+  .scheme-card {
+    border-radius:10px; padding:13px; text-align:center; border:1px solid #334155;
+  }
+  .sc1 { background:linear-gradient(135deg,#1e3a5f,#1e293b); }
+  .sc2 { background:linear-gradient(135deg,#3b1e5f,#1e293b); }
+  .sc-title { font-size:11px; font-weight:700; margin-bottom:4px; }
+  .sc1 .sc-title { color:#93c5fd; }
+  .sc2 .sc-title { color:#c4b5fd; }
+  .sc-count { font-size:22px; font-weight:800; color:white; }
+  .sc-sub   { font-size:10px; color:#94a3b8; }
+  .sc-amt   { font-size:10px; margin-top:5px; }
+  .sc1 .sc-amt { color:#93c5fd; }
+  .sc2 .sc-amt { color:#c4b5fd; }
+
+  /* ── MONTH SUMMARY BAR ── */
+  .month-bar {
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;
+  }
+  .month-bar select {
+    background:#0f172a; border:1px solid #334155; color:#f1f5f9;
+    padding:6px 10px; border-radius:8px; font-size:12px;
+  }
+  .summary-row {
+    display:flex; background:#0f172a; border-radius:10px;
+    border:1px solid #334155; overflow:hidden; margin-bottom:12px;
+  }
+  .sum-item { flex:1; padding:10px 6px; text-align:center; }
+  .sum-item + .sum-item { border-left:1px solid #334155; }
+  .sum-val { font-size:14px; font-weight:700; }
+  .sum-lbl { font-size:9px; color:#94a3b8; margin-top:1px; }
+  .green { color:#4ade80; }
+  .red   { color:#f87171; }
+  .amber { color:#fbbf24; }
+
+  /* ── CUSTOMER ROWS ── */
+  .sec-lbl {
+    font-size:10px; font-weight:700; letter-spacing:0.5px;
+    padding:5px 0; margin-bottom:5px; border-bottom:1px solid #334155;
+  }
+  .sec-lbl.paid-lbl   { color:#4ade80; }
+  .sec-lbl.unpaid-lbl { color:#f87171; }
+
+  .crow {
+    background:#1e293b; border-radius:8px; padding:9px 10px;
+    margin-bottom:6px; border:1px solid #334155;
+    display:flex; align-items:center; gap:8px;
+  }
+  .crow.paid   { border-left:3px solid #4ade80; }
+  .crow.unpaid { border-left:3px solid #f87171; }
+
+  .ci { flex:1; min-width:0; }
+  .ci-name { font-size:12px; font-weight:700; color:#f1f5f9; }
+  .ci-meta { font-size:9px; color:#94a3b8; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .badge {
+    font-size:9px; padding:2px 5px; border-radius:4px; font-weight:600;
+    white-space:nowrap; flex-shrink:0;
+  }
+  .s1-b { background:#1e3a5f; color:#93c5fd; }
+  .s2-b { background:#3b1e5f; color:#c4b5fd; }
+  .mb   { background:#0f172a; color:#64748b; border:1px solid #334155; }
+
+  .btn-row { display:flex; gap:4px; flex-shrink:0; }
+  .btn {
+    padding:5px 7px; border:none; border-radius:5px;
+    font-size:9px; font-weight:700; cursor:pointer; white-space:nowrap;
+  }
+  .btn-pay   { background:#15803d; color:white; }
+  .btn-wa    { background:#25d366; color:white; }
+  .btn-print { background:#475569; color:white; }
+  .btn-undo  { background:#b45309; color:white; }
+  .paid-tag  { background:#14532d; color:#4ade80; padding:3px 6px; border-radius:5px; font-size:9px; font-weight:700; }
+
+  /* ── FORM ── */
+  .form-label {
+    font-size:11px; font-weight:600; color:#94a3b8;
+    margin-bottom:4px; display:block;
+  }
+  .req { color:#f87171; }
+  .form-input {
+    width:100%; background:#0f172a; border:1px solid #334155;
+    border-radius:8px; padding:9px 12px; color:#f1f5f9; font-size:13px;
+    margin-bottom:12px; outline:none;
+  }
+  .scheme-pick { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .sp-btn {
+    padding:14px 10px; border-radius:10px; border:2px solid #334155;
+    background:#0f172a; color:#94a3b8; cursor:pointer; text-align:center;
+    font-size:12px; font-weight:600;
+  }
+  .sp-btn.sel { border-color:#f59e0b; background:#1c1400; color:#f59e0b; }
+  .sp-btn .sp-amt { font-size:20px; font-weight:800; margin-bottom:2px; }
+  .sp-btn .sp-sub { font-size:9px; opacity:0.7; }
+  .join-info {
+    background:#0f172a; border-radius:8px; padding:10px 12px;
+    margin-bottom:14px; border:1px solid #334155;
+  }
+  .join-info .ji-lbl { font-size:10px; color:#94a3b8; }
+  .join-info .ji-val { font-size:14px; font-weight:700; color:#f59e0b; }
+  .join-info .ji-sub { font-size:10px; color:#64748b; margin-top:2px; }
+
+  /* ── PAYMENT SCREEN ── */
+  .cust-box {
+    background:#0f172a; border-radius:10px; padding:12px;
+    margin-bottom:12px; border:1px solid #334155;
+  }
+  .cust-box .cb-name { font-size:15px; font-weight:700; }
+  .cust-box .cb-meta { font-size:10px; color:#94a3b8; margin-top:2px; }
+  .progress-bar { background:#334155; border-radius:4px; height:5px; margin-top:7px; }
+  .progress-fill { height:100%; background:#f59e0b; border-radius:4px; }
+
+  .chips { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:14px; }
+  .chip {
+    padding:4px 9px; border-radius:20px; font-size:10px;
+    font-weight:600; border:1px solid;
+  }
+  .chip.done { background:#14532d; color:#4ade80; border-color:#15803d; }
+  .chip.todo { background:#0f172a; color:#64748b; border-color:#334155; }
+  .chip.cur  { background:#1c1400; color:#f59e0b; border-color:#f59e0b; }
+
+  /* ── REMINDER SCREEN ── */
+  .reminder-card {
+    background:#1e293b; border-radius:8px; padding:10px 12px;
+    margin-bottom:6px; border:1px solid #334155;
+    display:flex; align-items:center; gap:8px;
+    border-left:3px solid #f59e0b;
+  }
+  .rc-info { flex:1; min-width:0; }
+  .rc-name { font-size:12px; font-weight:700; }
+  .rc-meta { font-size:9px; color:#94a3b8; margin-top:2px; }
+
+  /* ── WHATSAPP PREVIEWS ── */
+  .wa-box {
+    border-radius:12px; padding:13px;
+    margin-bottom:12px;
+  }
+  .wa-box.received { background:#0b5c39; border-left:4px solid #25d366; }
+  .wa-box.reminder { background:#1a1200; border-left:4px solid #f59e0b; }
+  .wa-title { font-size:11px; font-weight:700; margin-bottom:7px; }
+  .wa-box.received .wa-title { color:#25d366; }
+  .wa-box.reminder .wa-title { color:#f59e0b; }
+  .wa-msg {
+    background:rgba(0,0,0,0.3); border-radius:8px; padding:11px;
+    font-size:11px; color:#f1f5f9; line-height:1.75; white-space:pre-line;
+  }
+
+  /* ── PRIMARY BUTTON ── */
+  .btn-primary {
+    width:100%; padding:13px; border:none; border-radius:9px;
+    color:white; font-size:14px; font-weight:700; cursor:pointer;
+    margin-bottom:8px;
+  }
+  .amber-btn { background:linear-gradient(135deg,#d97706,#b45309); }
+  .green-btn { background:linear-gradient(135deg,#15803d,#166534); }
+  .purple-btn{ background:linear-gradient(135deg,#7c3aed,#6d28d9); }
+
+  /* ── PRINT BUTTON ── */
+  .print-btn {
+    width:100%; padding:11px;
+    background:linear-gradient(135deg,#7c3aed,#6d28d9);
+    border:none; border-radius:9px; color:white;
+    font-size:13px; font-weight:700; cursor:pointer; margin-bottom:12px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── TOP BAR ── -->
+<div class="topbar">
+  <button class="hamburger" onclick="toggleSidebar()">
+    <span></span><span></span><span></span>
+  </button>
+  <div>
+    <div class="topbar-title">🎉 Festival Fund</div>
+    <div class="topbar-sub" id="page-subtitle">Dashboard</div>
+  </div>
+  <div class="topbar-right" id="topbar-right">May 2026</div>
+</div>
+
+<!-- ── SIDEBAR OVERLAY ── -->
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- ── SIDEBAR DRAWER ── -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-head">
+    <button class="sidebar-close" onclick="closeSidebar()">✕</button>
+    <div class="sidebar-head-icon">🎉</div>
+    <h2>Festival Fund</h2>
+    <p>10-Month Savings Scheme</p>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Overview</div>
+    <div class="nav-item active" onclick="showScreen('dashboard')">
+      <span class="nav-icon">📊</span> Dashboard
+    </div>
+
+    <div class="nav-label">Customers</div>
+    <div class="nav-item" onclick="showScreen('addcust')">
+      <span class="nav-icon">➕</span> Add Customer
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <div class="nav-label">Payments</div>
+    <div class="nav-item" onclick="showScreen('monthly')">
+      <span class="nav-icon">📅</span> Monthly Payments
+      <span class="nav-badge">12</span>
+    </div>
+    <div class="nav-item" onclick="showScreen('payment')">
+      <span class="nav-icon">💰</span> Record Payment
+    </div>
+    <div class="nav-item" onclick="showScreen('reminder')">
+      <span class="nav-icon">🔔</span> Payment Reminder
+      <span class="nav-badge">12</span>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <div class="nav-label">Reports</div>
+    <div class="nav-item" onclick="showScreen('wapreview')">
+      <span class="nav-icon">💬</span> WhatsApp Messages
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    OM SAI MURUGAN FINANCE &nbsp;|&nbsp; v1.0
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     SCREEN 1 — DASHBOARD
+══════════════════════════════════════════ -->
+<div class="main">
+<div class="screen active" id="screen-dashboard">
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-num">34</div>
+      <div class="stat-lbl">Total Members</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:#4ade80">22</div>
+      <div class="stat-lbl">Paid This Month</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:#f87171">12</div>
+      <div class="stat-lbl">Pending</div>
+    </div>
+  </div>
+
+  <div class="scheme-row">
+    <div class="scheme-card sc1">
+      <div class="sc-title">Scheme 1</div>
+      <div class="sc-count">20</div>
+      <div class="sc-sub">members</div>
+      <div class="sc-amt">₹1,000/month<br>Total: ₹20,000</div>
+    </div>
+    <div class="scheme-card sc2">
+      <div class="sc-title">Scheme 2</div>
+      <div class="sc-count">14</div>
+      <div class="sc-sub">members</div>
+      <div class="sc-amt">₹2,000/month<br>Total: ₹28,000</div>
+    </div>
+  </div>
+
+  <!-- Month summary -->
+  <div class="card">
+    <div class="month-bar">
+      <span style="font-size:13px;font-weight:700;">📅 Monthly Summary</span>
+      <select onchange="void 0">
+        <option>May 2026</option><option>April 2026</option><option>June 2026</option>
+      </select>
+    </div>
+    <div class="summary-row">
+      <div class="sum-item"><div class="sum-val green">₹34,000</div><div class="sum-lbl">Collected (22)</div></div>
+      <div class="sum-item"><div class="sum-val red">₹14,000</div><div class="sum-lbl">Pending (12)</div></div>
+      <div class="sum-item"><div class="sum-val amber">₹48,000</div><div class="sum-lbl">Total Due</div></div>
+    </div>
+    <button class="print-btn">🖨️ Print Monthly Audit</button>
+
+    <!-- Quick mini list -->
+    <div class="sec-lbl paid-lbl">✓ PAID TODAY (3)</div>
+    <div class="crow paid">
+      <div class="ci">
+        <div class="ci-name">Murugan <span class="badge s1-b">S1</span> <span class="badge mb">M4/10</span></div>
+        <div class="ci-meta">Rajan | 9876543210 | 05/05/2026</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-wa">WA</button>
+        <button class="btn btn-print">🖨</button>
+      </div>
+    </div>
+    <div class="crow paid">
+      <div class="ci">
+        <div class="ci-name">Selvi <span class="badge s2-b">S2</span> <span class="badge mb">M2/10</span></div>
+        <div class="ci-meta">Arumugam | 9988776655 | 03/05/2026</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-wa">WA</button>
+        <button class="btn btn-print">🖨</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SCREEN 2 — MONTHLY PAYMENTS
+══════════════════════════════════════════ -->
+<div class="screen" id="screen-monthly">
+
+  <div class="card">
+    <div class="month-bar">
+      <span style="font-size:13px;font-weight:700;">📅 Monthly Payments</span>
+      <select><option>May 2026</option><option>April 2026</option><option>June 2026</option></select>
+    </div>
+    <div class="summary-row">
+      <div class="sum-item"><div class="sum-val green">22</div><div class="sum-lbl">Paid</div></div>
+      <div class="sum-item"><div class="sum-val red">12</div><div class="sum-lbl">Unpaid</div></div>
+      <div class="sum-item"><div class="sum-val amber">34</div><div class="sum-lbl">Total</div></div>
+    </div>
+    <button class="print-btn">🖨️ Print Monthly Audit (Thermal)</button>
+
+    <div class="sec-lbl paid-lbl">✓ PAID (22)</div>
+    <div class="crow paid">
+      <div class="ci">
+        <div class="ci-name">Murugan <span class="badge s1-b">S1 ₹1K</span></div>
+        <div class="ci-meta"><span class="badge mb">M 4/10</span> Paid: 05/05/2026</div>
+      </div>
+      <div class="btn-row">
+        <span class="paid-tag">✓</span>
+        <button class="btn btn-wa">WA</button>
+        <button class="btn btn-print">🖨</button>
+        <button class="btn btn-undo">Undo</button>
+      </div>
+    </div>
+    <div class="crow paid">
+      <div class="ci">
+        <div class="ci-name">Selvi <span class="badge s2-b">S2 ₹2K</span></div>
+        <div class="ci-meta"><span class="badge mb">M 2/10</span> Paid: 03/05/2026</div>
+      </div>
+      <div class="btn-row">
+        <span class="paid-tag">✓</span>
+        <button class="btn btn-wa">WA</button>
+        <button class="btn btn-print">🖨</button>
+        <button class="btn btn-undo">Undo</button>
+      </div>
+    </div>
+
+    <div class="sec-lbl unpaid-lbl" style="margin-top:12px;">✗ UNPAID (12)</div>
+    <div class="crow unpaid">
+      <div class="ci">
+        <div class="ci-name">Karthik <span class="badge s1-b">S1 ₹1K</span></div>
+        <div class="ci-meta"><span class="badge mb">M 3/10</span> Due: ₹1,000</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-pay">Pay</button>
+        <button class="btn btn-wa">WA</button>
+      </div>
+    </div>
+    <div class="crow unpaid">
+      <div class="ci">
+        <div class="ci-name">Lakshmi <span class="badge s2-b">S2 ₹2K</span></div>
+        <div class="ci-meta"><span class="badge mb">M 5/10</span> Due: ₹2,000</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-pay">Pay</button>
+        <button class="btn btn-wa">WA</button>
+      </div>
+    </div>
+    <div class="crow unpaid">
+      <div class="ci">
+        <div class="ci-name">Venkatesh <span class="badge s2-b">S2 ₹2K</span></div>
+        <div class="ci-meta"><span class="badge mb">M 7/10</span> Due: ₹2,000</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-pay">Pay</button>
+        <button class="btn btn-wa">WA</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SCREEN 3 — ADD CUSTOMER
+══════════════════════════════════════════ -->
+<div class="screen" id="screen-addcust">
+
+  <div class="card">
+    <div style="text-align:center;margin-bottom:14px;">
+      <div style="font-size:28px;">🎉</div>
+      <div style="font-size:15px;font-weight:700;color:#f59e0b;margin-top:4px;">Register New Member</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Festival Fund – 10 Month Scheme</div>
+    </div>
+
+    <label class="form-label">Customer Name <span class="req">*</span></label>
+    <input class="form-input" type="text" placeholder="Enter full name" value="Murugan">
+
+    <label class="form-label">Father Name <span class="req">*</span></label>
+    <input class="form-input" type="text" placeholder="Enter father's name" value="Rajan">
+
+    <label class="form-label">Mobile Number <span class="req">*</span></label>
+    <input class="form-input" type="tel" placeholder="10-digit mobile" value="9876543210">
+
+    <label class="form-label">Wife / Husband Name <span style="color:#475569;">(Optional)</span></label>
+    <input class="form-input" type="text" placeholder="Spouse name">
+
+    <label class="form-label">Select Scheme <span class="req">*</span></label>
+    <div class="scheme-pick">
+      <div class="sp-btn sel" onclick="selScheme(this)">
+        <div class="sp-amt">₹1,000</div>
+        <div>Scheme 1</div>
+        <div class="sp-sub">10 months = ₹10,000</div>
+      </div>
+      <div class="sp-btn" onclick="selScheme(this)">
+        <div class="sp-amt">₹2,000</div>
+        <div>Scheme 2</div>
+        <div class="sp-sub">10 months = ₹20,000</div>
+      </div>
+    </div>
+
+    <div class="join-info">
+      <div class="ji-lbl">Join Month (auto from today)</div>
+      <div class="ji-val">May 2026</div>
+      <div class="ji-sub">Payments: June 2026 → March 2027 &nbsp;(Month 1–10)</div>
+    </div>
+
+    <button class="btn-primary amber-btn">✅ Register Customer</button>
+  </div>
+
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SCREEN 4 — RECORD PAYMENT
+══════════════════════════════════════════ -->
+<div class="screen" id="screen-payment">
+
+  <div class="card">
+    <div class="form-label" style="margin-bottom:6px;">Search Customer</div>
+    <input class="form-input" type="text" placeholder="🔍 Type name or mobile...">
+
+    <div class="cust-box">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="cb-name">Murugan <span class="badge s1-b">Scheme 1</span></div>
+          <div class="cb-meta">Father: Rajan &nbsp;|&nbsp; 📞 9876543210</div>
+          <div class="cb-meta">Joined: May 2026 &nbsp;|&nbsp; ₹1,000/month</div>
+        </div>
+      </div>
+      <div style="font-size:9px;color:#94a3b8;margin-top:8px;">Progress: 3 of 10 months paid</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:30%"></div></div>
+    </div>
+
+    <div class="form-label">Payment Schedule</div>
+    <div class="chips">
+      <span class="chip done">Jun'26 ✓</span>
+      <span class="chip done">Jul'26 ✓</span>
+      <span class="chip done">Aug'26 ✓</span>
+      <span class="chip cur">Sep'26 ◀</span>
+      <span class="chip todo">Oct'26</span>
+      <span class="chip todo">Nov'26</span>
+      <span class="chip todo">Dec'26</span>
+      <span class="chip todo">Jan'27</span>
+      <span class="chip todo">Feb'27</span>
+      <span class="chip todo">Mar'27</span>
+    </div>
+
+    <label class="form-label">Amount</label>
+    <input class="form-input" value="₹1,000" readonly style="color:#f59e0b;font-weight:700;">
+
+    <label class="form-label">Payment Date <span class="req">*</span></label>
+    <input class="form-input" type="date" value="2026-09-05">
+
+    <button class="btn-primary green-btn">✅ Record Payment — September 2026</button>
+    <button style="width:100%;padding:10px;background:#1e293b;border:1px solid #334155;border-radius:8px;color:#94a3b8;font-size:12px;cursor:pointer;">
+      💬 Send WhatsApp Reminder Instead
+    </button>
+  </div>
+
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SCREEN 5 — PAYMENT REMINDER
+══════════════════════════════════════════ -->
+<div class="screen" id="screen-reminder">
+
+  <div class="card">
+    <div class="month-bar">
+      <span style="font-size:13px;font-weight:700;">🔔 Payment Reminders</span>
+      <select><option>May 2026</option><option>April 2026</option><option>June 2026</option></select>
+    </div>
+
+    <div class="summary-row" style="margin-bottom:12px;">
+      <div class="sum-item"><div class="sum-val red">12</div><div class="sum-lbl">Pending</div></div>
+      <div class="sum-item"><div class="sum-val amber">₹14,000</div><div class="sum-lbl">Amount Due</div></div>
+      <div class="sum-item"><div class="sum-val" style="color:#93c5fd">34</div><div class="sum-lbl">Total Members</div></div>
+    </div>
+
+    <!-- Send All Reminders button -->
+    <button class="btn-primary amber-btn" style="margin-bottom:12px;">
+      💬 Send Reminder to All 12 Pending
+    </button>
+
+    <!-- Individual unpaid customers -->
+    <div class="sec-lbl unpaid-lbl">Pending Members – May 2026</div>
+
+    <div class="reminder-card">
+      <div class="rc-info">
+        <div class="rc-name">Karthik <span class="badge s1-b">S1 ₹1K</span> <span class="badge mb">M 3/10</span></div>
+        <div class="rc-meta">Shanmugam | 📞 9812345678 | Due: ₹1,000</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-pay">Pay</button>
+        <button class="btn btn-wa">WA</button>
+      </div>
+    </div>
+
+    <div class="reminder-card">
+      <div class="rc-info">
+        <div class="rc-name">Lakshmi <span class="badge s2-b">S2 ₹2K</span> <span class="badge mb">M 5/10</span></div>
+        <div class="rc-meta">Perumal | 📞 9765432109 | Due: ₹2,000</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-pay">Pay</button>
+        <button class="btn btn-wa">WA</button>
+      </div>
+    </div>
+
+    <div class="reminder-card">
+      <div class="rc-info">
+        <div class="rc-name">Venkatesh <span class="badge s2-b">S2 ₹2K</span> <span class="badge mb">M 7/10</span></div>
+        <div class="rc-meta">Balaji | 📞 9654321098 | Due: ₹2,000</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-pay">Pay</button>
+        <button class="btn btn-wa">WA</button>
+      </div>
+    </div>
+
+    <div class="reminder-card">
+      <div class="rc-info">
+        <div class="rc-name">Anitha <span class="badge s1-b">S1 ₹1K</span> <span class="badge mb">M 1/10</span></div>
+        <div class="rc-meta">Subramani | 📞 9543210987 | Due: ₹1,000</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-pay">Pay</button>
+        <button class="btn btn-wa">WA</button>
+      </div>
+    </div>
+
+    <div class="reminder-card">
+      <div class="rc-info">
+        <div class="rc-name">Raja <span class="badge s2-b">S2 ₹2K</span> <span class="badge mb">M 9/10</span></div>
+        <div class="rc-meta">Murugesan | 📞 9432109876 | Due: ₹2,000</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-pay">Pay</button>
+        <button class="btn btn-wa">WA</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SCREEN 6 — WHATSAPP MESSAGES
+══════════════════════════════════════════ -->
+<div class="screen" id="screen-wapreview">
+
+  <div class="wa-box received">
+    <div class="wa-title">✅ Payment Received — Message</div>
+    <div class="wa-msg">🎉 *OM SAI MURUGAN FINANCE*
+*Festival Fund – Payment Received*
+
+✅ பணம் பெறப்பட்டது
+
+👤 பெயர்: Murugan
+👨 தந்தை பெயர்: Rajan
+📱 கைபேசி: 9876543210
+
+💰 திட்டம்: Scheme 1 – ₹1,000/மாதம்
+📅 மாதம்: September 2026 (மாதம் 4 / 10)
+💵 செலுத்திய தொகை: ₹1,000
+📆 தேதி: 05/09/2026
+
+📊 முன்னேற்றம்: 4/10 months ✓
+⏳ மீதமுள்ளது: 6 months
+
+🙏 நன்றி! அடுத்த மாதம்: October 2026
+
+– *OM SAI MURUGAN FINANCE*
+  📞 8667510724</div>
+  </div>
+
+  <div class="wa-box reminder">
+    <div class="wa-title">🔔 Payment Reminder — Message</div>
+    <div class="wa-msg">🔔 *OM SAI MURUGAN FINANCE*
+*Festival Fund – Payment Reminder*
+
+⚠️ நினைவூட்டல்
+
+👤 பெயர்: Karthik
+👨 தந்தை பெயர்: Shanmugam
+📱 கைபேசி: 9812345678
+
+💰 திட்டம்: Scheme 1 – ₹1,000/மாதம்
+📅 நடப்பு மாதம்: September 2026 (மாதம் 3 / 10)
+💵 செலுத்த வேண்டியது: ₹1,000
+
+📊 இதுவரை: 2/10 months ✓
+❌ இந்த மாதம் இன்னும் செலுத்தவில்லை
+
+🙏 தயவுசெய்து இந்த மாதம் செலுத்துங்கள்.
+
+– *OM SAI MURUGAN FINANCE*
+  📞 8667510724</div>
+  </div>
+
+</div>
+</div><!-- end .main -->
+
+
+<script>
+  const screenNames = {
+    dashboard:'Dashboard',
+    monthly:'Monthly Payments',
+    addcust:'Add Customer',
+    payment:'Record Payment',
+    reminder:'Payment Reminder',
+    wapreview:'WhatsApp Messages'
+  };
+
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    // Highlight nav item
+    document.querySelectorAll('.nav-item').forEach(n => {
+      if (n.textContent.trim().toLowerCase().includes(screenNames[name].split(' ')[0].toLowerCase())) {
+        n.classList.add('active');
+      }
+    });
+    document.getElementById('page-subtitle').textContent = screenNames[name];
+    closeSidebar();
+  }
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('open');
+  }
+  function selScheme(el) {
+    document.querySelectorAll('.sp-btn').forEach(b => b.classList.remove('sel'));
+    el.classList.add('sel');
+  }
+</script>
+</body>
+</html>
