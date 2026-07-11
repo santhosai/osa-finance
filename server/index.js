@@ -5628,7 +5628,7 @@ app.get('/api/festival-fund/customers', async (req, res) => {
 
 app.post('/api/festival-fund/customers', async (req, res) => {
   try {
-    const { name, father_name, mobile, spouse_name, scheme } = req.body;
+    const { name, father_name, mobile, spouse_name, scheme, referred_by } = req.body;
     if (!name || !father_name || !mobile || !scheme)
       return res.status(400).json({ error: 'name, father_name, mobile and scheme are required' });
     const schemeAmount = scheme === 1 ? 1000 : 2000;
@@ -5640,6 +5640,7 @@ app.post('/api/festival-fund/customers', async (req, res) => {
       scheme, scheme_amount: schemeAmount,
       join_month: joinMonth,
       payment_months: getFestivalPaymentMonths(joinMonth),
+      referred_by: referred_by || null,
       created_at: now.toISOString(),
       status: 'active'
     };
@@ -5650,10 +5651,24 @@ app.post('/api/festival-fund/customers', async (req, res) => {
 
 app.put('/api/festival-fund/customers/:id', async (req, res) => {
   try {
-    const { name, father_name, mobile, spouse_name } = req.body;
+    const { name, father_name, mobile, spouse_name, referred_by, status } = req.body;
     if (!name || !father_name || !mobile)
       return res.status(400).json({ error: 'name, father_name and mobile are required' });
-    const update = { name, father_name, mobile, spouse_name: spouse_name || '' };
+    const update = { name, father_name, mobile, spouse_name: spouse_name || '', referred_by: referred_by || null };
+    if (status) update.status = status;
+    await db.collection('festival_fund_customers').doc(req.params.id).update(update);
+    const doc = await db.collection('festival_fund_customers').doc(req.params.id).get();
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Mark the festival payout (₹ + gift) as handed over on completion, or undo it
+app.put('/api/festival-fund/customers/:id/payout', async (req, res) => {
+  try {
+    const { given, given_by } = req.body;
+    const update = given
+      ? { payout_given: true, payout_given_date: new Date().toISOString().slice(0, 10), payout_given_by: given_by || '' }
+      : { payout_given: false, payout_given_date: null, payout_given_by: null };
     await db.collection('festival_fund_customers').doc(req.params.id).update(update);
     const doc = await db.collection('festival_fund_customers').doc(req.params.id).get();
     res.json({ id: doc.id, ...doc.data() });
@@ -5679,7 +5694,7 @@ app.get('/api/festival-fund/payments', async (req, res) => {
 
 app.post('/api/festival-fund/payments', async (req, res) => {
   try {
-    const { customer_id, payment_month, month_number, amount, payment_date } = req.body;
+    const { customer_id, payment_month, month_number, amount, payment_date, payment_mode } = req.body;
     if (!customer_id || !payment_month || !month_number || !amount || !payment_date)
       return res.status(400).json({ error: 'All fields required' });
     const existing = await db.collection('festival_fund_payments')
@@ -5687,7 +5702,7 @@ app.post('/api/festival-fund/payments', async (req, res) => {
       .where('payment_month', '==', payment_month).get();
     if (!existing.empty)
       return res.status(400).json({ error: 'Payment already recorded for this month' });
-    const data = { customer_id, payment_month, month_number, amount, payment_date, created_at: new Date().toISOString() };
+    const data = { customer_id, payment_month, month_number, amount, payment_date, payment_mode: payment_mode || 'cash', created_at: new Date().toISOString() };
     const ref = await db.collection('festival_fund_payments').add(data);
     res.json({ id: ref.id, ...data });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -5713,6 +5728,13 @@ app.get('/api/festival-fund/stats', async (req, res) => {
     const due = customers.filter(c => (c.payment_months || []).includes(month));
     const paid = due.filter(c => paidIds.has(c.id));
     const unpaid = due.filter(c => !paidIds.has(c.id));
+
+    const modeBreakdown = { cash: 0, upi: 0, bank: 0 };
+    payments.forEach(p => {
+      const mode = modeBreakdown.hasOwnProperty(p.payment_mode) ? p.payment_mode : 'cash';
+      modeBreakdown[mode] += (p.amount || 0);
+    });
+
     res.json({
       total_customers: customers.length,
       scheme1_count: customers.filter(c => c.scheme === 1).length,
@@ -5722,6 +5744,7 @@ app.get('/api/festival-fund/stats', async (req, res) => {
       unpaid_this_month: unpaid.length,
       collected_amount: payments.reduce((s, p) => s + (p.amount || 0), 0),
       pending_amount: unpaid.reduce((s, c) => s + c.scheme_amount, 0),
+      mode_breakdown: modeBreakdown,
       current_month: month
     });
   } catch (e) { res.status(500).json({ error: e.message }); }

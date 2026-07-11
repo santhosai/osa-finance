@@ -3,6 +3,23 @@ import { API_URL } from '../config';
 
 const PHONE = '8667510724';
 
+// Payout on completion = 10 months' contribution + bonus, plus a festival gift item (rule: gift given on the Wednesday of the festival)
+const SCHEME_INFO = {
+  1: { payout: 11000, gift: '1 கிலோ கோழி', giftEn: '1 kg Chicken' },
+  2: { payout: 22000, gift: '1 கிலோ மட்டன்', giftEn: '1 kg Mutton' },
+};
+
+const FESTIVAL_RULES = [
+  'ஒவ்வொரு மாதமும் 1ம் தேதி முதல் 10ம் தேதிக்குள் பணம் செலுத்த வேண்டும் (Online / நேரடியாக).',
+  'திருவிழாவிற்கு முன் எந்த காரணத்திற்காகவும் செலுத்திய தொகை திரும்பப் பெற முடியாது.',
+  'தொடர்ந்து 3 மாதங்கள் செலுத்தாவிட்டால் திட்டத்தில் இருந்து நீக்கப்படுவார்கள்.',
+  'திருவிழா வரை பணம் பாதுகாப்பாக வைக்கப்படும்; பரிசுப் பொருள் திருவிழா புதன்கிழமையன்று வழங்கப்படும்.',
+  '5 புதிய உறுப்பினர்களை அறிமுகப்படுத்தும் உறுப்பினருக்கு சிறப்பு பரிசு உண்டு.',
+  'புதிதாக சேரும் ஒவ்வொரு உறுப்பினருக்கும் ஒரு சிறிய வரவேற்பு பரிசு வழங்கப்படும்.',
+];
+
+const REFERRAL_BADGE_THRESHOLD = 5;
+
 function fmt(month) {
   if (!month) return '';
   const [y, m] = month.split('-');
@@ -42,6 +59,18 @@ function getFestivalPaymentMonths(joinMonth) {
     months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
   return months;
+}
+
+// How many of the 10 scheduled months have already occurred, as of today
+function monthsElapsed(paymentMonths) {
+  if (!paymentMonths || paymentMonths.length === 0) return 0;
+  const now = currentMonth();
+  return paymentMonths.filter(m => m <= now).length;
+}
+
+// Rule: missing 3+ consecutive months' worth of payments results in removal from the scheme
+function isOverdue(paymentMonths, paidCount) {
+  return (monthsElapsed(paymentMonths) - paidCount) >= 3;
 }
 
 // ── Styles ──────────────────────────────────────────────────────────────────
@@ -136,17 +165,21 @@ export default function FestivalFund({ navigateTo }) {
   const [msg, setMsg]                 = useState('');
 
   // Add-customer form
-  const [form, setForm] = useState({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1 });
+  const [form, setForm] = useState({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'' });
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [contactPickerSupported] = useState(typeof navigator !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window);
 
   // Record-payment
   const [payTarget, setPayTarget]   = useState(null); // customer object (Record Payment screen)
   const [payDate, setPayDate]       = useState(todayISO());
+  const [payMode, setPayMode]       = useState('cash');
   const [custSearch, setCustSearch] = useState('');
   const [quickPay, setQuickPay]     = useState(null);
   const [quickDate, setQuickDate]   = useState(todayISO());
+  const [quickMode, setQuickMode]   = useState('cash');
   const [detailCust, setDetailCust] = useState(null); // customer for detail/history modal
   const [editCust, setEditCust]     = useState(null); // customer being edited
-  const [editForm, setEditForm]     = useState({ name:'', father_name:'', mobile:'', spouse_name:'' });
+  const [editForm, setEditForm]     = useState({ name:'', father_name:'', mobile:'', spouse_name:'', referred_by:'' });
   const [custListSearch, setCustListSearch] = useState('');
 
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3500); };
@@ -176,9 +209,34 @@ export default function FestivalFund({ navigateTo }) {
     paymentMap[p.customer_id][p.payment_month] = p;
   });
 
-  const dueThisMonth = customers.filter(c => (c.payment_months || []).includes(selMonth));
+  // Removed (rule-3 defaulter) members are kept for history but excluded from active lists
+  const activeCustomers  = customers.filter(c => c.status !== 'removed');
+  const removedCustomers = customers.filter(c => c.status === 'removed');
+
+  const dueThisMonth = activeCustomers.filter(c => (c.payment_months || []).includes(selMonth));
   const paidThisMonth   = dueThisMonth.filter(c =>  paymentMap[c.id]?.[selMonth]);
   const unpaidThisMonth = dueThisMonth.filter(c => !paymentMap[c.id]?.[selMonth]);
+
+  // Referral tracking (rule: 5 referrals earns a special gift)
+  const referralCounts = {};
+  customers.forEach(c => {
+    if (c.referred_by) referralCounts[c.referred_by] = (referralCounts[c.referred_by] || 0) + 1;
+  });
+  const referrers = customers
+    .filter(c => (referralCounts[c.id] || 0) > 0)
+    .sort((a, b) => (referralCounts[b.id] || 0) - (referralCounts[a.id] || 0));
+
+  // Defaulters: 3+ months behind (rule 3 — grounds for removal)
+  const defaulters = activeCustomers.filter(c => {
+    const paidCount = (c.payment_months||[]).filter(m => paymentMap[c.id]?.[m]).length;
+    return isOverdue(c.payment_months, paidCount);
+  });
+
+  // Completed 10/10 but the festival payout/gift hasn't been marked as handed over yet
+  const payoutPending = activeCustomers.filter(c => {
+    const paidCount = (c.payment_months||[]).filter(m => paymentMap[c.id]?.[m]).length;
+    return paidCount >= 10 && !c.payout_given;
+  });
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const addCustomer = async () => {
@@ -195,7 +253,7 @@ export default function FestivalFund({ navigateTo }) {
       const data = await r.json();
       if (!r.ok) return flash(data.error || 'Failed');
       flash(`✅ ${data.name} registered!`);
-      setForm({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1 });
+      setForm({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'' });
       fetchAll();
       setSection('monthly');
     } catch (e) { flash(e.message); }
@@ -211,7 +269,7 @@ export default function FestivalFund({ navigateTo }) {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           customer_id: customer.id, payment_month: selMonth,
-          month_number: monthIdx + 1, amount: customer.scheme_amount, payment_date: payDate
+          month_number: monthIdx + 1, amount: customer.scheme_amount, payment_date: payDate, payment_mode: payMode
         })
       });
       const data = await r.json();
@@ -235,7 +293,7 @@ export default function FestivalFund({ navigateTo }) {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           customer_id: customer.id, payment_month: selMonth,
-          month_number: monthIdx + 1, amount: customer.scheme_amount, payment_date: quickDate
+          month_number: monthIdx + 1, amount: customer.scheme_amount, payment_date: quickDate, payment_mode: quickMode
         })
       });
       const data = await r.json();
@@ -261,7 +319,7 @@ export default function FestivalFund({ navigateTo }) {
 
   const openEdit = (customer) => {
     setEditCust(customer);
-    setEditForm({ name:customer.name, father_name:customer.father_name, mobile:customer.mobile, spouse_name:customer.spouse_name||'' });
+    setEditForm({ name:customer.name, father_name:customer.father_name, mobile:customer.mobile, spouse_name:customer.spouse_name||'', referred_by:customer.referred_by||'' });
   };
 
   const saveEdit = async () => {
@@ -293,6 +351,65 @@ export default function FestivalFund({ navigateTo }) {
     } catch (e) { flash(e.message); }
   };
 
+  // ── Remove from scheme (rule 3: 3+ missed months) / Reactivate ─────────────
+  const setCustomerStatus = async (customer, status) => {
+    try {
+      const r = await fetch(`${API_URL}/festival-fund/customers/${customer.id}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          name: customer.name, father_name: customer.father_name, mobile: customer.mobile,
+          spouse_name: customer.spouse_name || '', referred_by: customer.referred_by || '', status
+        })
+      });
+      if (!r.ok) return flash('Failed to update status');
+      flash(status === 'removed' ? `${customer.name} — திட்டத்தில் இருந்து நீக்கப்பட்டார்` : `${customer.name} — மீண்டும் செயலில்`);
+      setDetailCust(null);
+      fetchAll();
+    } catch (e) { flash(e.message); }
+  };
+
+  const removeFromScheme = (customer) => {
+    if (!window.confirm(`"${customer.name}" — 3+ மாதங்கள் நிலுவை உள்ளதால் திட்டத்தில் இருந்து நீக்கவா? (பணம் செலுத்திய வரலாறு பாதுகாக்கப்படும்)`)) return;
+    setCustomerStatus(customer, 'removed');
+  };
+
+  const reactivateCustomer = (customer) => setCustomerStatus(customer, 'active');
+
+  // ── Festival payout / gift handover ─────────────────────────────────────────
+  const markPayout = async (customer, given) => {
+    try {
+      const r = await fetch(`${API_URL}/festival-fund/customers/${customer.id}/payout`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ given, given_by: localStorage.getItem('userName') || '' })
+      });
+      if (!r.ok) return flash('Failed to update payout status');
+      flash(given ? `🎁 ${customer.name} — பரிசு வழங்கப்பட்டது` : `Undone: payout for ${customer.name}`);
+      fetchAll();
+    } catch (e) { flash(e.message); }
+  };
+
+  // ── Contact picker (Android Chrome/PWA only) ────────────────────────────────
+  const pickContact = async (target) => {
+    if (!contactPickerSupported) {
+      return flash('📇 இந்த சாதனத்தில் Contacts தேர்வு ஆதரிக்கப்படவில்லை (Android Chrome மட்டும்)');
+    }
+    try {
+      const results = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+      if (!results.length) return;
+      const contact = results[0];
+      const name = contact.name?.[0] || '';
+      let phone = (contact.tel?.[0] || '').replace(/\D/g, '');
+      if (phone.length > 10) phone = phone.slice(-10);
+      if (target === 'add') {
+        setForm(f => ({ ...f, name: name || f.name, mobile: phone || f.mobile }));
+      } else {
+        setEditForm(f => ({ ...f, name: name || f.name, mobile: phone || f.mobile }));
+      }
+    } catch (_) {
+      // User cancelled the picker or denied permission — nothing to do
+    }
+  };
+
   // ── WhatsApp ──────────────────────────────────────────────────────────────
   const sendWhatsAppMsg = (customer, payment, type) => {
     const monthIdx = (customer.payment_months || []).indexOf(payment.payment_month);
@@ -319,7 +436,7 @@ export default function FestivalFund({ navigateTo }) {
 📆 தேதி: ${fmtDate(payment.payment_date)}
 
 📊 முன்னேற்றம்: ${mNum}/10 months ✓
-${remaining > 0 ? `⏳ மீதமுள்ளது: ${remaining} months\n🙏 நன்றி! அடுத்த மாதம்: ${nextMonth ? fmtFull(nextMonth) : ''}` : '🎊 அனைத்து மாதங்களும் முடிந்தன! நன்றி!'}
+${remaining > 0 ? `⏳ மீதமுள்ளது: ${remaining} months\n🙏 நன்றி! அடுத்த மாதம்: ${nextMonth ? fmtFull(nextMonth) : ''}` : `🎊 அனைத்து மாதங்களும் முடிந்தன! வாழ்த்துக்கள்!\n🎁 திருவிழாவில் உங்களுக்கு ₹${(SCHEME_INFO[customer.scheme]?.payout||0).toLocaleString('en-IN')} மற்றும் ${SCHEME_INFO[customer.scheme]?.gift||''} வழங்கப்படும்.`}
 
 – *OM SAI MURUGAN FINANCE*
   📞 ${PHONE}`;
@@ -517,7 +634,7 @@ th{background:#1e293b;color:white;font-size:10px;}
   // ── Nav helper ────────────────────────────────────────────────────────────
   const nav = (s) => { setSection(s); setSidebarOpen(false); };
 
-  const completedCustomers = customers.filter(c =>
+  const completedCustomers = activeCustomers.filter(c =>
     (c.payment_months||[]).every(m => paymentMap[c.id]?.[m])
   );
 
@@ -528,9 +645,10 @@ th{background:#1e293b;color:white;font-size:10px;}
     { id:'monthly',   icon:'📅', label:'Monthly Payments', badge:unpaidThisMonth.length, group:'Payments' },
     { id:'payment',   icon:'💰', label:'Record Payment',   group:'Payments' },
     { id:'reminder',  icon:'🔔', label:'Payment Reminder', badge:unpaidThisMonth.length, group:'Payments' },
+    { id:'defaulters',icon:'🚨', label:'Defaulters',       badge:defaulters.length, group:'Payments' },
   ];
 
-  const titles = { dashboard:'Dashboard', customers:'All Customers', addcust:'Add Customer', monthly:'Monthly Payments', payment:'Record Payment', reminder:'Payment Reminder' };
+  const titles = { dashboard:'Dashboard', customers:'All Customers', addcust:'Add Customer', monthly:'Monthly Payments', payment:'Record Payment', reminder:'Payment Reminder', defaulters:'Defaulters' };
 
   // ── Month picker shared ───────────────────────────────────────────────────
   const MonthPicker = () => (
@@ -581,6 +699,23 @@ th{background:#1e293b;color:white;font-size:10px;}
                 value={quickDate}
                 onChange={e => setQuickDate(e.target.value)}
               />
+
+              {/* Payment mode */}
+              <label style={S.label}>Payment Mode</label>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
+                {['cash','upi','bank'].map(mode => (
+                  <div key={mode}
+                    onClick={() => setQuickMode(mode)}
+                    style={{
+                      padding:'8px 4px', borderRadius:8, cursor:'pointer', textAlign:'center', fontSize:11, fontWeight:700, textTransform:'uppercase',
+                      border:`2px solid ${quickMode===mode?'#f59e0b':'#334155'}`,
+                      background: quickMode===mode?'#1c1400':'#0f172a',
+                      color: quickMode===mode?'#f59e0b':'#94a3b8'
+                    }}>
+                    {mode}
+                  </div>
+                ))}
+              </div>
 
               {/* Confirm */}
               <button
@@ -663,6 +798,22 @@ th{background:#1e293b;color:white;font-size:10px;}
       {/* ─── DASHBOARD ─────────────────────────────────────────── */}
       {section === 'dashboard' && (
         <div style={S.page}>
+          {/* Rules card */}
+          <div style={S.card}>
+            <div
+              onClick={() => setRulesOpen(o => !o)}
+              style={{ display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }}
+            >
+              <span style={{ fontSize:13, fontWeight:700, color:'#f59e0b' }}>📜 விதிமுறைகள் (Scheme Rules)</span>
+              <span style={{ fontSize:12, color:'#94a3b8' }}>{rulesOpen ? '▲' : '▼'}</span>
+            </div>
+            {rulesOpen && (
+              <ol style={{ margin:'10px 0 0', paddingLeft:18, fontSize:12, color:'#cbd5e1', lineHeight:1.7 }}>
+                {FESTIVAL_RULES.map((r, i) => <li key={i} style={{ marginBottom:6 }}>{r}</li>)}
+              </ol>
+            )}
+          </div>
+
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:12 }}>
             {[
               { num: stats?.total_customers ?? '—', lbl:'Total Members', color:'#f59e0b' },
@@ -678,14 +829,17 @@ th{background:#1e293b;color:white;font-size:10px;}
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
             {[
-              { title:'Scheme 1 — ₹1,000', count:stats?.scheme1_count, bg:'linear-gradient(135deg,#1e3a5f,#1e293b)', tc:'#93c5fd', amt:`₹${((stats?.scheme1_count||0)*1000).toLocaleString('en-IN')}/month` },
-              { title:'Scheme 2 — ₹2,000', count:stats?.scheme2_count, bg:'linear-gradient(135deg,#3b1e5f,#1e293b)', tc:'#c4b5fd', amt:`₹${((stats?.scheme2_count||0)*2000).toLocaleString('en-IN')}/month` },
+              { title:'Scheme 1 — ₹1,000', count:stats?.scheme1_count, bg:'linear-gradient(135deg,#1e3a5f,#1e293b)', tc:'#93c5fd', amt:`₹${((stats?.scheme1_count||0)*1000).toLocaleString('en-IN')}/month`, info:SCHEME_INFO[1] },
+              { title:'Scheme 2 — ₹2,000', count:stats?.scheme2_count, bg:'linear-gradient(135deg,#3b1e5f,#1e293b)', tc:'#c4b5fd', amt:`₹${((stats?.scheme2_count||0)*2000).toLocaleString('en-IN')}/month`, info:SCHEME_INFO[2] },
             ].map((s,i) => (
               <div key={i} style={{ background:s.bg,borderRadius:10,padding:13,textAlign:'center',border:'1px solid #334155' }}>
                 <div style={{ fontSize:11,fontWeight:700,color:s.tc,marginBottom:4 }}>{s.title}</div>
                 <div style={{ fontSize:22,fontWeight:800,color:'white' }}>{loading?'…':s.count}</div>
                 <div style={{ fontSize:9,color:'#94a3b8' }}>members</div>
                 <div style={{ fontSize:10,color:s.tc,marginTop:5 }}>{s.amt}</div>
+                <div style={{ fontSize:9,color:'#fbbf24',marginTop:6,paddingTop:6,borderTop:'1px solid #334155' }}>
+                  🎁 முடிவில்: ₹{s.info.payout.toLocaleString('en-IN')} + {s.info.gift}
+                </div>
               </div>
             ))}
           </div>
@@ -703,6 +857,84 @@ th{background:#1e293b;color:white;font-size:10px;}
             <button onClick={printMonthlyAudit} style={S.primaryBtn('linear-gradient(135deg,#7c3aed,#6d28d9)')}>🖨️ Print Monthly Audit</button>
             <button onClick={() => nav('addcust')} style={S.primaryBtn('linear-gradient(135deg,#d97706,#b45309)')}>➕ Add New Customer</button>
           </div>
+
+          {/* Pending reminder banner */}
+          {unpaidThisMonth.length > 0 && (
+            <div
+              onClick={() => nav('reminder')}
+              style={{ ...S.card, cursor:'pointer', background:'linear-gradient(135deg,#78350f,#92400e)', border:'1px solid #b45309', display:'flex', alignItems:'center', gap:10 }}
+            >
+              <span style={{ fontSize:22 }}>🔔</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'white' }}>{unpaidThisMonth.length} பேர் இந்த மாதம் இன்னும் செலுத்தவில்லை</div>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.75)', marginTop:2 }}>நினைவூட்டல் அனுப்ப தட்டவும் →</div>
+              </div>
+            </div>
+          )}
+
+          {/* Payout pending list */}
+          {payoutPending.length > 0 && (
+            <div
+              onClick={() => nav('customers')}
+              style={{ ...S.card, cursor:'pointer', background:'linear-gradient(135deg,#14532d,#166534)', border:'1px solid #15803d', display:'flex', alignItems:'center', gap:10 }}
+            >
+              <span style={{ fontSize:22 }}>🎁</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'white' }}>{payoutPending.length} பேருக்கு 10/10 முடிந்தது — பரிசு இன்னும் வழங்கப்படவில்லை</div>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.75)', marginTop:2 }}>விவரங்களுக்கு தட்டவும் →</div>
+              </div>
+            </div>
+          )}
+
+          {/* This month's Paid / Unpaid preview */}
+          <div style={S.card}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <span style={{ fontSize:13, fontWeight:700 }}>✅ {fmtFull(selMonth)} — Paid / Unpaid</span>
+              <button onClick={() => nav('monthly')} style={{ background:'none', border:'none', color:'#f59e0b', fontSize:11, fontWeight:700, cursor:'pointer' }}>View All →</button>
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:'#4ade80', marginBottom:6 }}>✓ PAID ({paidThisMonth.length})</div>
+                {paidThisMonth.slice(0, 5).map(c => (
+                  <div key={c.id} style={{ fontSize:11, color:'#cbd5e1', padding:'4px 0', borderBottom:'1px solid #1e293b' }}>{c.name}</div>
+                ))}
+                {paidThisMonth.length === 0 && <div style={{ fontSize:10, color:'#64748b' }}>—</div>}
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:'#f87171', marginBottom:6 }}>✗ UNPAID ({unpaidThisMonth.length})</div>
+                {unpaidThisMonth.slice(0, 5).map(c => (
+                  <div key={c.id} style={{ fontSize:11, color:'#cbd5e1', padding:'4px 0', borderBottom:'1px solid #1e293b' }}>{c.name}</div>
+                ))}
+                {unpaidThisMonth.length === 0 && <div style={{ fontSize:10, color:'#64748b' }}>—</div>}
+              </div>
+            </div>
+          </div>
+
+          {/* Referral leaderboard */}
+          {referrers.length > 0 && (
+            <div style={S.card}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#f59e0b', marginBottom:10 }}>🎁 அறிமுக பட்டியல் (Referral Leaderboard)</div>
+              {referrers.map(c => {
+                const count = referralCounts[c.id] || 0;
+                const qualifies = count >= REFERRAL_BADGE_THRESHOLD;
+                return (
+                  <div key={c.id} style={{ ...S.crow(qualifies ? 'paid' : 'pending'), borderLeft:`3px solid ${qualifies?'#4ade80':'#f59e0b'}` }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12, fontWeight:700 }}>
+                        {c.name}
+                        {qualifies && <span style={{ marginLeft:6 }}>🎁</span>}
+                      </div>
+                      <div style={{ fontSize:9, color:'#94a3b8', marginTop:2 }}>📞 {c.mobile}</div>
+                    </div>
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontSize:16, fontWeight:800, color: qualifies ? '#4ade80' : '#f59e0b' }}>{count}</div>
+                      <div style={{ fontSize:8, color:'#94a3b8' }}>referrals</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -738,7 +970,7 @@ th{background:#1e293b;color:white;font-size:10px;}
                           <span style={{ ...S.badge2(c.scheme===1?'#1e3a5f':'#3b1e5f', c.scheme===1?'#93c5fd':'#c4b5fd'), marginLeft:5 }}>S{c.scheme} ₹{c.scheme_amount/1000}K</span>
                         </div>
                         <div style={{ fontSize:9,color:'#94a3b8',marginTop:2 }}>
-                          {c.father_name} | {c.mobile} | M{mNum}/10 | Paid: {pay ? fmtDate(pay.payment_date) : ''}
+                          {c.father_name} | {c.mobile} | M{mNum}/10 | Paid: {pay ? fmtDate(pay.payment_date) : ''} {pay?.payment_mode ? `(${pay.payment_mode.toUpperCase()})` : ''}
                         </div>
                       </div>
                       <div style={S.row}>
@@ -773,7 +1005,7 @@ th{background:#1e293b;color:white;font-size:10px;}
                         </div>
                       </div>
                       <div style={S.row}>
-                        <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickPay({ customer: c }); }}>Pay</button>
+                        <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickMode('cash'); setQuickPay({ customer: c }); }}>Pay</button>
                         <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
                       </div>
                     </div>
@@ -799,6 +1031,16 @@ th{background:#1e293b;color:white;font-size:10px;}
               <div style={{ fontSize:11,color:'#94a3b8',marginTop:2 }}>Festival Fund – 10 Month Scheme</div>
             </div>
 
+            {contactPickerSupported && (
+              <button
+                type="button"
+                onClick={() => pickContact('add')}
+                style={{ width:'100%', padding:10, marginBottom:14, background:'#0f172a', border:'1px dashed #f59e0b', borderRadius:8, color:'#f59e0b', fontSize:12, fontWeight:600, cursor:'pointer' }}
+              >
+                📇 Contacts-ல் இருந்து தேர்வு செய்யவும்
+              </button>
+            )}
+
             <label style={S.label}>Customer Name <span style={{ color:'#f87171' }}>*</span></label>
             <input style={S.input} placeholder="Enter full name" value={form.name}
               onChange={e => setForm(f => ({ ...f, name:e.target.value }))} />
@@ -815,6 +1057,18 @@ th{background:#1e293b;color:white;font-size:10px;}
             <input style={S.input} placeholder="Spouse name" value={form.spouse_name}
               onChange={e => setForm(f => ({ ...f, spouse_name:e.target.value }))} />
 
+            <label style={S.label}>அறிமுகப்படுத்தியவர் <span style={{ color:'#475569' }}>(Referred By — Optional)</span></label>
+            <select
+              style={S.input}
+              value={form.referred_by}
+              onChange={e => setForm(f => ({ ...f, referred_by:e.target.value }))}
+            >
+              <option value="">— யாரும் இல்லை —</option>
+              {activeCustomers.map(c => (
+                <option key={c.id} value={c.id}>{c.name} ({c.mobile})</option>
+              ))}
+            </select>
+
             <label style={S.label}>Select Scheme <span style={{ color:'#f87171' }}>*</span></label>
             <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14 }}>
               {[1,2].map(s => (
@@ -829,6 +1083,9 @@ th{background:#1e293b;color:white;font-size:10px;}
                   <div style={{ fontSize:20,fontWeight:800,marginBottom:2 }}>₹{s===1?'1,000':'2,000'}</div>
                   <div>Scheme {s}</div>
                   <div style={{ fontSize:9,opacity:.7 }}>10 months = ₹{s===1?'10,000':'20,000'}</div>
+                  <div style={{ fontSize:9,opacity:.85,marginTop:3,color:'#fbbf24' }}>
+                    🎁 ₹{SCHEME_INFO[s].payout.toLocaleString('en-IN')} + {SCHEME_INFO[s].gift}
+                  </div>
                 </div>
               ))}
             </div>
@@ -931,6 +1188,22 @@ th{background:#1e293b;color:white;font-size:10px;}
                 <label style={S.label}>Payment Date <span style={{ color:'#f87171' }}>*</span></label>
                 <input style={S.input} type="date" value={payDate} onChange={e => setPayDate(e.target.value)} />
 
+                <label style={S.label}>Payment Mode</label>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
+                  {['cash','upi','bank'].map(mode => (
+                    <div key={mode}
+                      onClick={() => setPayMode(mode)}
+                      style={{
+                        padding:'8px 4px', borderRadius:8, cursor:'pointer', textAlign:'center', fontSize:11, fontWeight:700, textTransform:'uppercase',
+                        border:`2px solid ${payMode===mode?'#f59e0b':'#334155'}`,
+                        background: payMode===mode?'#1c1400':'#0f172a',
+                        color: payMode===mode?'#f59e0b':'#94a3b8'
+                      }}>
+                      {mode}
+                    </div>
+                  ))}
+                </div>
+
                 <button style={S.primaryBtn('linear-gradient(135deg,#15803d,#166534)')} disabled={saving}
                   onClick={() => recordPayment(payTarget)}>
                   {saving ? '⏳ Recording...' : `✅ Record Payment — ${fmtFull(selMonth)}`}
@@ -950,7 +1223,7 @@ th{background:#1e293b;color:white;font-size:10px;}
         <div style={S.page}>
           <div style={S.card}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-              <span style={{ fontSize:13, fontWeight:700 }}>👥 All Members ({customers.length})</span>
+              <span style={{ fontSize:13, fontWeight:700 }}>👥 All Members ({activeCustomers.length})</span>
               {completedCustomers.length > 0 && (
                 <span style={{ background:'#14532d', color:'#4ade80', fontSize:10, padding:'3px 8px', borderRadius:10, fontWeight:700 }}>
                   {completedCustomers.length} Completed ✓
@@ -968,16 +1241,18 @@ th{background:#1e293b;color:white;font-size:10px;}
             {loading && <div style={{ color:'#64748b', textAlign:'center', padding:20 }}>Loading...</div>}
 
             {/* Active customers */}
-            {customers.filter(c => {
+            {activeCustomers.filter(c => {
               const q = custListSearch.toLowerCase();
               return !q || c.name.toLowerCase().includes(q) || c.mobile.includes(q);
             }).filter(c => !completedCustomers.some(cc => cc.id === c.id)).map(c => {
               const paidCount = (c.payment_months||[]).filter(m => paymentMap[c.id]?.[m]).length;
               const pct = Math.round(paidCount / 10 * 100);
+              const overdue = isOverdue(c.payment_months, paidCount);
+              const referralQualifies = (referralCounts[c.id] || 0) >= REFERRAL_BADGE_THRESHOLD;
               return (
                 <div key={c.id}
                   onClick={() => setDetailCust(c)}
-                  style={{ ...S.crow('pending'), cursor:'pointer', borderLeft:'3px solid #f59e0b', flexDirection:'column', alignItems:'stretch', gap:6 }}>
+                  style={{ ...S.crow('pending'), cursor:'pointer', borderLeft:`3px solid ${overdue?'#dc2626':'#f59e0b'}`, flexDirection:'column', alignItems:'stretch', gap:6 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:13, fontWeight:700 }}>
@@ -985,6 +1260,8 @@ th{background:#1e293b;color:white;font-size:10px;}
                         <span style={{ ...S.badge2(c.scheme===1?'#1e3a5f':'#3b1e5f', c.scheme===1?'#93c5fd':'#c4b5fd'), marginLeft:6 }}>
                           S{c.scheme} ₹{c.scheme_amount/1000}K
                         </span>
+                        {overdue && <span title="3+ மாதங்கள் நிலுவை" style={{ marginLeft:5 }}>⚠️</span>}
+                        {referralQualifies && <span title="5+ referrals" style={{ marginLeft:4 }}>🎁</span>}
                       </div>
                       <div style={{ fontSize:9, color:'#94a3b8', marginTop:2 }}>
                         {c.father_name} &nbsp;|&nbsp; 📞 {c.mobile}
@@ -1041,7 +1318,7 @@ th{background:#1e293b;color:white;font-size:10px;}
               </>
             )}
 
-            {customers.length === 0 && !loading && (
+            {activeCustomers.length === 0 && !loading && (
               <div style={{ textAlign:'center', color:'#64748b', padding:'30px 0', fontSize:13 }}>
                 No members yet.<br />
                 <button onClick={() => nav('addcust')} style={{ marginTop:10, ...S.btn('#d97706') }}>+ Add First Member</button>
@@ -1071,9 +1348,37 @@ th{background:#1e293b;color:white;font-size:10px;}
                     <div style={{ fontSize:10, color:'rgba(255,255,255,0.75)', marginTop:1 }}>
                       📞 {c.mobile} &nbsp;|&nbsp; Scheme {c.scheme} — ₹{c.scheme_amount.toLocaleString('en-IN')}/mo
                     </div>
+                    {c.referred_by && (
+                      <div style={{ fontSize:10, color:'rgba(255,255,255,0.75)', marginTop:1 }}>
+                        🙋 அறிமுகம்: {customers.find(x => x.id === c.referred_by)?.name || '—'}
+                      </div>
+                    )}
+                    {(referralCounts[c.id] || 0) > 0 && (
+                      <div style={{ fontSize:10, color:'rgba(255,255,255,0.75)', marginTop:1 }}>
+                        🎁 அறிமுகப்படுத்தியது: {referralCounts[c.id]} பேர்{(referralCounts[c.id]||0) >= REFERRAL_BADGE_THRESHOLD ? ' — சிறப்பு பரிசு தகுதி!' : ''}
+                      </div>
+                    )}
                   </div>
                   {isCompleted && <span style={{ fontSize:22 }}>🎊</span>}
                 </div>
+                {isCompleted && (
+                  <div style={{ marginTop:8, padding:'8px 10px', background:'rgba(0,0,0,0.25)', borderRadius:8, fontSize:10, color:'#fde68a' }}>
+                    <div>🎁 திருவிழா பரிசு: ₹{SCHEME_INFO[c.scheme]?.payout.toLocaleString('en-IN')} + {SCHEME_INFO[c.scheme]?.gift}</div>
+                    {c.payout_given ? (
+                      <div style={{ marginTop:6, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                        <span style={{ color:'#4ade80', fontWeight:700 }}>✅ வழங்கப்பட்டது — {fmtDate(c.payout_given_date)}{c.payout_given_by ? ` (${c.payout_given_by})` : ''}</span>
+                        <button style={S.btn('#b45309')} onClick={() => markPayout(c, false)}>Undo</button>
+                      </div>
+                    ) : (
+                      <button
+                        style={{ ...S.primaryBtn('linear-gradient(135deg,#d97706,#b45309)'), marginTop:6, marginBottom:0, padding:9, fontSize:12 }}
+                        onClick={() => markPayout(c, true)}
+                      >
+                        🎁 பரிசு வழங்கப்பட்டதாக குறிக்கவும்
+                      </button>
+                    )}
+                  </div>
+                )}
                 {/* Progress bar */}
                 <div style={{ marginTop:10 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
@@ -1116,6 +1421,7 @@ th{background:#1e293b;color:white;font-size:10px;}
                           <span style={{ fontSize:11, color:'#4ade80', fontWeight:600 }}>M{i+1} — {fmtFull(m)}</span>
                           <div style={{ display:'flex', gap:6, alignItems:'center' }}>
                             <span style={{ fontSize:10, color:'#94a3b8' }}>{fmtDate(pay.payment_date)}</span>
+                            {pay.payment_mode && <span style={S.badge2('#0f172a','#64748b')}>{pay.payment_mode.toUpperCase()}</span>}
                             <span style={{ fontSize:11, fontWeight:700, color:'#f59e0b' }}>₹{(pay.amount||0).toLocaleString('en-IN')}</span>
                             <button style={S.btn('#475569')} onClick={() => printReceipt(c, pay)}>🖨</button>
                           </div>
@@ -1146,6 +1452,17 @@ th{background:#1e293b;color:white;font-size:10px;}
                     onClick={() => { window.open(`https://wa.me/91${c.mobile}`, '_blank'); }}
                   >💬 WA</button>
                 </div>
+                {c.status === 'removed' ? (
+                  <button
+                    style={{ width:'100%', padding:9, marginTop:8, ...S.btn('#15803d'), fontSize:12 }}
+                    onClick={() => reactivateCustomer(c)}
+                  >↩️ திட்டத்தில் மீண்டும் சேர்க்கவும் (Reactivate)</button>
+                ) : isOverdue(c.payment_months, paidCount) && (
+                  <button
+                    style={{ width:'100%', padding:9, marginTop:8, ...S.btn('#dc2626'), fontSize:12 }}
+                    onClick={() => removeFromScheme(c)}
+                  >🚨 திட்டத்தில் இருந்து நீக்கவும் (Remove — Rule 3)</button>
+                )}
                 <button onClick={() => setDetailCust(null)}
                   style={{ width:'100%', padding:9, background:'none', border:'1px solid #334155', borderRadius:8, color:'#94a3b8', fontSize:12, cursor:'pointer', marginTop:8 }}>
                   Close
@@ -1165,6 +1482,16 @@ th{background:#1e293b;color:white;font-size:10px;}
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{editCust.name}</div>
             </div>
             <div style={{ padding:'16px 18px' }}>
+              {contactPickerSupported && (
+                <button
+                  type="button"
+                  onClick={() => pickContact('edit')}
+                  style={{ width:'100%', padding:10, marginBottom:14, background:'#0f172a', border:'1px dashed #f59e0b', borderRadius:8, color:'#f59e0b', fontSize:12, fontWeight:600, cursor:'pointer' }}
+                >
+                  📇 Contacts-ல் இருந்து தேர்வு செய்யவும்
+                </button>
+              )}
+
               <label style={S.label}>Customer Name <span style={{ color:'#f87171' }}>*</span></label>
               <input style={S.input} value={editForm.name}
                 onChange={e => setEditForm(f => ({ ...f, name:e.target.value }))} />
@@ -1180,6 +1507,18 @@ th{background:#1e293b;color:white;font-size:10px;}
               <label style={S.label}>Spouse Name <span style={{ color:'#475569' }}>(Optional)</span></label>
               <input style={S.input} value={editForm.spouse_name}
                 onChange={e => setEditForm(f => ({ ...f, spouse_name:e.target.value }))} />
+
+              <label style={S.label}>அறிமுகப்படுத்தியவர் <span style={{ color:'#475569' }}>(Referred By — Optional)</span></label>
+              <select
+                style={S.input}
+                value={editForm.referred_by}
+                onChange={e => setEditForm(f => ({ ...f, referred_by:e.target.value }))}
+              >
+                <option value="">— யாரும் இல்லை —</option>
+                {activeCustomers.filter(c => c.id !== editCust.id).map(c => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.mobile})</option>
+                ))}
+              </select>
 
               <button style={S.primaryBtn('linear-gradient(135deg,#1e40af,#1e3a8a)')} disabled={saving} onClick={saveEdit}>
                 {saving ? '⏳ Saving...' : '✅ Save Changes'}
@@ -1235,12 +1574,65 @@ th{background:#1e293b;color:white;font-size:10px;}
                     <div style={{ fontSize:9,color:'#94a3b8',marginTop:2 }}>{c.father_name} | 📞 {c.mobile} | Due: ₹{c.scheme_amount.toLocaleString('en-IN')}</div>
                   </div>
                   <div style={S.row}>
-                    <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickPay({ customer: c }); }}>Pay</button>
+                    <button style={S.btn('#15803d')} onClick={() => { setQuickDate(todayISO()); setQuickMode('cash'); setQuickPay({ customer: c }); }}>Pay</button>
                     <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
                   </div>
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ─── DEFAULTERS (rule 3: 3+ months behind) ─────────────── */}
+      {section === 'defaulters' && (
+        <div style={S.page}>
+          <div style={S.card}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#f87171', marginBottom:4 }}>🚨 Defaulters</div>
+            <div style={{ fontSize:10, color:'#94a3b8', marginBottom:12 }}>
+              விதி 3: தொடர்ந்து 3 மாதங்கள் செலுத்தாதவர்கள் திட்டத்தில் இருந்து நீக்கப்படுவார்கள்.
+            </div>
+
+            {defaulters.length === 0 && !loading && (
+              <div style={{ textAlign:'center',color:'#4ade80',padding:'20px 0',fontSize:13 }}>🎉 யாரும் 3+ மாதம் நிலுவையில் இல்லை!</div>
+            )}
+
+            {defaulters.map(c => {
+              const paidCount = (c.payment_months||[]).filter(m => paymentMap[c.id]?.[m]).length;
+              const behind = monthsElapsed(c.payment_months) - paidCount;
+              return (
+                <div key={c.id} style={{ ...S.crow('unpaid'), borderLeft:'3px solid #dc2626' }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12,fontWeight:700 }}>
+                      {c.name}
+                      <span style={{ ...S.badge2('#7f1d1d','#fca5a5'), marginLeft:5 }}>⚠️ {behind} மாதங்கள் நிலுவை</span>
+                    </div>
+                    <div style={{ fontSize:9,color:'#94a3b8',marginTop:2 }}>{c.father_name} | 📞 {c.mobile} | {paidCount}/10 paid</div>
+                  </div>
+                  <div style={S.row}>
+                    <button style={S.btn('#25d366')} onClick={() => sendReminderWA(c)}>WA</button>
+                    <button style={S.btn('#dc2626')} onClick={() => removeFromScheme(c)}>Remove</button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {removedCustomers.length > 0 && (
+              <>
+                <div style={{ fontSize:10,fontWeight:700,color:'#64748b',padding:'12px 0 5px',marginTop:10,borderTop:'1px solid #334155' }}>
+                  நீக்கப்பட்டவர்கள் (Removed) — {removedCustomers.length}
+                </div>
+                {removedCustomers.map(c => (
+                  <div key={c.id} style={{ ...S.crow('unpaid'), borderLeft:'3px solid #64748b', opacity:0.7 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12,fontWeight:700 }}>{c.name}</div>
+                      <div style={{ fontSize:9,color:'#94a3b8',marginTop:2 }}>{c.father_name} | 📞 {c.mobile}</div>
+                    </div>
+                    <button style={S.btn('#15803d')} onClick={() => reactivateCustomer(c)}>Reactivate</button>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </div>
       )}
