@@ -4845,6 +4845,34 @@ app.put('/api/whatsapp-settings', async (req, res) => {
   }
 });
 
+// Festival Fund has its own independent promotional note — separate doc, separate
+// content, so it can say something different from the main Finance module's note.
+app.get('/api/festival-fund/whatsapp-settings', async (req, res) => {
+  try {
+    const doc = await db.collection('app_settings').doc('festival_whatsapp').get();
+    if (doc.exists) {
+      res.json({ id: doc.id, ...doc.data() });
+    } else {
+      res.json({ quick_note: '' });
+    }
+  } catch (error) {
+    console.error('Error fetching festival fund whatsapp settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/festival-fund/whatsapp-settings', async (req, res) => {
+  try {
+    const { quick_note } = req.body;
+    const settings = { quick_note: quick_note || '', updated_at: new Date().toISOString() };
+    await db.collection('app_settings').doc('festival_whatsapp').set(settings, { merge: true });
+    res.json({ id: 'festival_whatsapp', ...settings });
+  } catch (error) {
+    console.error('Error saving festival fund whatsapp settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ DASHBOARD NOTES ROUTES ============
 
 // Get dashboard notes

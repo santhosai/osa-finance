@@ -180,6 +180,37 @@ export default function FestivalFund({ navigateTo }) {
   const [showNewBatchModal, setShowNewBatchModal] = useState(false);
   const [newBatchInput, setNewBatchInput] = useState('');
 
+  // WhatsApp/SMS promotional note — independent from the main Finance module's note,
+  // so it can say something different (e.g. festival-specific announcements).
+  const [ffPromoNote, setFfPromoNote] = useState('');
+  const [ffPromoNoteInput, setFfPromoNoteInput] = useState('');
+  const [showFfPromoModal, setShowFfPromoModal] = useState(false);
+  const [ffPromoSaving, setFfPromoSaving] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_URL}/festival-fund/whatsapp-settings`)
+      .then(res => res.ok ? res.json() : { quick_note: '' })
+      .then(data => setFfPromoNote(data.quick_note || ''))
+      .catch(() => {});
+  }, []);
+
+  const saveFfPromoNote = async () => {
+    setFfPromoSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/festival-fund/whatsapp-settings`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quick_note: ffPromoNoteInput.trim() })
+      });
+      if (res.ok) {
+        setFfPromoNote(ffPromoNoteInput.trim());
+        setShowFfPromoModal(false);
+      }
+    } catch (error) {
+      console.error('Error saving festival fund WhatsApp note:', error);
+    }
+    setFfPromoSaving(false);
+  };
+
   // Add-customer form
   const [form, setForm] = useState({ name:'', father_name:'', mobile:'', spouse_name:'', scheme:1, referred_by:'', join_month:currentMonth(), batch:currentBatch });
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -467,7 +498,7 @@ ${balanceCheckLink(customer.mobile)}
 
 – Santhosh Kumar
 OM SAI MURUGAN FINANCE
-📞 ${PHONE}`;
+📞 ${PHONE}${ffPromoNote ? `\n\n${ffPromoNote}` : ''}`;
 
   const buildFestivalMessage = (customer, payment, type) => {
     const monthIdx = (customer.payment_months || []).indexOf(payment.payment_month);
@@ -1005,6 +1036,12 @@ th{background:#1e293b;color:white;}
 
         <div style={{ padding:'14px 16px', borderTop:'1px solid #334155' }}>
           <button
+            onClick={() => { setSidebarOpen(false); setFfPromoNoteInput(ffPromoNote); setShowFfPromoModal(true); }}
+            style={{ width:'100%', padding:10, marginBottom:8, background:'linear-gradient(135deg,#d97706,#b45309)', color:'white', border:'none', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:700 }}
+          >
+            📢 Manage WhatsApp Note {ffPromoNote ? '(Active)' : ''}
+          </button>
+          <button
             onClick={handleLogout}
             style={{ width:'100%', padding:10, background:'#dc2626', color:'white', border:'none', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:700 }}
           >
@@ -1015,6 +1052,50 @@ th{background:#1e293b;color:white;}
           </div>
         </div>
       </div>
+
+      {/* WhatsApp/SMS promotional note modal — independent from the main Finance module's note */}
+      {showFfPromoModal && (
+        <div style={S.modal} onClick={() => setShowFfPromoModal(false)}>
+          <div style={{ ...S.modalBox, maxWidth:400 }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding:'16px 18px', background:'linear-gradient(135deg,#d97706,#b45309)', borderRadius:'16px 16px 0 0' }}>
+              <div style={{ fontSize:16, fontWeight:700, color:'white' }}>📢 Festival Fund WhatsApp Note</div>
+            </div>
+            <div style={{ padding:'16px 18px' }}>
+              <div style={{ fontSize:11, color:'#94a3b8', marginBottom:12, lineHeight:1.5 }}>
+                இது Festival Fund செய்திகளில் மட்டும் சேரும் (Finance module note-ல் இருந்து தனி). காலியாக விட்டால் எதுவும் சேராது.
+              </div>
+              <textarea
+                value={ffPromoNoteInput}
+                onChange={e => setFfPromoNoteInput(e.target.value)}
+                placeholder="e.g. வருகின்ற தீபாவளி அன்று புதிய திட்டம் தொடங்கும்..."
+                rows={5}
+                style={{ ...S.input, resize:'vertical', fontFamily:'inherit' }}
+              />
+              <div style={{ display:'flex', gap:8, marginTop:4 }}>
+                <button
+                  onClick={() => setFfPromoNoteInput('')}
+                  style={{ flex:1, padding:10, background:'#0f172a', color:'#94a3b8', border:'1px solid #334155', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer' }}
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={saveFfPromoNote}
+                  disabled={ffPromoSaving}
+                  style={{ flex:1, padding:10, background:'linear-gradient(135deg,#d97706,#b45309)', color:'white', border:'none', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', opacity:ffPromoSaving?0.6:1 }}
+                >
+                  {ffPromoSaving ? 'Saving...' : '✅ Save'}
+                </button>
+              </div>
+              <button
+                onClick={() => setShowFfPromoModal(false)}
+                style={{ width:'100%', padding:9, marginTop:8, background:'none', border:'1px solid #334155', borderRadius:8, color:'#94a3b8', fontSize:12, cursor:'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top bar */}
       <div style={S.topbar}>
