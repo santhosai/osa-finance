@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
 import { API_URL } from '../config';
 import { THERMAL_COMMANDS, printViaBluetooth } from '../utils/thermalPrint';
 
@@ -832,6 +833,50 @@ th{background:#1e293b;color:white;}
     doc.save(`FestivalFund_${selMonth}.pdf`);
   };
 
+  // ── Excel export — full raw data (customers + every payment ever recorded for
+  // this batch), for accounting/reconciliation rather than a single month's snapshot ──
+  const downloadExcelLedger = () => {
+    const batchCustomerIds = new Set([...activeCustomers, ...removedCustomers].map(c => c.id));
+    const batchPayments = payments
+      .filter(p => batchCustomerIds.has(p.customer_id))
+      .sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
+    const custById = {};
+    [...activeCustomers, ...removedCustomers].forEach(c => { custById[c.id] = c; });
+
+    // Sheet 1: Customers
+    const custRows = [
+      ['Name', 'Father Name', 'Mobile', 'Scheme', 'Batch', 'Join Month', 'Status', 'Months Paid', 'Total Paid (₹)', 'Referred By', 'Payout Given']
+    ];
+    [...activeCustomers, ...removedCustomers].forEach(c => {
+      const paidCount = (c.payment_months || []).filter(m => paymentMap[c.id]?.[m]).length;
+      const totalPaid = (c.payment_months || []).reduce((sum, m) => sum + (paymentMap[c.id]?.[m]?.amount || 0), 0);
+      const payout = paymentMap[c.id]?.['payout'];
+      const referrer = c.referred_by ? (custById[c.referred_by]?.name || c.referred_by) : '';
+      custRows.push([
+        c.name, c.father_name, c.mobile, `Scheme ${c.scheme}`, c.batch || '', fmtFull(c.join_month),
+        c.status, `${paidCount}/10`, totalPaid, referrer, payout ? `${fmtDate(payout.payment_date)} (${(payout.payment_mode||'cash').toUpperCase()})` : 'No'
+      ]);
+    });
+
+    // Sheet 2: Payments (full ledger)
+    const payRows = [
+      ['Customer Name', 'Mobile', 'Scheme', 'Batch', 'Month / Type', 'Amount (₹)', 'Date', 'Mode']
+    ];
+    batchPayments.forEach(p => {
+      const c = custById[p.customer_id];
+      payRows.push([
+        c?.name || 'Unknown', c?.mobile || '', c ? `Scheme ${c.scheme}` : '', c?.batch || '',
+        p.month_number === 11 ? 'Payout' : `Month ${p.month_number} (${fmtFull(p.payment_month)})`,
+        p.amount, fmtDate(p.payment_date), (p.payment_mode || 'cash').toUpperCase()
+      ]);
+    });
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(custRows), 'Customers');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(payRows), 'Payments');
+    XLSX.writeFile(workbook, `FestivalFund_${currentBatch}.xlsx`);
+  };
+
   // ── Nav helper ────────────────────────────────────────────────────────────
   const nav = (s) => { setSection(s); setSidebarOpen(false); };
 
@@ -1232,6 +1277,7 @@ th{background:#1e293b;color:white;}
               <button onClick={printMonthlyAuditBluetooth} style={{ ...S.primaryBtn('linear-gradient(135deg,#0369a1,#0c4a6e)'), flex:1, marginBottom:0 }}>📶 Bluetooth Print</button>
             </div>
             <button onClick={downloadMonthlyReportPDF} style={S.primaryBtn('linear-gradient(135deg,#059669,#047857)')}>⬇️ Download Report (PDF)</button>
+            <button onClick={downloadExcelLedger} style={S.primaryBtn('linear-gradient(135deg,#15803d,#166534)')}>📊 Download Full Ledger (Excel)</button>
             <button onClick={() => nav('addcust')} style={S.primaryBtn('linear-gradient(135deg,#d97706,#b45309)')}>➕ Add New Customer</button>
           </div>
 
@@ -1389,6 +1435,7 @@ th{background:#1e293b;color:white;}
               <button onClick={printMonthlyAuditBluetooth} style={{ ...S.primaryBtn('linear-gradient(135deg,#0369a1,#0c4a6e)'), flex:1, marginBottom:0 }}>📶 Bluetooth Print</button>
             </div>
             <button onClick={downloadMonthlyReportPDF} style={S.primaryBtn('linear-gradient(135deg,#059669,#047857)')}>⬇️ Download Report (PDF)</button>
+            <button onClick={downloadExcelLedger} style={S.primaryBtn('linear-gradient(135deg,#15803d,#166534)')}>📊 Download Full Ledger (Excel)</button>
 
             {dueThisMonth.length === 0 && !loading && (
               <div style={{ textAlign:'center',color:'#64748b',padding:'20px 0',fontSize:13 }}>No payments due for this month</div>
