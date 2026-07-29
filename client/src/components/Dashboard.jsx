@@ -79,6 +79,40 @@ function Dashboard({ navigateTo }) {
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
 
+  // WhatsApp promotional note — shared with WhatsAppModal.jsx's quick_note setting,
+  // so it's set/cleared once and applies automatically to every WhatsApp receipt,
+  // from both this page and the per-customer page.
+  const [waPromoNote, setWaPromoNote] = useState('');
+  const [waPromoNoteInput, setWaPromoNoteInput] = useState('');
+  const [showWaPromoModal, setShowWaPromoModal] = useState(false);
+  const [waPromoSaving, setWaPromoSaving] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_URL}/whatsapp-settings`)
+      .then(res => res.ok ? res.json() : { quick_note: '' })
+      .then(data => setWaPromoNote(data.quick_note || ''))
+      .catch(() => {});
+  }, []);
+
+  const saveWaPromoNote = async () => {
+    setWaPromoSaving(true);
+    try {
+      const existing = await fetch(`${API_URL}/whatsapp-settings`).then(r => r.json());
+      const res = await fetch(`${API_URL}/whatsapp-settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: existing.language || 'english', quick_note: waPromoNoteInput.trim() })
+      });
+      if (res.ok) {
+        setWaPromoNote(waPromoNoteInput.trim());
+        setShowWaPromoModal(false);
+      }
+    } catch (error) {
+      console.error('Error saving WhatsApp note:', error);
+    }
+    setWaPromoSaving(false);
+  };
+
   // Pending Payments (UPI) state
   const [showPendingPayments, setShowPendingPayments] = useState(false);
 
@@ -571,10 +605,11 @@ function Dashboard({ navigateTo }) {
           const isClosedLoan = loan.status === 'closed' || loan.balance <= 0;
           if (isClosedLoan && !isPaid) return;
 
-          // For paid loans, use the actual payment data (balance_after, week_number)
-          // For unpaid loans, use the calculated values
+          // For paid loans, use the actual payment data (balance_after, week_number, amount)
+          // For unpaid loans, use the calculated/scheduled values
           const actualWeekNumber = isPaid && payment.week_number ? payment.week_number : weekNumber;
           const actualBalance = isPaid && payment.balance_after !== undefined ? payment.balance_after : loan.balance;
+          const actualPaymentAmount = isPaid && payment.amount !== undefined ? payment.amount : loan.weekly_amount;
           const remainingWeeks = totalWeeks - actualWeekNumber;
 
           const result = {
@@ -583,7 +618,7 @@ function Dashboard({ navigateTo }) {
             weekNumber: actualWeekNumber,
             totalWeeks,
             remainingWeeks,
-            paymentAmount: loan.weekly_amount,
+            paymentAmount: actualPaymentAmount,
             balance: actualBalance,
             isPaid,
             payment // Include payment data for WhatsApp
@@ -2415,6 +2450,28 @@ function Dashboard({ navigateTo }) {
             📄 Backup Weekly PDF
           </button>
 
+          {/* Manage WhatsApp Promotional Note */}
+          <button
+            onClick={() => { setShowSidebar(false); setWaPromoNoteInput(waPromoNote); setShowWaPromoModal(true); }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+              color: 'white',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background 0.15s',
+              marginTop: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'linear-gradient(135deg, #b45309 0%, #92400e 100%)'}
+            onMouseOut={(e) => e.target.style.background = 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'}
+          >
+            📢 Manage WhatsApp Note {waPromoNote ? '(Active)' : ''}
+          </button>
+
         </div>
 
         {/* Logout Button - Fixed at bottom */}
@@ -3569,7 +3626,7 @@ function Dashboard({ navigateTo }) {
                                   const friendNameLine = loan.loan_name && loan.loan_name !== 'General Loan'
                                     ? `Friend name: ${loan.loan_name}\n`
                                     : '';
-                                  const message = `Payment Receipt\n\nCustomer: ${customer.name}\n${friendNameLine}Amount: ${formatCurrency(paymentAmount)}\nDate: ${new Date(selectedDate).toLocaleDateString('en-IN')}\nWeek: ${weekNumber}\nBalance Remaining: ${formatCurrency(balance)}\n\nThank you for your payment!`;
+                                  const message = `Payment Receipt\n\nCustomer: ${customer.name}\n${friendNameLine}Amount: ${formatCurrency(paymentAmount)}\nDate: ${new Date(selectedDate).toLocaleDateString('en-IN')}\nWeek: ${weekNumber}\nBalance Remaining: ${formatCurrency(balance)}\n\nThank you for your payment!\n- Om Sai Murugan Finance${waPromoNote ? `\n\n${waPromoNote}` : ''}`;
                                   window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`, '_blank');
                                   // Mark as sent in database
                                   if (payment?.id) {
@@ -5059,6 +5116,45 @@ function Dashboard({ navigateTo }) {
 
       {showBackupWeeklyPDF && (
         <BackupWeeklyPDF onClose={() => setShowBackupWeeklyPDF(false)} />
+      )}
+
+      {showWaPromoModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 20 }} onClick={() => setShowWaPromoModal(false)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 20, width: '100%', maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 16, color: '#1e293b' }}>📢 WhatsApp Promotional Note</h3>
+            <p style={{ margin: '0 0 14px', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+              Whatever you type here gets added automatically to the bottom of every WhatsApp receipt (main page and customer page), until you clear it. Leave blank to send nothing extra.
+            </p>
+            <textarea
+              value={waPromoNoteInput}
+              onChange={e => setWaPromoNoteInput(e.target.value)}
+              placeholder="e.g. வருகின்ற தீபாவளி அன்று புதிய 1 மற்றும் 5 லட்சம் சீட்டு தொடங்கும். விருப்பம் உள்ளவர்கள் தெரிவிக்கவும்."
+              rows={5}
+              style={{ width: '100%', boxSizing: 'border-box', padding: 12, border: '2px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', marginBottom: 14 }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setWaPromoNoteInput('')}
+                style={{ flex: 1, padding: 12, background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Clear
+              </button>
+              <button
+                onClick={saveWaPromoNote}
+                disabled={waPromoSaving}
+                style={{ flex: 1, padding: 12, background: 'linear-gradient(135deg,#d97706,#b45309)', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: waPromoSaving ? 0.6 : 1 }}
+              >
+                {waPromoSaving ? 'Saving...' : '✅ Save'}
+              </button>
+            </div>
+            <button
+              onClick={() => setShowWaPromoModal(false)}
+              style={{ width: '100%', padding: 10, marginTop: 8, background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, color: '#64748b', fontSize: 12, cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {showPaymentReminders && (

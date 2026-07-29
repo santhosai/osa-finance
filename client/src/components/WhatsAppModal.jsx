@@ -13,7 +13,7 @@ const getChitMessage = (data, language, quickNote) => {
     msg += `தொகை: ${amount}\n`;
     msg += `மாதம்: ${month}\n`;
     msg += `தேதி: ${date}\n\n`;
-    msg += `வணக்கம்!\nஇந்த மாதம் சீட்டு பணம் பெறப்பட்டது நன்றி\n- ஓம் சாய் முருகன்`;
+    msg += `வணக்கம்!\nஇந்த மாதம் சீட்டு பணம் பெறப்பட்டது நன்றி\n- ஓம் சாய் முருகன் பைனான்ஸ்`;
     if (quickNote) msg += `\n\n${quickNote}`;
     return msg;
   } else {
@@ -24,7 +24,7 @@ const getChitMessage = (data, language, quickNote) => {
     msg += `Amount: ${amount}\n`;
     msg += `Month: ${month}\n`;
     msg += `Date: ${date}\n\n`;
-    msg += `Thank you!\n- Om Sai Murugan`;
+    msg += `Thank you!\n- Om Sai Murugan Finance`;
     if (quickNote) msg += `\n\n${quickNote}`;
     return msg;
   }
@@ -41,7 +41,7 @@ const getLoanMessage = (data, language, quickNote) => {
     if (weekNumber) msg += `வாரம்: ${weekNumber}\n`;
     msg += `மீதி: ${balance}\n`;
     msg += `தேதி: ${date}\n\n`;
-    msg += `நன்றி!\n- ஓம் சாய் முருகன்`;
+    msg += `நன்றி!\n- ஓம் சாய் முருகன் பைனான்ஸ்`;
     if (quickNote) msg += `\n\n${quickNote}`;
     return msg;
   } else {
@@ -52,7 +52,7 @@ const getLoanMessage = (data, language, quickNote) => {
     if (weekNumber) msg += `Week: ${weekNumber}\n`;
     msg += `Balance: ${balance}\n`;
     msg += `Date: ${date}\n\n`;
-    msg += `Thank you!\n- Om Sai Murugan`;
+    msg += `Thank you!\n- Om Sai Murugan Finance`;
     if (quickNote) msg += `\n\n${quickNote}`;
     return msg;
   }
