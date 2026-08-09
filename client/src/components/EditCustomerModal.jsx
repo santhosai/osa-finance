@@ -4,6 +4,7 @@ import { API_URL } from '../config';
 function EditCustomerModal({ customer, activeTab, onClose, onSuccess }) {
   const [name, setName] = useState(customer.name || '');
   const [phone, setPhone] = useState(customer.phone || '');
+  const [isPrimary, setIsPrimary] = useState(!!customer.is_primary);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,9 +37,9 @@ function EditCustomerModal({ customer, activeTab, onClose, onSuccess }) {
           loan_given_date: customer.loan_given_date || customer.start_date,
         };
       } else {
-        // Weekly: update name and phone only
+        // Weekly: update name, phone, and primary-contact flag
         url = `${API_URL}/customers/${customer.id}`;
-        body = { name: name.trim(), phone: cleanPhone };
+        body = { name: name.trim(), phone: cleanPhone, is_primary: isPrimary };
       }
 
       const response = await fetch(url, {
@@ -97,6 +98,26 @@ function EditCustomerModal({ customer, activeTab, onClose, onSuccess }) {
               Enter 10-digit mobile number without country code
             </small>
           </div>
+
+          {activeTab !== 'monthly' && (
+            <div className="form-group" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+              <input
+                type="checkbox"
+                id="isPrimaryCheckboxEdit"
+                checked={isPrimary}
+                onChange={(e) => setIsPrimary(e.target.checked)}
+                style={{ marginTop: '3px' }}
+              />
+              <label htmlFor="isPrimaryCheckboxEdit" style={{ fontSize: '13px', color: '#374151', cursor: 'pointer' }}>
+                This is the main contact for this phone number
+                <br />
+                <small style={{ color: '#6b7280' }}>
+                  Check this if other customers also share this same phone number and this
+                  person should show as the main one on the balance-check page.
+                </small>
+              </label>
+            </div>
+          )}
 
           <button type="submit" className="btn-primary" style={{ margin: '16px 0' }}>
             Update Customer

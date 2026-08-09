@@ -4,6 +4,7 @@ import { API_URL } from '../config';
 function AddCustomerModal({ onClose, onSuccess }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [isPrimary, setIsPrimary] = useState(false);
   const [isContactPickerSupported, setIsContactPickerSupported] = useState(false);
 
   // Check if Contact Picker API is supported (Android Chrome)
@@ -67,7 +68,8 @@ function AddCustomerModal({ onClose, onSuccess }) {
         },
         body: JSON.stringify({
           name: name.trim(),
-          phone: cleanPhone
+          phone: cleanPhone,
+          is_primary: isPrimary
         })
       });
 
@@ -156,6 +158,24 @@ function AddCustomerModal({ onClose, onSuccess }) {
             <small style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
               Enter 10-digit mobile number without country code
             </small>
+          </div>
+
+          <div className="form-group" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <input
+              type="checkbox"
+              id="isPrimaryCheckbox"
+              checked={isPrimary}
+              onChange={(e) => setIsPrimary(e.target.checked)}
+              style={{ marginTop: '3px' }}
+            />
+            <label htmlFor="isPrimaryCheckbox" style={{ fontSize: '13px', color: '#374151', cursor: 'pointer' }}>
+              This is the main contact for this phone number
+              <br />
+              <small style={{ color: '#6b7280' }}>
+                Check this if other customers also share this same phone number and this
+                person should show as the main one on the balance-check page.
+              </small>
+            </label>
           </div>
 
           <button type="submit" className="btn-primary" style={{ margin: '16px 0' }}>

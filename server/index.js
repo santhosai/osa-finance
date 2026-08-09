@@ -184,16 +184,19 @@ app.get('/api/customers/:id', async (req, res) => {
 app.post('/api/customers', async (req, res) => {
   try {
     console.log(`🎯 CREATE CUSTOMER v${VERSION} - DUPLICATE PHONES ALLOWED:`, req.body);
-    const { name, phone } = req.body;
+    const { name, phone, is_primary } = req.body;
 
     if (!name || !phone) {
       return res.status(400).json({ error: 'Name and phone are required' });
     }
 
     // NO DUPLICATE PHONE CHECK - Multiple customers can have same phone!
+    // is_primary marks which customer is the "main" contact when several
+    // customers share one phone number (see /api/balance-check/:phone).
     const customerData = {
       name,
       phone,
+      is_primary: !!is_primary,
       created_at: new Date().toISOString()
     };
 
@@ -211,8 +214,10 @@ app.post('/api/customers', async (req, res) => {
 // Update customer
 app.put('/api/customers/:id', async (req, res) => {
   try {
-    const { name, phone } = req.body;
-    await db.collection('customers').doc(req.params.id).update({ name, phone });
+    const { name, phone, is_primary } = req.body;
+    const updateData = { name, phone };
+    if (is_primary !== undefined) updateData.is_primary = !!is_primary;
+    await db.collection('customers').doc(req.params.id).update(updateData);
     const doc = await db.collection('customers').doc(req.params.id).get();
     res.json({ id: doc.id, ...doc.data() });
   } catch (error) {
@@ -5518,12 +5523,26 @@ app.get('/api/balance-check/:phone', async (req, res) => {
       dailyLoans: [],
       interestLoans: [],
       monthlyFinanceLoans: [],
-      autoFinanceLoans: []
+      autoFinanceLoans: [],
+      linkedCustomers: []
     };
 
     // Process regular customer loans
     if (hasRegular) {
-      const customerIds = customersSnapshot.docs.map(doc => doc.id);
+      const custDocs = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Multiple customers can share one phone (e.g. a group of borrowers who
+      // are all only reachable via one person's number). Whoever is flagged
+      // is_primary shows as the main account; everyone else shows underneath
+      // as a linked account with their own independent loans/balance/history.
+      custDocs.sort((a, b) => {
+        if (!!a.is_primary !== !!b.is_primary) return a.is_primary ? -1 : 1;
+        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      });
+      const primaryCustomer = custDocs[0];
+      const linkedCustomerDocs = custDocs.slice(1);
+      customerName = primaryCustomer.name;
+      result.name = customerName;
 
       // Build payments lookup: loan_id -> payments array
       const paymentsByLoan = {};
@@ -5540,34 +5559,47 @@ app.get('/api/balance-check/:phone', async (req, res) => {
         paymentsByLoan[loanId].sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
       });
 
-      // Filter loans belonging to this customer
-      loansSnapshot.docs.forEach(loanDoc => {
-        const loan = loanDoc.data();
-        if (!customerIds.includes(loan.customer_id)) return;
-        if (loan.balance <= 0 || loan.status === 'closed') return;
+      // Build weekly/daily/interest loan lists for a given set of customer ids
+      const buildLoanLists = (customerIds) => {
+        const lists = { weeklyLoans: [], dailyLoans: [], interestLoans: [] };
+        loansSnapshot.docs.forEach(loanDoc => {
+          const loan = loanDoc.data();
+          if (!customerIds.includes(loan.customer_id)) return;
+          if (loan.balance <= 0 || loan.status === 'closed') return;
 
-        const loanInfo = {
-          loanId: loanDoc.id,
-          loanName: loan.loan_name || 'General Loan',
-          loanAmount: loan.loan_amount,
-          balance: loan.balance,
-          startDate: loan.start_date,
-          weeklyAmount: loan.weekly_amount || 0,
-          monthlyAmount: loan.monthly_amount || 0,
-          dailyAmount: loan.daily_amount || 0,
-          interestRate: loan.interest_rate || 0,
-          payments: paymentsByLoan[loanDoc.id] || []
-        };
+          const loanInfo = {
+            loanId: loanDoc.id,
+            loanName: loan.loan_name || 'General Loan',
+            loanAmount: loan.loan_amount,
+            balance: loan.balance,
+            startDate: loan.start_date,
+            weeklyAmount: loan.weekly_amount || 0,
+            monthlyAmount: loan.monthly_amount || 0,
+            dailyAmount: loan.daily_amount || 0,
+            interestRate: loan.interest_rate || 0,
+            payments: paymentsByLoan[loanDoc.id] || []
+          };
 
-        if (loan.loan_type === 'Weekly') {
-          result.weeklyLoans.push(loanInfo);
-        } else if (loan.loan_type === 'Daily') {
-          result.dailyLoans.push(loanInfo);
-        } else if (loan.loan_type === 'Vaddi') {
-          loanInfo.monthlyInterest = (loan.loan_amount * (loan.interest_rate || 0)) / 100;
-          result.interestLoans.push(loanInfo);
-        }
-      });
+          if (loan.loan_type === 'Weekly') {
+            lists.weeklyLoans.push(loanInfo);
+          } else if (loan.loan_type === 'Daily') {
+            lists.dailyLoans.push(loanInfo);
+          } else if (loan.loan_type === 'Vaddi') {
+            loanInfo.monthlyInterest = (loan.loan_amount * (loan.interest_rate || 0)) / 100;
+            lists.interestLoans.push(loanInfo);
+          }
+        });
+        return lists;
+      };
+
+      const primaryLoans = buildLoanLists([primaryCustomer.id]);
+      result.weeklyLoans = primaryLoans.weeklyLoans;
+      result.dailyLoans = primaryLoans.dailyLoans;
+      result.interestLoans = primaryLoans.interestLoans;
+
+      result.linkedCustomers = linkedCustomerDocs
+        .map(c => ({ customerId: c.id, name: c.name, ...buildLoanLists([c.id]) }))
+        .filter(lc => lc.weeklyLoans.length || lc.dailyLoans.length || lc.interestLoans.length);
     }
 
     // Process monthly finance loans
