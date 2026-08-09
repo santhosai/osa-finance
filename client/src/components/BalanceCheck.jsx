@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { API_URL } from '../config';
 import { storage } from '../firebase';
@@ -8,8 +8,9 @@ function BalanceCheck() {
   // Check if QR print mode
   const [searchParams] = useSearchParams();
   const isQRMode = searchParams.get('mode') === 'qr';
+  const phoneFromUrl = searchParams.get('phone');
 
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl || '');
   const [loading, setLoading] = useState(false);
   const [customerData, setCustomerData] = useState(null);
   const [error, setError] = useState('');
@@ -45,10 +46,8 @@ function BalanceCheck() {
     });
   };
 
-  const handleCheckBalance = async (e) => {
-    e.preventDefault();
-
-    if (phoneNumber.length !== 10) {
+  const checkBalance = async (phone) => {
+    if (phone.length !== 10) {
       setError('Please enter a valid 10-digit phone number');
       return;
     }
@@ -59,7 +58,7 @@ function BalanceCheck() {
 
     try {
       // Single optimized API call - fetches only this customer's data
-      const response = await fetch(`${API_URL}/balance-check/${phoneNumber}`);
+      const response = await fetch(`${API_URL}/balance-check/${phone}`);
 
       if (response.status === 404) {
         setError('No customer found with this phone number');
@@ -80,6 +79,20 @@ function BalanceCheck() {
       setLoading(false);
     }
   };
+
+  const handleCheckBalance = (e) => {
+    e.preventDefault();
+    checkBalance(phoneNumber);
+  };
+
+  // A receipt/QR can deep-link straight to a customer's balance via
+  // ?phone=XXXXXXXXXX, skipping the manual "enter your number" step.
+  useEffect(() => {
+    if (phoneFromUrl && phoneFromUrl.length === 10) {
+      checkBalance(phoneFromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleReset = () => {
     setPhoneNumber('');

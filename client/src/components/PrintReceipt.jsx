@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 
+const BALANCE_CHECK_URL = 'https://osa-finance.vercel.app/balance-check';
+
 // ESC/POS Commands for Thermal Printer
 const ESC = '\x1B';
 const GS = '\x1D';
@@ -195,6 +197,16 @@ function PrintReceipt({
             font-size: 9px;
           }
           .contact { margin-top: 8px; font-size: 10px; }
+          .link-block {
+            margin-top: 9px;
+            padding-top: 9px;
+            border-top: 1px dashed #000;
+            text-align: center;
+          }
+          .link-block .lead { font-size: 9px; margin-bottom: 6px; }
+          .link-block .qr-img { width: 70px; height: 70px; margin-bottom: 6px; }
+          .link-block .link-url { font-size: 9px; font-weight: bold; word-break: break-all; }
+          .link-block .link-hint { font-size: 8px; color: #444; margin-top: 3px; }
         </style>
       </head>
       <body>
@@ -311,6 +323,15 @@ function PrintReceipt({
     }
     if (data.friendShare !== undefined) {
       receipt += `Friend Share: Rs ${formatForThermal(data.friendShare)}\n`;
+    }
+
+    // Balance-check link (payment receipts only, when we know the customer's phone)
+    if (type === 'payment' && data.phone) {
+      receipt += COMMANDS.DASHED;
+      receipt += COMMANDS.ALIGN_CENTER;
+      receipt += 'Check balance:\n';
+      receipt += `${BALANCE_CHECK_URL.replace('https://', '')}\n`;
+      receipt += `?phone=${data.phone}\n`;
     }
 
     // Footer
@@ -537,6 +558,19 @@ function PrintReceipt({
           </div>
         )}
       </div>
+
+      {data.phone && (
+        <div className="link-block">
+          <div className="lead">Scan to check your balance anytime</div>
+          <img
+            className="qr-img"
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${BALANCE_CHECK_URL}?phone=${data.phone}`)}`}
+            alt="Scan to check your balance"
+          />
+          <div className="link-url">{BALANCE_CHECK_URL.replace('https://', '')}?phone={data.phone}</div>
+          <div className="link-hint">or just visit the link above</div>
+        </div>
+      )}
 
       <div className="footer">
         <div className="signature">Authorized Signature</div>
