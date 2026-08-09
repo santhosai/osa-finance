@@ -644,16 +644,20 @@ function BalanceCheck() {
               </button>
             </div>
 
-            {/* Monthly Finance Loans */}
-            {customerData.monthlyFinanceLoans.length > 0 && customerData.monthlyFinanceLoans.map((monthlyLoan, index) => {
-              const loanKey = `monthly-${index}`;
+            {/* Monthly Finance Loans — a single loan renders as a full open
+                card as before; multiple people sharing this number (each
+                monthlyLoan.name is a different person) render as click-to-
+                expand rows instead, same pattern as the weekly named groups. */}
+            {customerData.monthlyFinanceLoans.length === 1 && (() => {
+              const monthlyLoan = customerData.monthlyFinanceLoans[0];
+              const loanKey = 'monthly-0';
               const isExpanded = expandedLoans[loanKey];
               const payments = monthlyLoan.payments || [];
               const totalPaid = monthlyLoan.loanAmount - monthlyLoan.balance;
               const paymentsCompleted = payments.length;
 
               return (
-                <div key={monthlyLoan.id || index} style={{
+                <div style={{
                   background: 'white',
                   borderRadius: '16px',
                   padding: '20px',
@@ -668,96 +672,37 @@ function BalanceCheck() {
                     paddingBottom: '12px',
                     borderBottom: '2px solid #e5e7eb'
                   }}>
-                    <div style={{
-                      fontSize: '32px'
-                    }}>💰</div>
+                    <div style={{ fontSize: '32px' }}>💰</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{
-                        fontSize: '18px',
-                        fontWeight: 700,
-                        color: '#1e293b'
-                      }}>
-                        Monthly Finance {customerData.monthlyFinanceLoans.length > 1 ? `(Loan ${index + 1})` : ''}
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
+                        Monthly Finance
                       </div>
-                      <div style={{
-                        fontSize: '12px',
-                        color: '#64748b'
-                      }}>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>
                         Payment Day: {monthlyLoan.paymentDay} of every month
                       </div>
                     </div>
                   </div>
 
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '12px'
-                  }}>
-                    <div style={{
-                      padding: '12px',
-                      background: '#f0f9ff',
-                      borderRadius: '8px',
-                      border: '1px solid #bae6fd'
-                    }}>
-                      <div style={{ fontSize: '11px', color: '#0369a1', marginBottom: '4px' }}>
-                        Loan Amount
-                      </div>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
-                        {formatCurrency(monthlyLoan.loanAmount)}
-                      </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div style={{ padding: '12px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                      <div style={{ fontSize: '11px', color: '#0369a1', marginBottom: '4px' }}>Loan Amount</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.loanAmount)}</div>
                     </div>
-
-                    <div style={{
-                      padding: '12px',
-                      background: '#fef3c7',
-                      borderRadius: '8px',
-                      border: '1px solid #fcd34d'
-                    }}>
-                      <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px' }}>
-                        Balance Due
-                      </div>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
-                        {formatCurrency(monthlyLoan.balance)}
-                      </div>
+                    <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
+                      <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px' }}>Balance Due</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.balance)}</div>
                     </div>
-
-                    <div style={{
-                      padding: '12px',
-                      background: '#f0fdf4',
-                      borderRadius: '8px',
-                      border: '1px solid #86efac'
-                    }}>
-                      <div style={{ fontSize: '11px', color: '#166534', marginBottom: '4px' }}>
-                        Monthly Payment
-                      </div>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
-                        {formatCurrency(monthlyLoan.monthlyAmount)}
-                      </div>
+                    <div style={{ padding: '12px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #86efac' }}>
+                      <div style={{ fontSize: '11px', color: '#166534', marginBottom: '4px' }}>Monthly Payment</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.monthlyAmount)}</div>
                     </div>
-
-                    <div style={{
-                      padding: '12px',
-                      background: '#faf5ff',
-                      borderRadius: '8px',
-                      border: '1px solid #d8b4fe'
-                    }}>
-                      <div style={{ fontSize: '11px', color: '#6b21a8', marginBottom: '4px' }}>
-                        Total Months
-                      </div>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
-                        {monthlyLoan.totalMonths} months
-                      </div>
+                    <div style={{ padding: '12px', background: '#faf5ff', borderRadius: '8px', border: '1px solid #d8b4fe' }}>
+                      <div style={{ fontSize: '11px', color: '#6b21a8', marginBottom: '4px' }}>Total Months</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{monthlyLoan.totalMonths} months</div>
                     </div>
                   </div>
 
-                  <div style={{
-                    marginTop: '12px',
-                    padding: '12px',
-                    background: '#f8fafc',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    color: '#475569'
-                  }}>
+                  <div style={{ marginTop: '12px', padding: '12px', background: '#f8fafc', borderRadius: '8px', fontSize: '12px', color: '#475569' }}>
                     <div>📅 Loan Given: {formatDate(monthlyLoan.loanGivenDate)}</div>
                     <div>🗓️ EMI Start: {formatDate(monthlyLoan.startDate)}</div>
                     {monthlyLoan.currentMonth && (
@@ -766,25 +711,15 @@ function BalanceCheck() {
                     <div>💵 Total Paid: {formatCurrency(totalPaid)} ({paymentsCompleted} payment{paymentsCompleted !== 1 ? 's' : ''})</div>
                   </div>
 
-                  {/* Pay Now Button */}
                   {monthlyLoan.balance > 0 && (
                     <button
                       onClick={() => handlePayNow(monthlyLoan, 'monthly')}
                       style={{
-                        marginTop: '12px',
-                        width: '100%',
-                        padding: '14px',
+                        marginTop: '12px', width: '100%', padding: '14px',
                         background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '10px',
-                        fontSize: '15px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
+                        color: 'white', border: 'none', borderRadius: '10px',
+                        fontSize: '15px', fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                         boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                       }}
                     >
@@ -792,107 +727,38 @@ function BalanceCheck() {
                     </button>
                   )}
 
-                  {/* View Payment History Button */}
                   {payments.length > 0 && (
                     <button
-                      onClick={() => toggleLoan('monthly', index)}
+                      onClick={() => toggleLoan('monthly', 0)}
                       style={{
-                        marginTop: '8px',
-                        width: '100%',
-                        padding: '12px',
+                        marginTop: '8px', width: '100%', padding: '12px',
                         background: isExpanded ? '#f1f5f9' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        color: isExpanded ? '#475569' : 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px'
+                        color: isExpanded ? '#475569' : 'white', border: 'none', borderRadius: '8px',
+                        fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                       }}
                     >
                       {isExpanded ? '▲' : '▼'} {isExpanded ? 'Hide' : 'View'} Payment History ({payments.length})
                     </button>
                   )}
 
-                  {/* Payment History Section */}
                   {isExpanded && payments.length > 0 && (
-                    <div style={{
-                      marginTop: '16px',
-                      padding: '16px',
-                      background: '#f8fafc',
-                      borderRadius: '12px',
-                      border: '2px solid #e5e7eb'
-                    }}>
-                      <div style={{
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        color: '#1e293b',
-                        marginBottom: '12px'
-                      }}>
-                        📜 Payment Timeline
-                      </div>
-
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px'
-                      }}>
+                    <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '2px solid #e5e7eb' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b', marginBottom: '12px' }}>📜 Payment Timeline</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {payments.map((payment, paymentIndex) => (
-                          <div
-                            key={payment.id || paymentIndex}
-                            style={{
-                              padding: '12px',
-                              background: 'white',
-                              borderRadius: '8px',
-                              border: '1px solid #e5e7eb',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center'
-                            }}
-                          >
+                          <div key={payment.id || paymentIndex} style={{
+                            padding: '12px', background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                          }}>
                             <div>
-                              <div style={{
-                                fontSize: '13px',
-                                fontWeight: 600,
-                                color: '#1e293b'
-                              }}>
-                                ✅ Payment #{payments.length - paymentIndex}
-                              </div>
-                              <div style={{
-                                fontSize: '11px',
-                                color: '#64748b',
-                                marginTop: '2px'
-                              }}>
-                                📅 {formatDate(payment.payment_date)}
-                              </div>
-                              <div style={{
-                                fontSize: '11px',
-                                color: '#64748b',
-                                marginTop: '2px'
-                              }}>
-                                💳 {payment.payment_mode || 'cash'}
-                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>✅ Payment #{payments.length - paymentIndex}</div>
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>📅 {formatDate(payment.payment_date)}</div>
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>💳 {payment.payment_mode || 'cash'}</div>
                             </div>
-                            <div style={{
-                              textAlign: 'right'
-                            }}>
-                              <div style={{
-                                fontSize: '16px',
-                                fontWeight: 700,
-                                color: '#10b981'
-                              }}>
-                                {formatCurrency(payment.amount)}
-                              </div>
-                              <div style={{
-                                fontSize: '10px',
-                                color: '#64748b',
-                                marginTop: '2px'
-                              }}>
-                                Balance: {formatCurrency(payment.balance_after)}
-                              </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981' }}>{formatCurrency(payment.amount)}</div>
+                              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Balance: {formatCurrency(payment.balance_after)}</div>
                             </div>
                           </div>
                         ))}
@@ -900,24 +766,136 @@ function BalanceCheck() {
                     </div>
                   )}
 
-                  {/* No Payment History Message */}
                   {payments.length === 0 && (
                     <div style={{
-                      marginTop: '12px',
-                      padding: '12px',
-                      background: '#fef3c7',
-                      borderRadius: '8px',
-                      border: '1px solid #fcd34d',
-                      fontSize: '12px',
-                      color: '#92400e',
-                      textAlign: 'center'
+                      marginTop: '12px', padding: '12px', background: '#fef3c7', borderRadius: '8px',
+                      border: '1px solid #fcd34d', fontSize: '12px', color: '#92400e', textAlign: 'center'
                     }}>
                       ℹ️ No payments made yet
                     </div>
                   )}
                 </div>
               );
-            })}
+            })()}
+
+            {customerData.monthlyFinanceLoans.length > 1 && (
+              <div style={{ marginBottom: '16px' }}>
+                {customerData.monthlyFinanceLoans.map((monthlyLoan) => {
+                  const groupKey = `monthly-group-${monthlyLoan.id}`;
+                  const isOpen = !!expandedLinked[groupKey];
+                  const payments = monthlyLoan.payments || [];
+                  const totalPaid = monthlyLoan.loanAmount - monthlyLoan.balance;
+
+                  return (
+                    <div key={monthlyLoan.id} style={{
+                      background: 'white', borderRadius: '14px', marginBottom: '10px',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.1)', overflow: 'hidden'
+                    }}>
+                      <div
+                        onClick={() => toggleLinked(groupKey)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer' }}
+                      >
+                        <div style={{
+                          width: '36px', height: '36px', borderRadius: '50%',
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 700, fontSize: '14px', flexShrink: 0
+                        }}>
+                          {(monthlyLoan.name || '?')[0].toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{monthlyLoan.name}</div>
+                          <div style={{ fontSize: '11.5px', color: '#64748b' }}>Monthly Finance</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '9.5px', color: '#92400e', fontWeight: 700 }}>BALANCE</div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.balance)}</div>
+                        </div>
+                        <div style={{
+                          fontSize: '12px', color: '#64748b',
+                          transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease'
+                        }}>▼</div>
+                      </div>
+
+                      {isOpen && (
+                        <div style={{ padding: '0 16px 16px', borderTop: '1.5px dashed #e5e7eb', marginTop: '2px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '14px' }}>
+                            <div style={{ padding: '10px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                              <div style={{ fontSize: '10px', color: '#0369a1', marginBottom: '3px' }}>LOAN AMOUNT</div>
+                              <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.loanAmount)}</div>
+                            </div>
+                            <div style={{ padding: '10px', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
+                              <div style={{ fontSize: '10px', color: '#92400e', marginBottom: '3px' }}>BALANCE DUE</div>
+                              <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.balance)}</div>
+                            </div>
+                            <div style={{ padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #86efac' }}>
+                              <div style={{ fontSize: '10px', color: '#166534', marginBottom: '3px' }}>MONTHLY PAYMENT</div>
+                              <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.monthlyAmount)}</div>
+                            </div>
+                            <div style={{ padding: '10px', background: '#faf5ff', borderRadius: '8px', border: '1px solid #d8b4fe' }}>
+                              <div style={{ fontSize: '10px', color: '#6b21a8', marginBottom: '3px' }}>TOTAL MONTHS</div>
+                              <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{monthlyLoan.totalMonths} months</div>
+                            </div>
+                          </div>
+
+                          <div style={{ marginTop: '10px', fontSize: '11.5px', color: '#64748b' }}>
+                            📅 Loan given {formatDate(monthlyLoan.loanGivenDate)} · EMI start {formatDate(monthlyLoan.startDate)}
+                            {monthlyLoan.currentMonth ? ` · Month ${monthlyLoan.currentMonth}/${monthlyLoan.totalMonths}` : ''}
+                            {' '}· Total paid {formatCurrency(totalPaid)} ({payments.length} payment{payments.length !== 1 ? 's' : ''})
+                          </div>
+
+                          {monthlyLoan.balance > 0 && (
+                            <button
+                              onClick={() => handlePayNow(monthlyLoan, 'monthly')}
+                              style={{
+                                marginTop: '10px', width: '100%', padding: '11px',
+                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                color: 'white', border: 'none', borderRadius: '9px',
+                                fontSize: '13.5px', fontWeight: 700, cursor: 'pointer'
+                              }}
+                            >
+                              💳 Pay Now via UPI
+                            </button>
+                          )}
+
+                          {payments.length > 0 ? (
+                            <div style={{ marginTop: '10px' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '6px' }}>
+                                Payment History
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {[...payments].reverse().map((payment, pIdx) => (
+                                  <div key={payment.id || pIdx} style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '9px 10px', background: '#f8fafc', borderRadius: '7px', border: '1px solid #e5e7eb'
+                                  }}>
+                                    <div>
+                                      <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#1e293b' }}>✅ {formatDate(payment.payment_date)}</div>
+                                      <div style={{ fontSize: '10px', color: '#64748b' }}>💳 {payment.payment_mode || 'cash'}</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#10b981' }}>{formatCurrency(payment.amount)}</div>
+                                      <div style={{ fontSize: '9.5px', color: '#64748b' }}>Balance: {formatCurrency(payment.balance_after)}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{
+                              marginTop: '10px', padding: '10px', background: '#fef3c7', borderRadius: '8px',
+                              border: '1px solid #fcd34d', fontSize: '11.5px', color: '#92400e', textAlign: 'center'
+                            }}>
+                              ℹ️ No payments made yet
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Named Groups — this account has multiple loans under different
                 people's names (a shared family/contact number), so show each
