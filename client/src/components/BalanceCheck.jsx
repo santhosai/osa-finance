@@ -779,7 +779,14 @@ function BalanceCheck() {
             })()}
 
             {customerData.monthlyFinanceLoans.length > 1 && (
-              <div style={{ marginBottom: '16px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{
+                  fontSize: '12px', fontWeight: 700, letterSpacing: '0.3px', textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.9)', marginBottom: '10px', paddingLeft: '4px',
+                  display: 'flex', alignItems: 'center', gap: '6px'
+                }}>
+                  💰 Monthly Finance ({customerData.monthlyFinanceLoans.length})
+                </div>
                 {customerData.monthlyFinanceLoans.map((monthlyLoan) => {
                   const groupKey = `monthly-group-${monthlyLoan.id}`;
                   const isOpen = !!expandedLinked[groupKey];
@@ -789,7 +796,8 @@ function BalanceCheck() {
                   return (
                     <div key={monthlyLoan.id} style={{
                       background: 'white', borderRadius: '14px', marginBottom: '10px',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.1)', overflow: 'hidden'
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.1)', overflow: 'hidden',
+                      borderLeft: '4px solid #d97706'
                     }}>
                       <div
                         onClick={() => toggleLinked(groupKey)}
@@ -797,7 +805,7 @@ function BalanceCheck() {
                       >
                         <div style={{
                           width: '36px', height: '36px', borderRadius: '50%',
-                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                           color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
                           fontWeight: 700, fontSize: '14px', flexShrink: 0
                         }}>
@@ -901,7 +909,14 @@ function BalanceCheck() {
                 people's names (a shared family/contact number), so show each
                 person as its own click-to-expand row instead of a flat list. */}
             {customerData.namedGroups && customerData.namedGroups.length > 1 && (
-              <div style={{ marginBottom: '16px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{
+                  fontSize: '12px', fontWeight: 700, letterSpacing: '0.3px', textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.9)', marginBottom: '10px', paddingLeft: '4px',
+                  display: 'flex', alignItems: 'center', gap: '6px'
+                }}>
+                  📅 Weekly Loans ({customerData.namedGroups.length})
+                </div>
                 {customerData.namedGroups.map((grp) => {
                   const groupKey = `group-${grp.name}`;
                   const isOpen = !!expandedLinked[groupKey];
@@ -918,7 +933,8 @@ function BalanceCheck() {
                       borderRadius: '14px',
                       marginBottom: '10px',
                       boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                      overflow: 'hidden'
+                      overflow: 'hidden',
+                      borderLeft: '4px solid #667eea'
                     }}>
                       <div
                         onClick={() => toggleLinked(groupKey)}
