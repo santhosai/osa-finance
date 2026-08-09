@@ -5533,11 +5533,20 @@ app.get('/api/balance-check/:phone', async (req, res) => {
       const custDocs = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       // Multiple customers can share one phone (e.g. a group of borrowers who
-      // are all only reachable via one person's number). Whoever is flagged
-      // is_primary shows as the main account; everyone else shows underneath
-      // as a linked account with their own independent loans/balance/history.
+      // are all only reachable via one person's number, or an accidental
+      // duplicate customer record). Whoever is flagged is_primary shows as the
+      // main account; otherwise prefer whoever actually has active loans (an
+      // empty duplicate record shouldn't outrank the real account just for
+      // being created first); everyone else shows underneath as a linked
+      // account with their own independent loans/balance/history.
+      const activeLoanCount = (customerId) => loansSnapshot.docs.filter(loanDoc => {
+        const l = loanDoc.data();
+        return l.customer_id === customerId && l.balance > 0 && l.status !== 'closed';
+      }).length;
       custDocs.sort((a, b) => {
         if (!!a.is_primary !== !!b.is_primary) return a.is_primary ? -1 : 1;
+        const loanDiff = activeLoanCount(b.id) - activeLoanCount(a.id);
+        if (loanDiff !== 0) return loanDiff;
         return new Date(a.created_at || 0) - new Date(b.created_at || 0);
       });
       const primaryCustomer = custDocs[0];
