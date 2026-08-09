@@ -29,6 +29,13 @@ function BalanceCheck() {
     return `₹${Number(amount).toLocaleString('en-IN')}`;
   };
 
+  const summarizeLoanKinds = (loans) => {
+    const counts = {};
+    loans.forEach(l => { counts[l.kind] = (counts[l.kind] || 0) + 1; });
+    const parts = Object.entries(counts).map(([kind, count]) => count > 1 ? `${count} ${kind}` : kind);
+    return `${parts.join(' + ')} Loan${loans.length > 1 ? 's' : ''}`;
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('en-IN', {
@@ -957,7 +964,7 @@ function BalanceCheck() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{grp.name}</div>
                           <div style={{ fontSize: '11.5px', color: '#64748b' }}>
-                            {allLoans.map(l => l.kind).join(' + ')} Loan{allLoans.length > 1 ? 's' : ''}
+                            {summarizeLoanKinds(allLoans)}
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
@@ -2079,7 +2086,7 @@ function BalanceCheck() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{lc.name}</div>
                           <div style={{ fontSize: '11.5px', color: '#64748b' }}>
-                            {allLoans.map(l => l.kind).join(' + ')} Loan{allLoans.length > 1 ? 's' : ''}
+                            {summarizeLoanKinds(allLoans)}
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
