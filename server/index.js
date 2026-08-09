@@ -5524,7 +5524,8 @@ app.get('/api/balance-check/:phone', async (req, res) => {
       interestLoans: [],
       monthlyFinanceLoans: [],
       autoFinanceLoans: [],
-      linkedCustomers: []
+      linkedCustomers: [],
+      namedGroups: []
     };
 
     // Process regular customer loans
@@ -5593,9 +5594,38 @@ app.get('/api/balance-check/:phone', async (req, res) => {
       };
 
       const primaryLoans = buildLoanLists([primaryCustomer.id]);
-      result.weeklyLoans = primaryLoans.weeklyLoans;
-      result.dailyLoans = primaryLoans.dailyLoans;
-      result.interestLoans = primaryLoans.interestLoans;
+
+      // Some accounts already track separate borrowers as separate LOANS under
+      // one customer, naming each loan after the actual person (e.g. a shared
+      // family phone number where "Aravindhan", "Priya" etc. are each their own
+      // weekly loan under one account). When that account has loans under more
+      // than one distinct name, group them per-name for display instead of a
+      // flat list — otherwise leave the normal flat rendering untouched.
+      const allPrimaryLoans = [
+        ...primaryLoans.weeklyLoans,
+        ...primaryLoans.dailyLoans,
+        ...primaryLoans.interestLoans
+      ];
+      const distinctLoanNames = new Set(
+        allPrimaryLoans.map(l => (l.loanName || '').trim()).filter(Boolean)
+      );
+
+      if (distinctLoanNames.size > 1) {
+        const groupsByName = {};
+        ['weeklyLoans', 'dailyLoans', 'interestLoans'].forEach(key => {
+          primaryLoans[key].forEach(loan => {
+            const nm = (loan.loanName || 'General').trim() || 'General';
+            if (!groupsByName[nm]) groupsByName[nm] = { name: nm, weeklyLoans: [], dailyLoans: [], interestLoans: [] };
+            groupsByName[nm][key].push(loan);
+          });
+        });
+        result.namedGroups = Object.values(groupsByName);
+        // Leave top-level arrays empty — the client renders namedGroups instead.
+      } else {
+        result.weeklyLoans = primaryLoans.weeklyLoans;
+        result.dailyLoans = primaryLoans.dailyLoans;
+        result.interestLoans = primaryLoans.interestLoans;
+      }
 
       result.linkedCustomers = linkedCustomerDocs
         .map(c => ({ customerId: c.id, name: c.name, ...buildLoanLists([c.id]) }))
