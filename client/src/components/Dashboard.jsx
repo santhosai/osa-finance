@@ -54,6 +54,8 @@ function Dashboard({ navigateTo }) {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedUnpaid, setSelectedUnpaid] = useState(new Set());
   const [selectedPaid, setSelectedPaid] = useState(new Set()); // For bulk undo
+  const [selectedSakkaraUnpaid, setSelectedSakkaraUnpaid] = useState(new Set());
+  const [selectedSakkaraPaid, setSelectedSakkaraPaid] = useState(new Set()); // For bulk undo, Sakkara group
   const [quickPayConfirm, setQuickPayConfirm] = useState(null); // { loan, customer, amount, weekNumber }
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
   const [undoPaymentConfirm, setUndoPaymentConfirm] = useState(null); // { loan, customer, paymentId }
@@ -838,8 +840,9 @@ function Dashboard({ navigateTo }) {
   }, [penColor, penSize]);
 
   // Toggle selection of unpaid customer for WhatsApp share
-  const toggleUnpaidSelection = (loanId) => {
-    setSelectedUnpaid(prev => {
+  // Generalized so each payment group (Others / Sakkara) can keep independent selection state
+  const toggleUnpaidSelectionFor = (setSelected, loanId) => {
+    setSelected(prev => {
       const newSet = new Set(prev);
       if (newSet.has(loanId)) {
         newSet.delete(loanId);
@@ -850,18 +853,18 @@ function Dashboard({ navigateTo }) {
     });
   };
 
-  // Select/Deselect all unpaid customers
-  const toggleSelectAll = (unpaidLoans) => {
-    if (selectedUnpaid.size === unpaidLoans.length) {
-      setSelectedUnpaid(new Set());
+  // Select/Deselect all unpaid customers within a given group
+  const toggleSelectAllFor = (selected, setSelected, unpaidLoans) => {
+    if (selected.size === unpaidLoans.length) {
+      setSelected(new Set());
     } else {
-      setSelectedUnpaid(new Set(unpaidLoans.map(item => item.loan.loan_id)));
+      setSelected(new Set(unpaidLoans.map(item => item.loan.loan_id)));
     }
   };
 
   // Share selected customers via WhatsApp
-  const shareViaWhatsApp = (unpaidLoans) => {
-    const selectedItems = unpaidLoans.filter(item => selectedUnpaid.has(item.loan.loan_id));
+  const shareViaWhatsAppFor = (selected, unpaidLoans) => {
+    const selectedItems = unpaidLoans.filter(item => selected.has(item.loan.loan_id));
     if (selectedItems.length === 0) {
       alert('Please select at least one customer to share');
       return;
@@ -1349,10 +1352,11 @@ function Dashboard({ navigateTo }) {
   };
 
   // Bulk Undo - undo multiple selected payments
-  const handleBulkUndo = async () => {
-    if (selectedPaid.size === 0 || isPaymentLoading) return;
+  // Generalized so each payment group (Others / Sakkara) can undo only its own selection
+  const handleBulkUndoFor = async (selected, setSelected) => {
+    if (selected.size === 0 || isPaymentLoading) return;
 
-    const confirmMsg = `Are you sure you want to undo ${selectedPaid.size} payment(s)?`;
+    const confirmMsg = `Are you sure you want to undo ${selected.size} payment(s)?`;
     if (!window.confirm(confirmMsg)) return;
 
     setIsPaymentLoading(true);
@@ -1365,7 +1369,7 @@ function Dashboard({ navigateTo }) {
       let successCount = 0;
       let failCount = 0;
 
-      for (const loanId of selectedPaid) {
+      for (const loanId of selected) {
         const payment = payments.find(p => p.loan_id === loanId);
         if (!payment) {
           failCount++;
@@ -1389,7 +1393,7 @@ function Dashboard({ navigateTo }) {
       // Refresh data
       mutate();
       mutateCustomers();
-      setSelectedPaid(new Set());
+      setSelected(new Set());
       setPaymentsRefreshKey(k => k + 1);
 
       if (failCount > 0) {
@@ -3426,45 +3430,484 @@ function Dashboard({ navigateTo }) {
                 );
               }
 
-              // Calculate totals
-              const paidTotal = paidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
-              const unpaidTotal = unpaidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
-              const grandTotal = paidTotal + unpaidTotal;
+              // Split into "Sakkara (Appa Customers)" vs everyone else, purely for display.
+              // Matched live by name prefix so any newly added Sakkara customer is grouped
+              // automatically — no manual tagging, no change to how paid/unpaid is computed.
+              const isSakkaraCustomer = (name) => (name || '').trim().toLowerCase().startsWith('sakkara');
+              const othersPaid = paidLoans.filter(item => !isSakkaraCustomer(item.customer.name));
+              const othersUnpaidRaw = unpaidLoans.filter(item => !isSakkaraCustomer(item.customer.name));
+              const sakkaraPaid = paidLoans.filter(item => isSakkaraCustomer(item.customer.name));
+              const sakkaraUnpaidRaw = unpaidLoans.filter(item => isSakkaraCustomer(item.customer.name));
+
+              // For Thursday collections (both groups) and Sunday's Sakkara group only —
+              // drop negligible balances and order by the loan's given date, oldest first.
+              // Sunday's "Others" group is left exactly as before, untouched.
+              const sortUnpaidByLoanDate = (list) => [...list]
+                .filter(item => item.balance > 1)
+                .sort((a, b) => new Date(a.loan.start_date) - new Date(b.loan.start_date));
+
+              const othersUnpaid = weeklyCollectionDay === 'Thursday'
+                ? sortUnpaidByLoanDate(othersUnpaidRaw)
+                : othersUnpaidRaw;
+              const sakkaraUnpaid = sortUnpaidByLoanDate(sakkaraUnpaidRaw);
+
+              // Renders one group's totals bar + Paid/Unpaid columns. Each group gets its own
+              // selection state passed in, so bulk-undo / bulk-WhatsApp only ever act within
+              // that group and never cross into the other one.
+              const renderPaymentGroup = (groupPaidLoans, groupUnpaidLoans, selectedPaidSet, setSelectedPaidSet, selectedUnpaidSet, setSelectedUnpaidSet, keyPrefix) => {
+                const groupPaidTotal = groupPaidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
+                const groupUnpaidTotal = groupUnpaidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
+                const groupGrandTotal = groupPaidTotal + groupUnpaidTotal;
+
+                return (
+                  <div>
+                    {/* Total Summary */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      marginBottom: '10px',
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr 1fr',
+                      gap: '10px',
+                      color: 'white'
+                    }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#86efac' }}>
+                          {formatCurrency(groupPaidTotal)}
+                        </div>
+                        <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('collected')}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#fca5a5' }}>
+                          {formatCurrency(groupUnpaidTotal)}
+                        </div>
+                        <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('pending')}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '16px', fontWeight: 700 }}>
+                          {formatCurrency(groupGrandTotal)}
+                        </div>
+                        <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('totalDue')}</div>
+                      </div>
+                    </div>
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '10px',
+                    overflowX: 'auto'
+                  }}>
+                    {/* PAID Column */}
+                    <div style={{
+                      background: '#f0fdf4',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      minWidth: '250px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <h4 style={{
+                          margin: 0,
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          color: '#065f46'
+                        }}>
+                          ✓ {t('paid').toUpperCase()} ({groupPaidLoans.length})
+                        </h4>
+                        {groupPaidLoans.length > 0 && (
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#065f46', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedPaidSet.size === groupPaidLoans.length && groupPaidLoans.length > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedPaidSet(new Set(groupPaidLoans.map(p => p.loan.loan_id)));
+                                  } else {
+                                    setSelectedPaidSet(new Set());
+                                  }
+                                }}
+                                style={{ cursor: 'pointer' }}
+                              />
+                              All
+                            </label>
+                            {selectedPaidSet.size > 0 && (
+                              <button
+                                onClick={() => handleBulkUndoFor(selectedPaidSet, setSelectedPaidSet)}
+                                disabled={isPaymentLoading}
+                                style={{
+                                  background: '#dc2626',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '4px 8px',
+                                  fontSize: '10px',
+                                  fontWeight: 600,
+                                  cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
+                                  opacity: isPaymentLoading ? 0.6 : 1
+                                }}
+                              >
+                                {isPaymentLoading ? '...' : `Undo (${selectedPaidSet.size})`}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gap: '4px' }}>
+                        {groupPaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance, payment }) => (
+                          <div
+                            key={`${keyPrefix}-${loan.loan_id}`}
+                            style={{
+                              background: selectedPaidSet.has(loan.loan_id)
+                                ? 'linear-gradient(135deg, #bbf7d0 0%, #86efac 100%)'
+                                : 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
+                              padding: '6px 8px',
+                              borderRadius: '6px',
+                              border: selectedPaidSet.has(loan.loan_id) ? '2px solid #22c55e' : '1px solid #6ee7b7',
+                              transition: 'all 0.15s',
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '8px'
+                            }}
+                          >
+                            {/* Checkbox for bulk selection */}
+                            <input
+                              type="checkbox"
+                              checked={selectedPaidSet.has(loan.loan_id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                const newSelected = new Set(selectedPaidSet);
+                                if (newSelected.has(loan.loan_id)) {
+                                  newSelected.delete(loan.loan_id);
+                                } else {
+                                  newSelected.add(loan.loan_id);
+                                }
+                                setSelectedPaidSet(newSelected);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                cursor: 'pointer',
+                                marginTop: '2px',
+                                accentColor: '#22c55e'
+                              }}
+                            />
+                            {/* Customer Info */}
+                            <div
+                              style={{ flex: 1, cursor: 'pointer' }}
+                              onClick={() => navigateTo('loan-details', loan.loan_id)}
+                              onMouseOver={(e) => {
+                                e.currentTarget.parentElement.style.transform = 'scale(1.02)';
+                                e.currentTarget.parentElement.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+                              }}
+                              onMouseOut={(e) => {
+                                e.currentTarget.parentElement.style.transform = 'scale(1)';
+                                e.currentTarget.parentElement.style.boxShadow = 'none';
+                              }}
+                            >
+                              <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
+                                {customer.name}
+                                {loan.loan_name && loan.loan_name !== 'General Loan' && (
+                                  <span style={{ fontSize: '10px', color: '#047857', fontWeight: 500, marginLeft: '4px' }}>
+                                    • {loan.loan_name}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
+                                Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
+                              </div>
+                              <div style={{ fontSize: '9px', color: '#059669', fontWeight: 500 }}>
+                                Bal: {formatCurrency(balance)} • {remainingWeeks}w left
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              {/* WhatsApp Button */}
+                              {customer.phone && (
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const phone = customer.phone.replace(/\D/g, '');
+                                    const friendNameLine = loan.loan_name && loan.loan_name !== 'General Loan'
+                                      ? `Friend name: ${loan.loan_name}\n`
+                                      : '';
+                                    const message = `Payment Receipt\n\nCustomer: ${customer.name}\n${friendNameLine}Amount: ${formatCurrency(paymentAmount)}\nDate: ${new Date(selectedDate).toLocaleDateString('en-IN')}\nWeek: ${weekNumber}\nBalance Remaining: ${formatCurrency(balance)}\n\nThank you for your payment!\n- Om Sai Murugan Finance${waPromoNote ? `\n\n${waPromoNote}` : ''}`;
+                                    window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`, '_blank');
+                                    // Mark as sent in database
+                                    if (payment?.id) {
+                                      try {
+                                        await fetch(`${API_URL}/payments/${payment.id}/whatsapp-sent`, {
+                                          method: 'PUT',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ sent_by: localStorage.getItem('userName') || 'Unknown' })
+                                        });
+                                        // Refresh to show updated status
+                                        setPaymentsRefreshKey(k => k + 1);
+                                      } catch (err) {
+                                        console.error('Error marking WhatsApp sent:', err);
+                                      }
+                                    }
+                                  }}
+                                  style={{
+                                    background: payment?.whatsapp_sent ? '#e5e7eb' : '#dcfce7',
+                                    border: payment?.whatsapp_sent ? '1px solid #9ca3af' : '1px solid #86efac',
+                                    borderRadius: '4px',
+                                    padding: '4px 6px',
+                                    cursor: 'pointer',
+                                    fontSize: '9px',
+                                    color: payment?.whatsapp_sent ? '#6b7280' : '#16a34a',
+                                    fontWeight: 600,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '1px'
+                                  }}
+                                  title={payment?.whatsapp_sent ? `Already sent by ${payment.whatsapp_sent_by}` : 'Send WhatsApp receipt'}
+                                >
+                                  {payment?.whatsapp_sent ? '✓' : '📱'}
+                                  <span>{payment?.whatsapp_sent ? 'Sent' : 'WA'}</span>
+                                </button>
+                              )}
+
+                              {/* Print Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPrintData({
+                                    type: 'payment',
+                                    data: {
+                                      customerName: customer.name,
+                                      phone: customer.phone,
+                                      loanName: loan.loan_name,
+                                      loanAmount: loan.loan_amount,
+                                      amountPaid: paymentAmount,
+                                      totalPaid: loan.loan_amount - balance,
+                                      balance: balance,
+                                      weekNumber: weekNumber,
+                                      date: selectedDate,
+                                      loanType: 'Weekly'
+                                    }
+                                  });
+                                }}
+                                style={{
+                                  background: '#ede9fe',
+                                  border: '1px solid #c4b5fd',
+                                  borderRadius: '4px',
+                                  padding: '4px 6px',
+                                  cursor: 'pointer',
+                                  fontSize: '9px',
+                                  color: '#7c3aed',
+                                  fontWeight: 600,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '1px'
+                                }}
+                                title="Print receipt"
+                              >
+                                🖨️
+                                <span>Print</span>
+                              </button>
+
+                              {/* Undo Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setUndoPaymentConfirm({ loan, customer, amount: paymentAmount, weekNumber });
+                                }}
+                                style={{
+                                  background: '#fee2e2',
+                                  border: '1px solid #fca5a5',
+                                  borderRadius: '4px',
+                                  padding: '4px 6px',
+                                  cursor: 'pointer',
+                                  fontSize: '9px',
+                                  color: '#dc2626',
+                                  fontWeight: 600,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '1px'
+                                }}
+                                title="Undo this payment"
+                              >
+                                ↩️
+                                <span>Undo</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* UNPAID Column */}
+                    <div style={{
+                      background: '#fef2f2',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      minWidth: '250px'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '8px'
+                      }}>
+                        <h4 style={{
+                          margin: 0,
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          color: '#991b1b'
+                        }}>
+                          ✗ {t('unpaid').toUpperCase()} ({groupUnpaidLoans.length})
+                        </h4>
+                        {groupUnpaidLoans.length > 0 && (
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <label style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '10px',
+                              color: '#991b1b',
+                              cursor: 'pointer'
+                            }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedUnpaidSet.size === groupUnpaidLoans.length && groupUnpaidLoans.length > 0}
+                                onChange={() => toggleSelectAllFor(selectedUnpaidSet, setSelectedUnpaidSet, groupUnpaidLoans)}
+                                style={{ cursor: 'pointer' }}
+                              />
+                              All
+                            </label>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* WhatsApp Share Button */}
+                      {selectedUnpaidSet.size > 0 && (
+                        <button
+                          onClick={() => shareViaWhatsAppFor(selectedUnpaidSet, groupUnpaidLoans)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            marginBottom: '8px',
+                            background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 6px rgba(37, 211, 102, 0.3)'
+                          }}
+                        >
+                          📱 Share {selectedUnpaidSet.size} via WhatsApp
+                        </button>
+                      )}
+
+                      <div style={{ display: 'grid', gap: '4px' }}>
+                        {groupUnpaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
+                          <div
+                            key={`${keyPrefix}-${loan.loan_id}`}
+                            style={{
+                              background: getUnpaidCardColor(balance),
+                              padding: '6px 8px',
+                              borderRadius: '6px',
+                              border: selectedUnpaidSet.has(loan.loan_id)
+                                ? '2px solid #25D366'
+                                : balance > 10000
+                                  ? '1px solid #fca5a5'
+                                  : balance > 5000
+                                    ? '1px solid #fb923c'
+                                    : '1px solid #fecaca',
+                              transition: 'all 0.15s',
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '8px'
+                            }}
+                          >
+                            {/* Checkbox */}
+                            <input
+                              type="checkbox"
+                              checked={selectedUnpaidSet.has(loan.loan_id)}
+                              onChange={() => toggleUnpaidSelectionFor(setSelectedUnpaidSet, loan.loan_id)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                cursor: 'pointer',
+                                marginTop: '2px',
+                                width: '16px',
+                                height: '16px',
+                                accentColor: '#25D366'
+                              }}
+                            />
+
+                            {/* Customer Info */}
+                            <div
+                              style={{ flex: 1, cursor: 'pointer' }}
+                              onClick={() => navigateTo('loan-details', loan.loan_id)}
+                              onMouseOver={(e) => {
+                                e.currentTarget.parentElement.style.transform = 'scale(1.02)';
+                                e.currentTarget.parentElement.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
+                              }}
+                              onMouseOut={(e) => {
+                                e.currentTarget.parentElement.style.transform = 'scale(1)';
+                                e.currentTarget.parentElement.style.boxShadow = 'none';
+                              }}
+                            >
+                              <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
+                                {customer.name}
+                                {loan.loan_name && loan.loan_name !== 'General Loan' && (
+                                  <span style={{ fontSize: '10px', color: '#991b1b', fontWeight: 500, marginLeft: '4px' }}>
+                                    • {loan.loan_name}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
+                                Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
+                              </div>
+                              <div style={{ fontSize: '9px', color: '#dc2626', fontWeight: 700 }}>
+                                ⚠️ {formatCurrency(balance)} • {remainingWeeks}w left
+                              </div>
+                            </div>
+
+                            {/* Quick Pay Checkbox */}
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '2px'
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                onChange={() => setQuickPayConfirm({ loan, customer, amount: paymentAmount, weekNumber })}
+                                checked={false}
+                                style={{
+                                  cursor: 'pointer',
+                                  width: '18px',
+                                  height: '18px',
+                                  accentColor: '#10b981'
+                                }}
+                              />
+                              <span style={{ fontSize: '8px', color: '#059669', fontWeight: 600 }}>Paid</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+                );
+              };
 
               return (
                 <div>
-                  {/* Total Summary */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
-                    borderRadius: '8px',
-                    padding: '10px 14px',
-                    marginBottom: '10px',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1fr',
-                    gap: '10px',
-                    color: 'white'
-                  }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#86efac' }}>
-                        {formatCurrency(paidTotal)}
-                      </div>
-                      <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('collected')}</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#fca5a5' }}>
-                        {formatCurrency(unpaidTotal)}
-                      </div>
-                      <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('pending')}</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '16px', fontWeight: 700 }}>
-                        {formatCurrency(grandTotal)}
-                      </div>
-                      <div style={{ fontSize: '10px', opacity: 0.8 }}>{t('totalDue')}</div>
-                    </div>
-                  </div>
-
-                  {/* Print Daily Summary Button */}
+                  {/* Print Daily Summary Button - stays one combined printout for the whole day */}
                   <button
                     onClick={printDailySummaryThermal}
                     style={{
@@ -3488,415 +3931,16 @@ function Dashboard({ navigateTo }) {
                     🖨️ Print Daily Summary (Thermal)
                   </button>
 
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '10px',
-                  overflowX: 'auto'
-                }}>
-                  {/* PAID Column */}
-                  <div style={{
-                    background: '#f0fdf4',
-                    borderRadius: '8px',
-                    padding: '10px',
-                    minWidth: '250px'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <h4 style={{
-                        margin: 0,
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        color: '#065f46'
-                      }}>
-                        ✓ {t('paid').toUpperCase()} ({paidLoans.length})
-                      </h4>
-                      {paidLoans.length > 0 && (
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#065f46', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedPaid.size === paidLoans.length && paidLoans.length > 0}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedPaid(new Set(paidLoans.map(p => p.loan.loan_id)));
-                                } else {
-                                  setSelectedPaid(new Set());
-                                }
-                              }}
-                              style={{ cursor: 'pointer' }}
-                            />
-                            All
-                          </label>
-                          {selectedPaid.size > 0 && (
-                            <button
-                              onClick={handleBulkUndo}
-                              disabled={isPaymentLoading}
-                              style={{
-                                background: '#dc2626',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '4px 8px',
-                                fontSize: '10px',
-                                fontWeight: 600,
-                                cursor: isPaymentLoading ? 'not-allowed' : 'pointer',
-                                opacity: isPaymentLoading ? 0.6 : 1
-                              }}
-                            >
-                              {isPaymentLoading ? '...' : `Undo (${selectedPaid.size})`}
-                            </button>
-                          )}
-                        </div>
-                      )}
+                  {renderPaymentGroup(othersPaid, othersUnpaid, selectedPaid, setSelectedPaid, selectedUnpaid, setSelectedUnpaid, 'others')}
+
+                  {(sakkaraPaid.length > 0 || sakkaraUnpaid.length > 0) && (
+                    <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '2px dashed #d1d5db' }}>
+                      <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 700, color: '#7c3aed' }}>
+                        👤 Sakkara (Appa Customers)
+                      </h3>
+                      {renderPaymentGroup(sakkaraPaid, sakkaraUnpaid, selectedSakkaraPaid, setSelectedSakkaraPaid, selectedSakkaraUnpaid, setSelectedSakkaraUnpaid, 'sakkara')}
                     </div>
-                    <div style={{ display: 'grid', gap: '4px' }}>
-                      {paidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance, payment }) => (
-                        <div
-                          key={loan.loan_id}
-                          style={{
-                            background: selectedPaid.has(loan.loan_id)
-                              ? 'linear-gradient(135deg, #bbf7d0 0%, #86efac 100%)'
-                              : 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
-                            padding: '6px 8px',
-                            borderRadius: '6px',
-                            border: selectedPaid.has(loan.loan_id) ? '2px solid #22c55e' : '1px solid #6ee7b7',
-                            transition: 'all 0.15s',
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '8px'
-                          }}
-                        >
-                          {/* Checkbox for bulk selection */}
-                          <input
-                            type="checkbox"
-                            checked={selectedPaid.has(loan.loan_id)}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              const newSelected = new Set(selectedPaid);
-                              if (newSelected.has(loan.loan_id)) {
-                                newSelected.delete(loan.loan_id);
-                              } else {
-                                newSelected.add(loan.loan_id);
-                              }
-                              setSelectedPaid(newSelected);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              cursor: 'pointer',
-                              marginTop: '2px',
-                              accentColor: '#22c55e'
-                            }}
-                          />
-                          {/* Customer Info */}
-                          <div
-                            style={{ flex: 1, cursor: 'pointer' }}
-                            onClick={() => navigateTo('loan-details', loan.loan_id)}
-                            onMouseOver={(e) => {
-                              e.currentTarget.parentElement.style.transform = 'scale(1.02)';
-                              e.currentTarget.parentElement.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.parentElement.style.transform = 'scale(1)';
-                              e.currentTarget.parentElement.style.boxShadow = 'none';
-                            }}
-                          >
-                            <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
-                              {customer.name}
-                              {loan.loan_name && loan.loan_name !== 'General Loan' && (
-                                <span style={{ fontSize: '10px', color: '#047857', fontWeight: 500, marginLeft: '4px' }}>
-                                  • {loan.loan_name}
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: '10px', color: '#047857', fontWeight: 600, marginBottom: '1px' }}>
-                              Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
-                            </div>
-                            <div style={{ fontSize: '9px', color: '#059669', fontWeight: 500 }}>
-                              Bal: {formatCurrency(balance)} • {remainingWeeks}w left
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            {/* WhatsApp Button */}
-                            {customer.phone && (
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const phone = customer.phone.replace(/\D/g, '');
-                                  const friendNameLine = loan.loan_name && loan.loan_name !== 'General Loan'
-                                    ? `Friend name: ${loan.loan_name}\n`
-                                    : '';
-                                  const message = `Payment Receipt\n\nCustomer: ${customer.name}\n${friendNameLine}Amount: ${formatCurrency(paymentAmount)}\nDate: ${new Date(selectedDate).toLocaleDateString('en-IN')}\nWeek: ${weekNumber}\nBalance Remaining: ${formatCurrency(balance)}\n\nThank you for your payment!\n- Om Sai Murugan Finance${waPromoNote ? `\n\n${waPromoNote}` : ''}`;
-                                  window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`, '_blank');
-                                  // Mark as sent in database
-                                  if (payment?.id) {
-                                    try {
-                                      await fetch(`${API_URL}/payments/${payment.id}/whatsapp-sent`, {
-                                        method: 'PUT',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ sent_by: localStorage.getItem('userName') || 'Unknown' })
-                                      });
-                                      // Refresh to show updated status
-                                      setPaymentsRefreshKey(k => k + 1);
-                                    } catch (err) {
-                                      console.error('Error marking WhatsApp sent:', err);
-                                    }
-                                  }
-                                }}
-                                style={{
-                                  background: payment?.whatsapp_sent ? '#e5e7eb' : '#dcfce7',
-                                  border: payment?.whatsapp_sent ? '1px solid #9ca3af' : '1px solid #86efac',
-                                  borderRadius: '4px',
-                                  padding: '4px 6px',
-                                  cursor: 'pointer',
-                                  fontSize: '9px',
-                                  color: payment?.whatsapp_sent ? '#6b7280' : '#16a34a',
-                                  fontWeight: 600,
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  gap: '1px'
-                                }}
-                                title={payment?.whatsapp_sent ? `Already sent by ${payment.whatsapp_sent_by}` : 'Send WhatsApp receipt'}
-                              >
-                                {payment?.whatsapp_sent ? '✓' : '📱'}
-                                <span>{payment?.whatsapp_sent ? 'Sent' : 'WA'}</span>
-                              </button>
-                            )}
-
-                            {/* Print Button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPrintData({
-                                  type: 'payment',
-                                  data: {
-                                    customerName: customer.name,
-                                    phone: customer.phone,
-                                    loanName: loan.loan_name,
-                                    loanAmount: loan.loan_amount,
-                                    amountPaid: paymentAmount,
-                                    totalPaid: loan.loan_amount - balance,
-                                    balance: balance,
-                                    weekNumber: weekNumber,
-                                    date: selectedDate,
-                                    loanType: 'Weekly'
-                                  }
-                                });
-                              }}
-                              style={{
-                                background: '#ede9fe',
-                                border: '1px solid #c4b5fd',
-                                borderRadius: '4px',
-                                padding: '4px 6px',
-                                cursor: 'pointer',
-                                fontSize: '9px',
-                                color: '#7c3aed',
-                                fontWeight: 600,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                gap: '1px'
-                              }}
-                              title="Print receipt"
-                            >
-                              🖨️
-                              <span>Print</span>
-                            </button>
-
-                            {/* Undo Button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setUndoPaymentConfirm({ loan, customer, amount: paymentAmount, weekNumber });
-                              }}
-                              style={{
-                                background: '#fee2e2',
-                                border: '1px solid #fca5a5',
-                                borderRadius: '4px',
-                                padding: '4px 6px',
-                                cursor: 'pointer',
-                                fontSize: '9px',
-                                color: '#dc2626',
-                                fontWeight: 600,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                gap: '1px'
-                              }}
-                              title="Undo this payment"
-                            >
-                              ↩️
-                              <span>Undo</span>
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* UNPAID Column */}
-                  <div style={{
-                    background: '#fef2f2',
-                    borderRadius: '8px',
-                    padding: '10px',
-                    minWidth: '250px'
-                  }}>
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '8px'
-                    }}>
-                      <h4 style={{
-                        margin: 0,
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        color: '#991b1b'
-                      }}>
-                        ✗ {t('unpaid').toUpperCase()} ({unpaidLoans.length})
-                      </h4>
-                      {unpaidLoans.length > 0 && (
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          <label style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontSize: '10px',
-                            color: '#991b1b',
-                            cursor: 'pointer'
-                          }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedUnpaid.size === unpaidLoans.length && unpaidLoans.length > 0}
-                              onChange={() => toggleSelectAll(unpaidLoans)}
-                              style={{ cursor: 'pointer' }}
-                            />
-                            All
-                          </label>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* WhatsApp Share Button */}
-                    {selectedUnpaid.size > 0 && (
-                      <button
-                        onClick={() => shareViaWhatsApp(unpaidLoans)}
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          marginBottom: '8px',
-                          background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          boxShadow: '0 2px 6px rgba(37, 211, 102, 0.3)'
-                        }}
-                      >
-                        📱 Share {selectedUnpaid.size} via WhatsApp
-                      </button>
-                    )}
-
-                    <div style={{ display: 'grid', gap: '4px' }}>
-                      {unpaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
-                        <div
-                          key={loan.loan_id}
-                          style={{
-                            background: getUnpaidCardColor(balance),
-                            padding: '6px 8px',
-                            borderRadius: '6px',
-                            border: selectedUnpaid.has(loan.loan_id)
-                              ? '2px solid #25D366'
-                              : balance > 10000
-                                ? '1px solid #fca5a5'
-                                : balance > 5000
-                                  ? '1px solid #fb923c'
-                                  : '1px solid #fecaca',
-                            transition: 'all 0.15s',
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '8px'
-                          }}
-                        >
-                          {/* Checkbox */}
-                          <input
-                            type="checkbox"
-                            checked={selectedUnpaid.has(loan.loan_id)}
-                            onChange={() => toggleUnpaidSelection(loan.loan_id)}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              cursor: 'pointer',
-                              marginTop: '2px',
-                              width: '16px',
-                              height: '16px',
-                              accentColor: '#25D366'
-                            }}
-                          />
-
-                          {/* Customer Info */}
-                          <div
-                            style={{ flex: 1, cursor: 'pointer' }}
-                            onClick={() => navigateTo('loan-details', loan.loan_id)}
-                            onMouseOver={(e) => {
-                              e.currentTarget.parentElement.style.transform = 'scale(1.02)';
-                              e.currentTarget.parentElement.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.parentElement.style.transform = 'scale(1)';
-                              e.currentTarget.parentElement.style.boxShadow = 'none';
-                            }}
-                          >
-                            <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
-                              {customer.name}
-                              {loan.loan_name && loan.loan_name !== 'General Loan' && (
-                                <span style={{ fontSize: '10px', color: '#991b1b', fontWeight: 500, marginLeft: '4px' }}>
-                                  • {loan.loan_name}
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: '10px', color: '#991b1b', fontWeight: 600, marginBottom: '1px' }}>
-                              Week {weekNumber}/{totalWeeks} • {formatCurrency(paymentAmount)}
-                            </div>
-                            <div style={{ fontSize: '9px', color: '#dc2626', fontWeight: 700 }}>
-                              ⚠️ {formatCurrency(balance)} • {remainingWeeks}w left
-                            </div>
-                          </div>
-
-                          {/* Quick Pay Checkbox */}
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              gap: '2px'
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              onChange={() => setQuickPayConfirm({ loan, customer, amount: paymentAmount, weekNumber })}
-                              checked={false}
-                              style={{
-                                cursor: 'pointer',
-                                width: '18px',
-                                height: '18px',
-                                accentColor: '#10b981'
-                              }}
-                            />
-                            <span style={{ fontSize: '8px', color: '#059669', fontWeight: 600 }}>Paid</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                  )}
                 </div>
               );
             })()}
