@@ -94,6 +94,7 @@ function PongalFund() {
   const [pendingBatches, setPendingBatches] = useState([]);
 
   const [addForm, setAddForm] = useState({ name: '', phone: '', village: '', scheme_year: currentYear, address: '', notes: '' });
+  const [contactPickerSupported] = useState(typeof navigator !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window);
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState('');
 
@@ -191,6 +192,38 @@ function PongalFund() {
     const newStack = cursorStack.slice(0, -1);
     setCursorStack(newStack);
     fetchCustomersPage(year, newStack[newStack.length - 1], search);
+  };
+
+  // Contact picker (Android Chrome/PWA only) — same feature-detected pattern Festival Fund uses.
+  const pickContactForAdd = async () => {
+    if (!contactPickerSupported) return;
+    try {
+      const results = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+      if (!results.length) return;
+      const contact = results[0];
+      const name = contact.name?.[0] || '';
+      let phone = (contact.tel?.[0] || '').replace(/\D/g, '');
+      if (phone.length > 10) phone = phone.slice(-10);
+      setAddForm(f => ({ ...f, name: name || f.name, phone: phone || f.phone }));
+    } catch (err) {
+      // AbortError = user cancelled the picker — not worth surfacing as an error.
+      if (err?.name !== 'AbortError') alert(`Contacts error: ${err?.message || err?.name || 'Unknown error'}`);
+    }
+  };
+
+  const pickContactForEdit = async () => {
+    if (!contactPickerSupported) return;
+    try {
+      const results = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+      if (!results.length) return;
+      const contact = results[0];
+      const name = contact.name?.[0] || '';
+      let phone = (contact.tel?.[0] || '').replace(/\D/g, '');
+      if (phone.length > 10) phone = phone.slice(-10);
+      setEditModal(f => ({ ...f, name: name || f.name, phone: phone || f.phone }));
+    } catch (err) {
+      if (err?.name !== 'AbortError') alert(`Contacts error: ${err?.message || err?.name || 'Unknown error'}`);
+    }
   };
 
   const handleAddCustomer = async (e) => {
@@ -396,7 +429,7 @@ function PongalFund() {
           )}
 
           {section === 'add' && (
-            <AddCustomerSection form={addForm} setForm={setAddForm} onSubmit={handleAddCustomer} saving={addSaving} error={addError} currentYear={currentYear} />
+            <AddCustomerSection form={addForm} setForm={setAddForm} onSubmit={handleAddCustomer} saving={addSaving} error={addError} currentYear={currentYear} onPickContact={pickContactForAdd} contactPickerSupported={contactPickerSupported} />
           )}
 
           {section === 'approvals' && (
@@ -421,6 +454,11 @@ function PongalFund() {
         <div style={S.modalOverlay} onClick={() => setEditModal(null)}>
           <div style={S.modalBox} onClick={e => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>Edit Customer</h3>
+            {contactPickerSupported && (
+              <button type="button" onClick={pickContactForEdit} style={{ width: '100%', padding: 10, marginBottom: 14, background: '#1b140f', border: '1px dashed #f2a93b', borderRadius: 8, color: '#f2a93b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                📇 Pick from Contacts
+              </button>
+            )}
             <label style={S.label}>Name</label>
             <input style={S.input} value={editModal.name} onChange={e => setEditModal({ ...editModal, name: e.target.value })} />
             <div style={{ height: 10 }} />
@@ -648,10 +686,17 @@ function CustomerDetailSection({ detail, plan, selectedMonths, setSelectedMonths
   );
 }
 
-function AddCustomerSection({ form, setForm, onSubmit, saving, error, currentYear }) {
+function AddCustomerSection({ form, setForm, onSubmit, saving, error, currentYear, onPickContact, contactPickerSupported }) {
   return (
     <form style={S.card} onSubmit={onSubmit}>
       <h3 style={{ marginTop: 0 }}>Add New Customer</h3>
+      <button type="button" onClick={onPickContact} style={{ width: '100%', padding: 10, marginBottom: 6, background: '#1b140f', border: '1px dashed #f2a93b', borderRadius: 8, color: '#f2a93b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+        📇 Pick from Contacts
+      </button>
+      {!contactPickerSupported && (
+        <div style={{ fontSize: 10, color: '#8a7256', marginBottom: 14 }}>(Contacts picker only works in Chrome on Android)</div>
+      )}
+      {contactPickerSupported && <div style={{ marginBottom: 14 }} />}
       {error && <div style={{ color: '#fca5a5', marginBottom: 10, fontSize: 13 }}>{error}</div>}
       <label style={S.label}>Name *</label>
       <input style={S.input} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
