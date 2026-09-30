@@ -8,6 +8,7 @@ import ModuleSelector from './components/ModuleSelector';
 import ErrorBoundary from './components/ErrorBoundary';
 import BalanceCheck from './components/BalanceCheck';
 import FestivalBalanceCheck from './components/FestivalBalanceCheck';
+import PongalCustomerPortal from './components/PongalCustomerPortal';
 import LandingPage from './components/LandingPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -34,6 +35,7 @@ const AdminCollections = lazy(() => import('./components/AdminCollections'));
 const ChitDashboard = lazy(() => import('./components/ChitDashboard'));
 const AutoFinanceDashboard = lazy(() => import('./components/AutoFinanceDashboard'));
 const FestivalFund = lazy(() => import('./components/FestivalFund'));
+const PongalFund = lazy(() => import('./components/PongalFund'));
 
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
 const CURRENT_PASSWORD_VERSION = '2025-01-27-v2';
@@ -171,6 +173,10 @@ function FestivalFundWrapper() {
   return <FestivalFund navigateTo={(path) => navigate(`/${path}`)} />;
 }
 
+function PongalFundWrapper() {
+  return <PongalFund />;
+}
+
 
 // Main app component wrapper
 function AppContent() {
@@ -300,6 +306,20 @@ function AppContent() {
     );
   }
 
+  // PONGAL SAVINGS SCHEME MODULE
+  if (selectedModule === 'pongal-fund') {
+    return (
+      <div className="app">
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/pongal-fund" element={<PongalFundWrapper />} />
+            <Route path="*" element={<Navigate to="/pongal-fund" replace />} />
+          </Routes>
+        </Suspense>
+      </div>
+    );
+  }
+
   // Fallback (should never reach here)
   return null;
 }
@@ -377,6 +397,7 @@ function App() {
         <Route path="/website" element={<LandingPage />} />
         <Route path="/balance-check" element={<BalanceCheck />} />
         <Route path="/festival-balance-check" element={<FestivalBalanceCheck />} />
+        <Route path="/pongal" element={<PongalCustomerPortal />} />
 
         {/* All other routes require authentication */}
         <Route path="/*" element={<AppContent />} />

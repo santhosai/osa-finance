@@ -48,5 +48,8 @@ try {
 // Get Firebase Cloud Messaging instance
 const messaging = admin.messaging();
 
-export { messaging };
+// Firebase Auth instance (used to verify customer-submitted phone-auth ID tokens)
+const auth = admin.auth();
+
+export { messaging, auth };
 export default db;

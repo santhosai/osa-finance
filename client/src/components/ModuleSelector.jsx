@@ -35,6 +35,14 @@ function ModuleSelector({ onSelectModule }) {
       subtitle: '10-Month Savings Scheme',
       color: '#d97706',
       gradient: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
+    },
+    {
+      id: 'pongal-fund',
+      icon: '🌾',
+      title: 'Pongal Scheme',
+      subtitle: '12-Month Grocery Savings',
+      color: '#c2410c',
+      gradient: 'linear-gradient(135deg, #f2a93b 0%, #c2410c 100%)'
     }
   ];
 
