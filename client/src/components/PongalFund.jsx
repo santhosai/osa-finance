@@ -10,23 +10,28 @@ import {
 // app's admin screens use, so it reads as a sibling module rather than a re-skin of
 // Festival Fund's navy/amber look.
 const S = {
-  page: { minHeight: '100vh', background: '#1b140f', color: '#f3e9dc', fontFamily: 'system-ui, sans-serif', display: 'flex' },
-  sidebar: {
-    width: 230, minHeight: '100vh', background: '#241a12', borderRight: '1px solid #3a2a1a',
-    padding: '18px 12px', position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', gap: 4
-  },
+  page: { minHeight: '100vh', background: '#1b140f', color: '#f3e9dc', fontFamily: 'system-ui, sans-serif' },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 200 },
+  // Off-canvas drawer on every screen size (not just mobile) — same pattern as the
+  // rest of the app's admin modules, so the main content is never squeezed sideways.
+  sidebar: (open) => ({
+    position: 'fixed', top: 0, left: open ? 0 : '-260px', bottom: 0, width: 230,
+    background: '#241a12', borderRight: '1px solid #3a2a1a', zIndex: 201,
+    transition: 'left 0.3s ease', padding: '18px 12px', display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto'
+  }),
   sidebarHeader: { padding: '4px 10px 18px', borderBottom: '1px solid #3a2a1a', marginBottom: 10 },
   navItem: (active) => ({
     padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
     color: active ? '#1b140f' : '#e8d5b7', background: active ? 'linear-gradient(135deg,#f2a93b,#d4841f)' : 'transparent',
     display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.15s'
   }),
-  main: { flex: 1, minWidth: 0 },
   topbar: {
     position: 'sticky', top: 0, zIndex: 5, background: '#241a12e6', backdropFilter: 'blur(6px)',
-    borderBottom: '2px solid #d4841f', padding: '14px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+    borderBottom: '2px solid #d4841f', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10
   },
-  body: { padding: '20px 22px 60px', maxWidth: 1100 },
+  burger: { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 },
+  burgerLine: { display: 'block', width: 22, height: 2, background: '#f2a93b', borderRadius: 2 },
+  body: { padding: '16px 16px 60px', maxWidth: 1100, boxSizing: 'border-box' },
   card: { background: '#241a12', border: '1px solid #3a2a1a', borderRadius: 12, padding: 16, marginBottom: 14 },
   statGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 14 },
   stat: { background: '#2c2015', border: '1px solid #3a2a1a', borderRadius: 10, padding: '12px 14px', textAlign: 'center' },
@@ -69,6 +74,7 @@ const monthName = (n) => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep',
 function PongalFund() {
   const currentYear = new Date().getFullYear();
   const [section, setSection] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [year, setYear] = useState(currentYear);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
 
@@ -311,15 +317,19 @@ function PongalFund() {
   };
 
   // ---------- UI ----------
+  const goSection = (id) => { setSection(id); setSidebarOpen(false); };
+
   return (
     <div style={S.page}>
-      <div style={S.sidebar}>
+      {sidebarOpen && <div style={S.overlay} onClick={() => setSidebarOpen(false)} />}
+
+      <div style={S.sidebar(sidebarOpen)}>
         <div style={S.sidebarHeader}>
           <div style={{ fontSize: 15, fontWeight: 800, color: '#f2a93b' }}>🌾 Pongal Scheme</div>
           <div style={{ fontSize: 11, color: '#c9b491' }}>12-Month Grocery Savings</div>
         </div>
         {NAV.map(n => (
-          <div key={n.id} style={S.navItem(section === n.id)} onClick={() => setSection(n.id)}>
+          <div key={n.id} style={S.navItem(section === n.id)} onClick={() => goSection(n.id)}>
             <span>{n.icon}</span><span>{n.label}</span>
           </div>
         ))}
@@ -330,9 +340,12 @@ function PongalFund() {
         </div>
       </div>
 
-      <div style={S.main}>
+      <div>
         <div style={S.topbar}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>{NAV.find(n => n.id === section)?.label}</div>
+          <button style={S.burger} onClick={() => setSidebarOpen(true)}>
+            <span style={S.burgerLine} /><span style={S.burgerLine} /><span style={S.burgerLine} />
+          </button>
+          <div style={{ fontSize: 16, fontWeight: 700, flex: 1 }}>{NAV.find(n => n.id === section)?.label}</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <select value={year} onChange={e => setYear(Number(e.target.value))} style={{ ...S.input, width: 'auto' }}>
               {[currentYear - 1, currentYear, currentYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
