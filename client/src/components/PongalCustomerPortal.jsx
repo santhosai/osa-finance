@@ -195,6 +195,9 @@ function PongalCustomerPortal() {
               <form onSubmit={verifyOtp}>
                 <label style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, display: 'block' }}>Enter the code sent to +91{pongalNormalizePhone(phone)}</label>
                 <input style={S.input} value={otp} onChange={e => setOtp(e.target.value)} placeholder="6-digit code" inputMode="numeric" />
+                <div style={{ fontSize: 12, color: '#8a6a3c', marginBottom: 12 }}>
+                  Didn't get it? Please check your <strong>Spam / Blocked messages</strong> folder — some phones flag the first OTP from a new sender.
+                </div>
                 {authError && <div style={{ color: '#b91c1c', fontSize: 13, marginBottom: 10 }}>{authError}</div>}
                 <button style={S.btn} disabled={sending} type="submit">{sending ? 'Verifying...' : 'Verify & Continue'}</button>
                 <button style={S.btnSecondary} type="button" onClick={() => { setOtpSent(false); setOtp(''); }}>Change Number</button>
