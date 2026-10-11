@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { API_URL } from '../config';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { BALANCE_CHECK_STRINGS } from '../utils/balanceCheckStrings';
 
 function BalanceCheck() {
   // Check if QR print mode
@@ -25,6 +26,25 @@ function BalanceCheck() {
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(null); // { amount, customerName, loanType }
 
+  // Display language — English by default, the customer can switch to Tamil
+  const [lang, setLang] = useState(() => {
+    try {
+      return localStorage.getItem('balanceCheckLang') === 'ta' ? 'ta' : 'en';
+    } catch {
+      return 'en';
+    }
+  });
+  const t = BALANCE_CHECK_STRINGS[lang];
+
+  const changeLang = (next) => {
+    setLang(next);
+    try {
+      localStorage.setItem('balanceCheckLang', next);
+    } catch {
+      // storage unavailable (private mode) — the choice just won't be remembered
+    }
+  };
+
   const formatCurrency = (amount) => {
     if (amount === null || amount === undefined || isNaN(amount)) return '₹0';
     return `₹${Number(amount).toLocaleString('en-IN')}`;
@@ -33,22 +53,26 @@ function BalanceCheck() {
   const summarizeLoanKinds = (loans) => {
     const counts = {};
     loans.forEach(l => { counts[l.kind] = (counts[l.kind] || 0) + 1; });
-    const parts = Object.entries(counts).map(([kind, count]) => count > 1 ? `${count} ${kind}` : kind);
-    return `${parts.join(' + ')} Loan${loans.length > 1 ? 's' : ''}`;
+    const parts = Object.entries(counts).map(([kind, count]) => count > 1 ? `${count} ${t.loanKinds[kind]}` : t.loanKinds[kind]);
+    return `${parts.join(' + ')} ${loans.length > 1 ? t.loansWord : t.loanWord}`;
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-IN', {
+    return new Date(dateString).toLocaleDateString(lang === 'ta' ? 'ta-IN' : 'en-IN', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
     });
   };
 
+  // Loan names are free text typed by the admin; only the default one is translated
+  const loanNameLabel = (name) => name === 'General Loan' ? t.generalLoan : name;
+  const payModeLabel = (mode) => t.payModes[(mode || 'cash').toLowerCase()] || mode || 'cash';
+
   const checkBalance = async (phone) => {
     if (phone.length !== 10) {
-      setError('Please enter a valid 10-digit phone number');
+      setError('errInvalidPhone');
       return;
     }
 
@@ -61,7 +85,7 @@ function BalanceCheck() {
       const response = await fetch(`${API_URL}/balance-check/${phone}`);
 
       if (response.status === 404) {
-        setError('No customer found with this phone number');
+        setError('errNotFound');
         setLoading(false);
         return;
       }
@@ -75,7 +99,7 @@ function BalanceCheck() {
       setLoading(false);
     } catch (err) {
       console.error('Error fetching balance:', err);
-      setError('Failed to fetch balance. Please try again.');
+      setError('errFetch');
       setLoading(false);
     }
   };
@@ -127,12 +151,12 @@ function BalanceCheck() {
       const file = e.target.files[0];
       // Validate file is an image
       if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file');
+        alert(t.alertImageOnly);
         return;
       }
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be less than 5MB');
+        alert(t.alertFileSize);
         return;
       }
       setPaymentScreenshot(file);
@@ -142,17 +166,13 @@ function BalanceCheck() {
   // Submit payment request
   const handleSubmitPayment = async (skipScreenshot = false) => {
     if (!selectedLoan) {
-      alert('Loan information missing');
+      alert(t.alertLoanMissing);
       return;
     }
 
     // If no screenshot and not skipping, ask for confirmation
     if (!paymentScreenshot && !skipScreenshot) {
-      const proceed = window.confirm(
-        'No screenshot uploaded.\n\n' +
-        'You can still submit, but admin will need to verify manually.\n\n' +
-        'Click OK to submit without screenshot, or Cancel to upload one.'
-      );
+      const proceed = window.confirm(t.confirmNoScreenshot);
       if (!proceed) return;
     }
 
@@ -179,7 +199,7 @@ function BalanceCheck() {
 
       // Validate minimum amount (UPI usually requires minimum ₹10)
       if (amount < 10) {
-        alert('Minimum payment amount is ₹10. Please contact admin for smaller amounts.');
+        alert(t.alertMinAmount);
         setPaymentSubmitting(false);
         return;
       }
@@ -210,11 +230,7 @@ function BalanceCheck() {
           setUploading(false);
 
           // Ask if they want to continue without screenshot
-          const continueWithout = window.confirm(
-            'Screenshot upload failed (slow network).\n\n' +
-            'Click OK to submit without screenshot.\n' +
-            'Admin will verify your payment manually.'
-          );
+          const continueWithout = window.confirm(t.confirmUploadFailed);
           if (!continueWithout) {
             setPaymentSubmitting(false);
             return;
@@ -277,12 +293,7 @@ function BalanceCheck() {
       window.open(whatsappUrl, '_blank');
     } catch (error) {
       console.error('Error submitting payment:', error);
-      alert(
-        '❌ Payment Submission Failed!\n\n' +
-        'Error: ' + error.message + '\n\n' +
-        'Please try again or contact admin at:\n' +
-        '📞 +91 8667510724'
-      );
+      alert(t.alertSubmitFailed(error.message));
     } finally {
       setPaymentSubmitting(false);
       setUploading(false);
@@ -461,20 +472,44 @@ function BalanceCheck() {
         marginBottom: '30px',
         paddingTop: '20px'
       }}>
+        {/* Language toggle — English by default */}
+        <div style={{ maxWidth: '500px', margin: '0 auto 14px auto', display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.2)', borderRadius: '999px', padding: '3px' }}>
+            {[['en', 'English'], ['ta', 'தமிழ்']].map(([code, label]) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => changeLang(code)}
+                style={{
+                  padding: '6px 14px',
+                  border: 'none',
+                  borderRadius: '999px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: lang === code ? 'white' : 'transparent',
+                  color: lang === code ? '#5b4bc4' : 'white'
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <h1 style={{
-          fontSize: '28px',
+          fontSize: lang === 'ta' ? '22px' : '28px',
           fontWeight: 700,
           margin: '0 0 8px 0',
           textShadow: '0 2px 10px rgba(0,0,0,0.2)'
         }}>
-          🏦 Om Sai Murugan Finance
+          🏦 {t.brand}
         </h1>
         <p style={{
           fontSize: '16px',
           margin: 0,
           opacity: 0.95
         }}>
-          Check Your Loan Balance
+          {t.subtitle}
         </p>
       </div>
 
@@ -515,21 +550,21 @@ function BalanceCheck() {
                 color: '#1e293b',
                 margin: '0 0 8px 0'
               }}>
-                Enter Your Phone Number
+                {t.enterPhone}
               </h2>
               <p style={{
                 fontSize: '14px',
                 color: '#64748b',
                 margin: 0
               }}>
-                We'll show you all your loan details
+                {t.enterPhoneSub}
               </p>
             </div>
 
             <form onSubmit={handleCheckBalance}>
               <input
                 type="tel"
-                placeholder="10-digit mobile number"
+                placeholder={t.phonePlaceholder}
                 value={phoneNumber}
                 onChange={(e) => {
                   const value = e.target.value.replace(/\D/g, '');
@@ -567,7 +602,7 @@ function BalanceCheck() {
                   marginBottom: '16px',
                   textAlign: 'center'
                 }}>
-                  {error}
+                  {t[error] || error}
                 </div>
               )}
 
@@ -598,7 +633,7 @@ function BalanceCheck() {
                 }}
                 onMouseUp={(e) => e.target.style.transform = 'scale(1)'}
               >
-                {loading ? 'Checking...' : 'Check Balance'}
+                {loading ? t.checking : t.checkBalance}
               </button>
             </form>
 
@@ -616,7 +651,7 @@ function BalanceCheck() {
                 textAlign: 'center',
                 lineHeight: '1.5'
               }}>
-                🔒 Your information is secure and will only be used to display your loan details. We do not store any data.
+                🔒 {t.secureNote}
               </p>
             </div>
           </div>
@@ -638,7 +673,7 @@ function BalanceCheck() {
                 color: '#1e293b',
                 marginBottom: '8px'
               }}>
-                👋 Welcome, {customerData.name}!
+                👋 {t.welcome(customerData.name)}
               </div>
               <div style={{
                 fontSize: '16px',
@@ -660,7 +695,7 @@ function BalanceCheck() {
                   cursor: 'pointer'
                 }}
               >
-                Check Another Number
+                {t.checkAnother}
               </button>
             </div>
 
@@ -695,40 +730,40 @@ function BalanceCheck() {
                     <div style={{ fontSize: '32px' }}>💰</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
-                        Monthly Finance
+                        {t.monthlyFinance}
                       </div>
                       <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        Payment Day: {monthlyLoan.paymentDay} of every month
+                        {t.paymentDay(monthlyLoan.paymentDay)}
                       </div>
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div style={{ padding: '12px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                      <div style={{ fontSize: '11px', color: '#0369a1', marginBottom: '4px' }}>Loan Amount</div>
+                      <div style={{ fontSize: '11px', color: '#0369a1', marginBottom: '4px' }}>{t.loanAmount}</div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.loanAmount)}</div>
                     </div>
                     <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
-                      <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px' }}>Balance Due</div>
+                      <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px' }}>{t.balanceDue}</div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.balance)}</div>
                     </div>
                     <div style={{ padding: '12px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #86efac' }}>
-                      <div style={{ fontSize: '11px', color: '#166534', marginBottom: '4px' }}>Monthly Payment</div>
+                      <div style={{ fontSize: '11px', color: '#166534', marginBottom: '4px' }}>{t.monthlyPayment}</div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.monthlyAmount)}</div>
                     </div>
                     <div style={{ padding: '12px', background: '#faf5ff', borderRadius: '8px', border: '1px solid #d8b4fe' }}>
-                      <div style={{ fontSize: '11px', color: '#6b21a8', marginBottom: '4px' }}>Total Months</div>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{monthlyLoan.totalMonths} months</div>
+                      <div style={{ fontSize: '11px', color: '#6b21a8', marginBottom: '4px' }}>{t.totalMonths}</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{t.months(monthlyLoan.totalMonths)}</div>
                     </div>
                   </div>
 
                   <div style={{ marginTop: '12px', padding: '12px', background: '#f8fafc', borderRadius: '8px', fontSize: '12px', color: '#475569' }}>
-                    <div>📅 Loan Given: {formatDate(monthlyLoan.loanGivenDate)}</div>
-                    <div>🗓️ EMI Start: {formatDate(monthlyLoan.startDate)}</div>
-                    {monthlyLoan.currentMonth && (
-                      <div>📊 Current Month: M{monthlyLoan.currentMonth} / {monthlyLoan.totalMonths}</div>
+                    <div>📅 {t.loanGiven}: {formatDate(monthlyLoan.loanGivenDate)}</div>
+                    <div>🗓️ {t.emiStart}: {formatDate(monthlyLoan.startDate)}</div>
+                    {monthlyLoan.currentMonth > 0 && (
+                      <div>📊 {t.currentMonth(monthlyLoan.currentMonth, monthlyLoan.totalMonths)}</div>
                     )}
-                    <div>💵 Total Paid: {formatCurrency(totalPaid)} ({paymentsCompleted} payment{paymentsCompleted !== 1 ? 's' : ''})</div>
+                    <div>💵 {t.totalPaid}: {formatCurrency(totalPaid)} ({t.paymentsCount(paymentsCompleted)})</div>
                   </div>
 
                   {monthlyLoan.balance > 0 && (
@@ -743,7 +778,7 @@ function BalanceCheck() {
                         boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                       }}
                     >
-                      💳 Pay Now via UPI
+                      💳 {t.payNowUpi}
                     </button>
                   )}
 
@@ -758,13 +793,13 @@ function BalanceCheck() {
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                       }}
                     >
-                      {isExpanded ? '▲' : '▼'} {isExpanded ? 'Hide' : 'View'} Payment History ({payments.length})
+                      {isExpanded ? '▲' : '▼'} {t.historyToggle(isExpanded, payments.length)}
                     </button>
                   )}
 
                   {isExpanded && payments.length > 0 && (
                     <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '2px solid #e5e7eb' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b', marginBottom: '12px' }}>📜 Payment Timeline</div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b', marginBottom: '12px' }}>📜 {t.paymentTimeline}</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {payments.map((payment, paymentIndex) => (
                           <div key={payment.id || paymentIndex} style={{
@@ -772,13 +807,13 @@ function BalanceCheck() {
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                           }}>
                             <div>
-                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>✅ Payment #{payments.length - paymentIndex}</div>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>✅ {t.paymentNo(payments.length - paymentIndex)}</div>
                               <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>📅 {formatDate(payment.payment_date)}</div>
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>💳 {payment.payment_mode || 'cash'}</div>
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>💳 {payModeLabel(payment.payment_mode)}</div>
                             </div>
                             <div style={{ textAlign: 'right' }}>
                               <div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981' }}>{formatCurrency(payment.amount)}</div>
-                              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Balance: {formatCurrency(payment.balance_after)}</div>
+                              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>{t.balance}: {formatCurrency(payment.balance_after)}</div>
                             </div>
                           </div>
                         ))}
@@ -791,7 +826,7 @@ function BalanceCheck() {
                       marginTop: '12px', padding: '12px', background: '#fef3c7', borderRadius: '8px',
                       border: '1px solid #fcd34d', fontSize: '12px', color: '#92400e', textAlign: 'center'
                     }}>
-                      ℹ️ No payments made yet
+                      ℹ️ {t.noPayments}
                     </div>
                   )}
                 </div>
@@ -805,7 +840,7 @@ function BalanceCheck() {
                   color: 'rgba(255,255,255,0.9)', marginBottom: '10px', paddingLeft: '4px',
                   display: 'flex', alignItems: 'center', gap: '6px'
                 }}>
-                  💰 Monthly Finance ({customerData.monthlyFinanceLoans.length})
+                  💰 {t.monthlyFinance} ({customerData.monthlyFinanceLoans.length})
                 </div>
                 {customerData.monthlyFinanceLoans.map((monthlyLoan) => {
                   const groupKey = `monthly-group-${monthlyLoan.id}`;
@@ -833,10 +868,10 @@ function BalanceCheck() {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{monthlyLoan.name}</div>
-                          <div style={{ fontSize: '11.5px', color: '#64748b' }}>Monthly Finance</div>
+                          <div style={{ fontSize: '11.5px', color: '#64748b' }}>{t.monthlyFinance}</div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '9.5px', color: '#92400e', fontWeight: 700 }}>BALANCE</div>
+                          <div style={{ fontSize: '9.5px', color: '#92400e', fontWeight: 700 }}>{t.balance.toUpperCase()}</div>
                           <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.balance)}</div>
                         </div>
                         <div style={{
@@ -849,27 +884,27 @@ function BalanceCheck() {
                         <div style={{ padding: '0 16px 16px', borderTop: '1.5px dashed #e5e7eb', marginTop: '2px' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '14px' }}>
                             <div style={{ padding: '10px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                              <div style={{ fontSize: '10px', color: '#0369a1', marginBottom: '3px' }}>LOAN AMOUNT</div>
+                              <div style={{ fontSize: '10px', color: '#0369a1', marginBottom: '3px' }}>{t.loanAmount.toUpperCase()}</div>
                               <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.loanAmount)}</div>
                             </div>
                             <div style={{ padding: '10px', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
-                              <div style={{ fontSize: '10px', color: '#92400e', marginBottom: '3px' }}>BALANCE DUE</div>
+                              <div style={{ fontSize: '10px', color: '#92400e', marginBottom: '3px' }}>{t.balanceDue.toUpperCase()}</div>
                               <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.balance)}</div>
                             </div>
                             <div style={{ padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #86efac' }}>
-                              <div style={{ fontSize: '10px', color: '#166534', marginBottom: '3px' }}>MONTHLY PAYMENT</div>
+                              <div style={{ fontSize: '10px', color: '#166534', marginBottom: '3px' }}>{t.monthlyPayment.toUpperCase()}</div>
                               <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(monthlyLoan.monthlyAmount)}</div>
                             </div>
                             <div style={{ padding: '10px', background: '#faf5ff', borderRadius: '8px', border: '1px solid #d8b4fe' }}>
-                              <div style={{ fontSize: '10px', color: '#6b21a8', marginBottom: '3px' }}>TOTAL MONTHS</div>
-                              <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{monthlyLoan.totalMonths} months</div>
+                              <div style={{ fontSize: '10px', color: '#6b21a8', marginBottom: '3px' }}>{t.totalMonths.toUpperCase()}</div>
+                              <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{t.months(monthlyLoan.totalMonths)}</div>
                             </div>
                           </div>
 
                           <div style={{ marginTop: '10px', fontSize: '11.5px', color: '#64748b' }}>
-                            📅 Loan given {formatDate(monthlyLoan.loanGivenDate)} · EMI start {formatDate(monthlyLoan.startDate)}
-                            {monthlyLoan.currentMonth ? ` · Month ${monthlyLoan.currentMonth}/${monthlyLoan.totalMonths}` : ''}
-                            {' '}· Total paid {formatCurrency(totalPaid)} ({payments.length} payment{payments.length !== 1 ? 's' : ''})
+                            📅 {t.loanGivenLine(formatDate(monthlyLoan.loanGivenDate), formatDate(monthlyLoan.startDate))}
+                            {monthlyLoan.currentMonth ? ` · ${t.monthOf(monthlyLoan.currentMonth, monthlyLoan.totalMonths)}` : ''}
+                            {' '}· {t.totalPaidInline} {formatCurrency(totalPaid)} ({t.paymentsCount(payments.length)})
                           </div>
 
                           {monthlyLoan.balance > 0 && (
@@ -882,14 +917,14 @@ function BalanceCheck() {
                                 fontSize: '13.5px', fontWeight: 700, cursor: 'pointer'
                               }}
                             >
-                              💳 Pay Now via UPI
+                              💳 {t.payNowUpi}
                             </button>
                           )}
 
                           {payments.length > 0 ? (
                             <div style={{ marginTop: '10px' }}>
                               <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '6px' }}>
-                                Payment History
+                                {t.paymentHistory}
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                 {[...payments].reverse().map((payment, pIdx) => (
@@ -899,11 +934,11 @@ function BalanceCheck() {
                                   }}>
                                     <div>
                                       <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#1e293b' }}>✅ {formatDate(payment.payment_date)}</div>
-                                      <div style={{ fontSize: '10px', color: '#64748b' }}>💳 {payment.payment_mode || 'cash'}</div>
+                                      <div style={{ fontSize: '10px', color: '#64748b' }}>💳 {payModeLabel(payment.payment_mode)}</div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                       <div style={{ fontSize: '13px', fontWeight: 700, color: '#10b981' }}>{formatCurrency(payment.amount)}</div>
-                                      <div style={{ fontSize: '9.5px', color: '#64748b' }}>Balance: {formatCurrency(payment.balance_after)}</div>
+                                      <div style={{ fontSize: '9.5px', color: '#64748b' }}>{t.balance}: {formatCurrency(payment.balance_after)}</div>
                                     </div>
                                   </div>
                                 ))}
@@ -914,7 +949,7 @@ function BalanceCheck() {
                               marginTop: '10px', padding: '10px', background: '#fef3c7', borderRadius: '8px',
                               border: '1px solid #fcd34d', fontSize: '11.5px', color: '#92400e', textAlign: 'center'
                             }}>
-                              ℹ️ No payments made yet
+                              ℹ️ {t.noPayments}
                             </div>
                           )}
                         </div>
@@ -935,15 +970,15 @@ function BalanceCheck() {
                   color: 'rgba(255,255,255,0.9)', marginBottom: '10px', paddingLeft: '4px',
                   display: 'flex', alignItems: 'center', gap: '6px'
                 }}>
-                  📅 Weekly Loans ({customerData.namedGroups.length})
+                  📅 {t.weeklyLoans} ({customerData.namedGroups.length})
                 </div>
                 {customerData.namedGroups.map((grp) => {
                   const groupKey = `group-${grp.name}`;
                   const isOpen = !!expandedLinked[groupKey];
                   const allLoans = [
-                    ...grp.weeklyLoans.map(l => ({ ...l, kind: 'Weekly', unitAmount: l.weeklyAmount, unitLabel: 'Weekly Payment', loanType: 'weekly' })),
-                    ...grp.dailyLoans.map(l => ({ ...l, kind: 'Daily', unitAmount: l.dailyAmount, unitLabel: 'Daily Payment', loanType: 'daily' })),
-                    ...grp.interestLoans.map(l => ({ ...l, kind: 'Interest', unitAmount: l.monthlyInterest, unitLabel: 'Monthly Interest', loanType: 'interest' }))
+                    ...grp.weeklyLoans.map(l => ({ ...l, kind: 'Weekly', unitAmount: l.weeklyAmount, unitLabel: t.weeklyPayment, loanType: 'weekly' })),
+                    ...grp.dailyLoans.map(l => ({ ...l, kind: 'Daily', unitAmount: l.dailyAmount, unitLabel: t.dailyPayment, loanType: 'daily' })),
+                    ...grp.interestLoans.map(l => ({ ...l, kind: 'Interest', unitAmount: l.monthlyInterest, unitLabel: t.monthlyInterest, loanType: 'interest' }))
                   ];
                   const totalBalance = allLoans.reduce((sum, l) => sum + (l.balance || 0), 0);
 
@@ -981,7 +1016,7 @@ function BalanceCheck() {
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '9.5px', color: '#92400e', fontWeight: 700 }}>BALANCE</div>
+                          <div style={{ fontSize: '9.5px', color: '#92400e', fontWeight: 700 }}>{t.balance.toUpperCase()}</div>
                           <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(totalBalance)}</div>
                         </div>
                         <div style={{
@@ -1001,11 +1036,11 @@ function BalanceCheck() {
                                 gap: '10px'
                               }}>
                                 <div style={{ padding: '10px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                                  <div style={{ fontSize: '10px', color: '#0369a1', marginBottom: '3px' }}>LOAN AMOUNT</div>
+                                  <div style={{ fontSize: '10px', color: '#0369a1', marginBottom: '3px' }}>{t.loanAmount.toUpperCase()}</div>
                                   <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(loan.loanAmount)}</div>
                                 </div>
                                 <div style={{ padding: '10px', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
-                                  <div style={{ fontSize: '10px', color: '#92400e', marginBottom: '3px' }}>BALANCE DUE</div>
+                                  <div style={{ fontSize: '10px', color: '#92400e', marginBottom: '3px' }}>{t.balanceDue.toUpperCase()}</div>
                                   <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(loan.balance)}</div>
                                 </div>
                                 <div style={{ padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #86efac', gridColumn: '1 / -1' }}>
@@ -1014,7 +1049,7 @@ function BalanceCheck() {
                                 </div>
                               </div>
                               <div style={{ marginTop: '8px', fontSize: '11.5px', color: '#64748b' }}>
-                                📅 Started {formatDate(loan.startDate)} · {(loan.payments || []).length} payment{(loan.payments || []).length !== 1 ? 's' : ''} made
+                                📅 {t.startedLine(formatDate(loan.startDate), (loan.payments || []).length)}
                               </div>
 
                               {loan.balance > 0 && (
@@ -1033,14 +1068,14 @@ function BalanceCheck() {
                                     cursor: 'pointer'
                                   }}
                                 >
-                                  💳 Pay Now via UPI
+                                  💳 {t.payNowUpi}
                                 </button>
                               )}
 
                               {loan.payments && loan.payments.length > 0 && (
                                 <div style={{ marginTop: '10px' }}>
                                   <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '6px' }}>
-                                    Payment History
+                                    {t.paymentHistory}
                                   </div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                     {[...loan.payments].reverse().map((payment, pIdx) => (
@@ -1060,11 +1095,11 @@ function BalanceCheck() {
                                           <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#1e293b' }}>
                                             ✅ {formatDate(payment.payment_date)}
                                           </div>
-                                          <div style={{ fontSize: '10px', color: '#64748b' }}>💳 {payment.payment_mode || 'cash'}</div>
+                                          <div style={{ fontSize: '10px', color: '#64748b' }}>💳 {payModeLabel(payment.payment_mode)}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#10b981' }}>{formatCurrency(payment.amount)}</div>
-                                          <div style={{ fontSize: '9.5px', color: '#64748b' }}>Balance: {formatCurrency(payment.balance_after)}</div>
+                                          <div style={{ fontSize: '9.5px', color: '#64748b' }}>{t.balance}: {formatCurrency(payment.balance_after)}</div>
                                         </div>
                                       </div>
                                     ))}
@@ -1108,10 +1143,10 @@ function BalanceCheck() {
                     <div style={{ fontSize: '32px' }}>📅</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
-                        Weekly Loan {customerData.weeklyLoans.length > 1 ? `(${index + 1})` : ''}
+                        {t.weeklyLoan} {customerData.weeklyLoans.length > 1 ? `(${index + 1})` : ''}
                       </div>
                       <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        {loan.loanName}
+                        {loanNameLabel(loan.loanName)}
                       </div>
                     </div>
                   </div>
@@ -1128,7 +1163,7 @@ function BalanceCheck() {
                       border: '1px solid #bae6fd'
                     }}>
                       <div style={{ fontSize: '11px', color: '#0369a1', marginBottom: '4px' }}>
-                        Loan Amount
+                        {t.loanAmount}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatCurrency(loan.loanAmount)}
@@ -1142,7 +1177,7 @@ function BalanceCheck() {
                       border: '1px solid #fcd34d'
                     }}>
                       <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px' }}>
-                        Balance Due
+                        {t.balanceDue}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatCurrency(loan.balance)}
@@ -1156,7 +1191,7 @@ function BalanceCheck() {
                       border: '1px solid #86efac'
                     }}>
                       <div style={{ fontSize: '11px', color: '#166534', marginBottom: '4px' }}>
-                        Weekly Payment
+                        {t.weeklyPayment}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatCurrency(loan.weeklyAmount)}
@@ -1170,7 +1205,7 @@ function BalanceCheck() {
                       border: '1px solid #d8b4fe'
                     }}>
                       <div style={{ fontSize: '11px', color: '#6b21a8', marginBottom: '4px' }}>
-                        Start Date
+                        {t.startDate}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatDate(loan.startDate)}
@@ -1186,7 +1221,7 @@ function BalanceCheck() {
                     fontSize: '12px',
                     color: '#475569'
                   }}>
-                    <div>💵 Total Paid: {formatCurrency(totalPaid)} ({paymentsCompleted} payment{paymentsCompleted !== 1 ? 's' : ''})</div>
+                    <div>💵 {t.totalPaid}: {formatCurrency(totalPaid)} ({t.paymentsCount(paymentsCompleted)})</div>
                   </div>
 
                   {/* Pay Now Button */}
@@ -1211,7 +1246,7 @@ function BalanceCheck() {
                         boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                       }}
                     >
-                      💳 Pay Now via UPI
+                      💳 {t.payNowUpi}
                     </button>
                   )}
 
@@ -1236,7 +1271,7 @@ function BalanceCheck() {
                         gap: '8px'
                       }}
                     >
-                      {isExpanded ? '▲' : '▼'} {isExpanded ? 'Hide' : 'View'} Payment History ({payments.length})
+                      {isExpanded ? '▲' : '▼'} {t.historyToggle(isExpanded, payments.length)}
                     </button>
                   )}
 
@@ -1255,7 +1290,7 @@ function BalanceCheck() {
                         color: '#1e293b',
                         marginBottom: '12px'
                       }}>
-                        📜 Payment Timeline
+                        📜 {t.paymentTimeline}
                       </div>
 
                       <div style={{
@@ -1282,7 +1317,7 @@ function BalanceCheck() {
                                 fontWeight: 600,
                                 color: '#1e293b'
                               }}>
-                                ✅ Payment #{payments.length - paymentIndex}
+                                ✅ {t.paymentNo(payments.length - paymentIndex)}
                               </div>
                               <div style={{
                                 fontSize: '11px',
@@ -1296,7 +1331,7 @@ function BalanceCheck() {
                                 color: '#64748b',
                                 marginTop: '2px'
                               }}>
-                                💳 {payment.payment_mode || 'cash'}
+                                💳 {payModeLabel(payment.payment_mode)}
                               </div>
                             </div>
                             <div style={{
@@ -1314,7 +1349,7 @@ function BalanceCheck() {
                                 color: '#64748b',
                                 marginTop: '2px'
                               }}>
-                                Balance: {formatCurrency(payment.balance_after)}
+                                {t.balance}: {formatCurrency(payment.balance_after)}
                               </div>
                             </div>
                           </div>
@@ -1335,7 +1370,7 @@ function BalanceCheck() {
                       color: '#92400e',
                       textAlign: 'center'
                     }}>
-                      ℹ️ No payments made yet
+                      ℹ️ {t.noPayments}
                     </div>
                   )}
                 </div>
@@ -1369,10 +1404,10 @@ function BalanceCheck() {
                     <div style={{ fontSize: '32px' }}>📆</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
-                        Daily Loan {customerData.dailyLoans.length > 1 ? `(${index + 1})` : ''}
+                        {t.dailyLoan} {customerData.dailyLoans.length > 1 ? `(${index + 1})` : ''}
                       </div>
                       <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        {loan.loanName}
+                        {loanNameLabel(loan.loanName)}
                       </div>
                     </div>
                   </div>
@@ -1389,7 +1424,7 @@ function BalanceCheck() {
                       border: '1px solid #bae6fd'
                     }}>
                       <div style={{ fontSize: '11px', color: '#0369a1', marginBottom: '4px' }}>
-                        Loan Amount
+                        {t.loanAmount}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatCurrency(loan.loanAmount)}
@@ -1403,7 +1438,7 @@ function BalanceCheck() {
                       border: '1px solid #fcd34d'
                     }}>
                       <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px' }}>
-                        Balance Due
+                        {t.balanceDue}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatCurrency(loan.balance)}
@@ -1417,7 +1452,7 @@ function BalanceCheck() {
                       border: '1px solid #86efac'
                     }}>
                       <div style={{ fontSize: '11px', color: '#166534', marginBottom: '4px' }}>
-                        Daily Payment
+                        {t.dailyPayment}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatCurrency(loan.dailyAmount)}
@@ -1431,7 +1466,7 @@ function BalanceCheck() {
                       border: '1px solid #d8b4fe'
                     }}>
                       <div style={{ fontSize: '11px', color: '#6b21a8', marginBottom: '4px' }}>
-                        Start Date
+                        {t.startDate}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatDate(loan.startDate)}
@@ -1447,7 +1482,7 @@ function BalanceCheck() {
                     fontSize: '12px',
                     color: '#475569'
                   }}>
-                    <div>💵 Total Paid: {formatCurrency(totalPaid)} ({paymentsCompleted} payment{paymentsCompleted !== 1 ? 's' : ''})</div>
+                    <div>💵 {t.totalPaid}: {formatCurrency(totalPaid)} ({t.paymentsCount(paymentsCompleted)})</div>
                   </div>
 
                   {/* Pay Now Button */}
@@ -1472,7 +1507,7 @@ function BalanceCheck() {
                         boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                       }}
                     >
-                      💳 Pay Now via UPI
+                      💳 {t.payNowUpi}
                     </button>
                   )}
 
@@ -1497,7 +1532,7 @@ function BalanceCheck() {
                         gap: '8px'
                       }}
                     >
-                      {isExpanded ? '▲' : '▼'} {isExpanded ? 'Hide' : 'View'} Payment History ({payments.length})
+                      {isExpanded ? '▲' : '▼'} {t.historyToggle(isExpanded, payments.length)}
                     </button>
                   )}
 
@@ -1516,7 +1551,7 @@ function BalanceCheck() {
                         color: '#1e293b',
                         marginBottom: '12px'
                       }}>
-                        📜 Payment Timeline
+                        📜 {t.paymentTimeline}
                       </div>
 
                       <div style={{
@@ -1543,7 +1578,7 @@ function BalanceCheck() {
                                 fontWeight: 600,
                                 color: '#1e293b'
                               }}>
-                                ✅ Payment #{payments.length - paymentIndex}
+                                ✅ {t.paymentNo(payments.length - paymentIndex)}
                               </div>
                               <div style={{
                                 fontSize: '11px',
@@ -1557,7 +1592,7 @@ function BalanceCheck() {
                                 color: '#64748b',
                                 marginTop: '2px'
                               }}>
-                                💳 {payment.payment_mode || 'cash'}
+                                💳 {payModeLabel(payment.payment_mode)}
                               </div>
                             </div>
                             <div style={{
@@ -1575,7 +1610,7 @@ function BalanceCheck() {
                                 color: '#64748b',
                                 marginTop: '2px'
                               }}>
-                                Balance: {formatCurrency(payment.balance_after)}
+                                {t.balance}: {formatCurrency(payment.balance_after)}
                               </div>
                             </div>
                           </div>
@@ -1596,7 +1631,7 @@ function BalanceCheck() {
                       color: '#92400e',
                       textAlign: 'center'
                     }}>
-                      ℹ️ No payments made yet
+                      ℹ️ {t.noPayments}
                     </div>
                   )}
                 </div>
@@ -1630,10 +1665,10 @@ function BalanceCheck() {
                     <div style={{ fontSize: '32px' }}>💵</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
-                        Interest Loan {customerData.interestLoans.length > 1 ? `(${index + 1})` : ''}
+                        {t.interestLoan} {customerData.interestLoans.length > 1 ? `(${index + 1})` : ''}
                       </div>
                       <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        {loan.loanName}
+                        {loanNameLabel(loan.loanName)}
                       </div>
                     </div>
                   </div>
@@ -1650,7 +1685,7 @@ function BalanceCheck() {
                       border: '1px solid #bae6fd'
                     }}>
                       <div style={{ fontSize: '11px', color: '#0369a1', marginBottom: '4px' }}>
-                        Principal Amount
+                        {t.principalAmount}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatCurrency(loan.loanAmount)}
@@ -1664,7 +1699,7 @@ function BalanceCheck() {
                       border: '1px solid #fcd34d'
                     }}>
                       <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px' }}>
-                        Balance Due
+                        {t.balanceDue}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatCurrency(loan.balance)}
@@ -1678,10 +1713,10 @@ function BalanceCheck() {
                       border: '1px solid #86efac'
                     }}>
                       <div style={{ fontSize: '11px', color: '#166534', marginBottom: '4px' }}>
-                        Interest Rate
+                        {t.interestRate}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
-                        {loan.interestRate}% /month
+                        {loan.interestRate}% {t.perMonth}
                       </div>
                     </div>
 
@@ -1692,7 +1727,7 @@ function BalanceCheck() {
                       border: '1px solid #d8b4fe'
                     }}>
                       <div style={{ fontSize: '11px', color: '#6b21a8', marginBottom: '4px' }}>
-                        Monthly Interest
+                        {t.monthlyInterest}
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
                         {formatCurrency(loan.monthlyInterest)}
@@ -1708,8 +1743,8 @@ function BalanceCheck() {
                     fontSize: '12px',
                     color: '#475569'
                   }}>
-                    <div>📅 Start Date: {formatDate(loan.startDate)}</div>
-                    <div>💵 Total Paid: {formatCurrency(totalPaid)} ({paymentsCompleted} payment{paymentsCompleted !== 1 ? 's' : ''})</div>
+                    <div>📅 {t.startDate}: {formatDate(loan.startDate)}</div>
+                    <div>💵 {t.totalPaid}: {formatCurrency(totalPaid)} ({t.paymentsCount(paymentsCompleted)})</div>
                   </div>
 
                   {/* Pay Now Button */}
@@ -1734,7 +1769,7 @@ function BalanceCheck() {
                         boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                       }}
                     >
-                      💳 Pay Interest via UPI
+                      💳 {t.payInterestUpi}
                     </button>
                   )}
 
@@ -1759,7 +1794,7 @@ function BalanceCheck() {
                         gap: '8px'
                       }}
                     >
-                      {isExpanded ? '▲' : '▼'} {isExpanded ? 'Hide' : 'View'} Payment History ({payments.length})
+                      {isExpanded ? '▲' : '▼'} {t.historyToggle(isExpanded, payments.length)}
                     </button>
                   )}
 
@@ -1778,7 +1813,7 @@ function BalanceCheck() {
                         color: '#1e293b',
                         marginBottom: '12px'
                       }}>
-                        📜 Payment Timeline
+                        📜 {t.paymentTimeline}
                       </div>
 
                       <div style={{
@@ -1805,7 +1840,7 @@ function BalanceCheck() {
                                 fontWeight: 600,
                                 color: '#1e293b'
                               }}>
-                                ✅ Payment #{payments.length - paymentIndex}
+                                ✅ {t.paymentNo(payments.length - paymentIndex)}
                               </div>
                               <div style={{
                                 fontSize: '11px',
@@ -1819,7 +1854,7 @@ function BalanceCheck() {
                                 color: '#64748b',
                                 marginTop: '2px'
                               }}>
-                                💳 {payment.payment_mode || 'cash'}
+                                💳 {payModeLabel(payment.payment_mode)}
                               </div>
                             </div>
                             <div style={{
@@ -1837,7 +1872,7 @@ function BalanceCheck() {
                                 color: '#64748b',
                                 marginTop: '2px'
                               }}>
-                                Balance: {formatCurrency(payment.balance_after)}
+                                {t.balance}: {formatCurrency(payment.balance_after)}
                               </div>
                             </div>
                           </div>
@@ -1858,7 +1893,7 @@ function BalanceCheck() {
                       color: '#92400e',
                       textAlign: 'center'
                     }}>
-                      ℹ️ No payments made yet
+                      ℹ️ {t.noPayments}
                     </div>
                   )}
                 </div>
@@ -1892,7 +1927,7 @@ function BalanceCheck() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', fontWeight: 600 }}>
-                          🚗 Vehicle Loan
+                          🚗 {t.vehicleLoan}
                         </div>
                         <div style={{ color: 'white', fontSize: '16px', fontWeight: 700, marginTop: '4px' }}>
                           {autoLoan.loanName}
@@ -1907,14 +1942,14 @@ function BalanceCheck() {
                         <div style={{ color: 'white', fontSize: '18px', fontWeight: 700 }}>
                           {formatCurrency(autoLoan.emiAmount)}
                         </div>
-                        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px' }}>EMI/month</div>
+                        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px' }}>{t.emiPerMonth}</div>
                       </div>
                     </div>
                     {/* Progress bar */}
                     <div style={{ marginTop: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                         <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px' }}>
-                          {autoLoan.paidEmis}/{autoLoan.tenureMonths} EMIs paid
+                          {t.emisPaid(autoLoan.paidEmis, autoLoan.tenureMonths)}
                         </span>
                         <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px' }}>{progressPercent}%</span>
                       </div>
@@ -1933,15 +1968,15 @@ function BalanceCheck() {
                   {/* Loan Details */}
                   <div style={{ padding: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ color: '#64748b', fontSize: '13px' }}>Loan Amount</span>
+                      <span style={{ color: '#64748b', fontSize: '13px' }}>{t.loanAmount}</span>
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(autoLoan.loanAmount)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ color: '#64748b', fontSize: '13px' }}>Total Payable</span>
+                      <span style={{ color: '#64748b', fontSize: '13px' }}>{t.totalPayable}</span>
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(autoLoan.totalPayable)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
-                      <span style={{ color: '#64748b', fontSize: '13px' }}>Balance</span>
+                      <span style={{ color: '#64748b', fontSize: '13px' }}>{t.balance}</span>
                       <span style={{ fontWeight: 700, color: '#dc2626', fontSize: '16px' }}>{formatCurrency(autoLoan.balance)}</span>
                     </div>
 
@@ -1968,7 +2003,7 @@ function BalanceCheck() {
                         marginTop: '12px'
                       }}
                     >
-                      💰 Pay EMI Now
+                      💰 {t.payEmiNow}
                     </button>
 
                     {/* Payment History Toggle */}
@@ -1987,7 +2022,7 @@ function BalanceCheck() {
                           marginTop: '8px'
                         }}
                       >
-                        {isExpanded ? '▲ Hide' : '▼ View'} Payment History ({payments.length})
+                        {isExpanded ? '▲' : '▼'} {t.historyToggle(isExpanded, payments.length)}
                       </button>
                     )}
                   </div>
@@ -2004,7 +2039,7 @@ function BalanceCheck() {
                           fontSize: '13px'
                         }}>
                           <div>
-                            <div style={{ fontWeight: 600, color: '#1e293b' }}>EMI #{payment.emi_number}</div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{t.emiNo(payment.emi_number)}</div>
                             <div style={{ color: '#64748b', fontSize: '11px' }}>
                               {new Date(payment.payment_date).toLocaleDateString('en-IN')}
                             </div>
@@ -2037,10 +2072,10 @@ function BalanceCheck() {
               }}>
                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
                 <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
-                  No Active Loans
+                  {t.noActiveLoans}
                 </div>
                 <div style={{ fontSize: '14px', color: '#64748b' }}>
-                  You have no outstanding loans at this time.
+                  {t.noActiveLoansSub}
                 </div>
               </div>
             )}
@@ -2058,15 +2093,15 @@ function BalanceCheck() {
                   marginBottom: '10px',
                   paddingLeft: '4px'
                 }}>
-                  Also linked to this number ({customerData.linkedCustomers.length})
+                  {t.alsoLinked(customerData.linkedCustomers.length)}
                 </div>
 
                 {customerData.linkedCustomers.map((lc) => {
                   const isOpen = !!expandedLinked[lc.customerId];
                   const allLoans = [
-                    ...lc.weeklyLoans.map(l => ({ ...l, kind: 'Weekly', unitAmount: l.weeklyAmount, unitLabel: 'Weekly Payment', loanType: 'weekly' })),
-                    ...lc.dailyLoans.map(l => ({ ...l, kind: 'Daily', unitAmount: l.dailyAmount, unitLabel: 'Daily Payment', loanType: 'daily' })),
-                    ...lc.interestLoans.map(l => ({ ...l, kind: 'Interest', unitAmount: l.monthlyInterest, unitLabel: 'Monthly Interest', loanType: 'interest' }))
+                    ...lc.weeklyLoans.map(l => ({ ...l, kind: 'Weekly', unitAmount: l.weeklyAmount, unitLabel: t.weeklyPayment, loanType: 'weekly' })),
+                    ...lc.dailyLoans.map(l => ({ ...l, kind: 'Daily', unitAmount: l.dailyAmount, unitLabel: t.dailyPayment, loanType: 'daily' })),
+                    ...lc.interestLoans.map(l => ({ ...l, kind: 'Interest', unitAmount: l.monthlyInterest, unitLabel: t.monthlyInterest, loanType: 'interest' }))
                   ];
                   const totalBalance = allLoans.reduce((sum, l) => sum + (l.balance || 0), 0);
 
@@ -2103,7 +2138,7 @@ function BalanceCheck() {
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '9.5px', color: '#92400e', fontWeight: 700 }}>BALANCE</div>
+                          <div style={{ fontSize: '9.5px', color: '#92400e', fontWeight: 700 }}>{t.balance.toUpperCase()}</div>
                           <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(totalBalance)}</div>
                         </div>
                         <div style={{
@@ -2123,11 +2158,11 @@ function BalanceCheck() {
                                 gap: '10px'
                               }}>
                                 <div style={{ padding: '10px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                                  <div style={{ fontSize: '10px', color: '#0369a1', marginBottom: '3px' }}>LOAN AMOUNT</div>
+                                  <div style={{ fontSize: '10px', color: '#0369a1', marginBottom: '3px' }}>{t.loanAmount.toUpperCase()}</div>
                                   <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(loan.loanAmount)}</div>
                                 </div>
                                 <div style={{ padding: '10px', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
-                                  <div style={{ fontSize: '10px', color: '#92400e', marginBottom: '3px' }}>BALANCE DUE</div>
+                                  <div style={{ fontSize: '10px', color: '#92400e', marginBottom: '3px' }}>{t.balanceDue.toUpperCase()}</div>
                                   <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(loan.balance)}</div>
                                 </div>
                                 <div style={{ padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #86efac', gridColumn: '1 / -1' }}>
@@ -2136,7 +2171,7 @@ function BalanceCheck() {
                                 </div>
                               </div>
                               <div style={{ marginTop: '8px', fontSize: '11.5px', color: '#64748b' }}>
-                                📅 Started {formatDate(loan.startDate)} · {(loan.payments || []).length} payment{(loan.payments || []).length !== 1 ? 's' : ''} made
+                                📅 {t.startedLine(formatDate(loan.startDate), (loan.payments || []).length)}
                               </div>
 
                               {loan.balance > 0 && (
@@ -2155,14 +2190,14 @@ function BalanceCheck() {
                                     cursor: 'pointer'
                                   }}
                                 >
-                                  💳 Pay Now via UPI
+                                  💳 {t.payNowUpi}
                                 </button>
                               )}
 
                               {loan.payments && loan.payments.length > 0 && (
                                 <div style={{ marginTop: '10px' }}>
                                   <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '6px' }}>
-                                    Payment History
+                                    {t.paymentHistory}
                                   </div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                     {[...loan.payments].reverse().map((payment, pIdx) => (
@@ -2182,11 +2217,11 @@ function BalanceCheck() {
                                           <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#1e293b' }}>
                                             ✅ {formatDate(payment.payment_date)}
                                           </div>
-                                          <div style={{ fontSize: '10px', color: '#64748b' }}>💳 {payment.payment_mode || 'cash'}</div>
+                                          <div style={{ fontSize: '10px', color: '#64748b' }}>💳 {payModeLabel(payment.payment_mode)}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#10b981' }}>{formatCurrency(payment.amount)}</div>
-                                          <div style={{ fontSize: '9.5px', color: '#64748b' }}>Balance: {formatCurrency(payment.balance_after)}</div>
+                                          <div style={{ fontSize: '9.5px', color: '#64748b' }}>{t.balance}: {formatCurrency(payment.balance_after)}</div>
                                         </div>
                                       </div>
                                     ))}
@@ -2217,7 +2252,7 @@ function BalanceCheck() {
                 color: '#64748b',
                 marginBottom: '8px'
               }}>
-                For any queries, contact us:
+                {t.queries}
               </div>
               <a
                 href="tel:+918667510724"
@@ -2247,7 +2282,7 @@ function BalanceCheck() {
         opacity: 0.9,
         fontSize: '12px'
       }}>
-        <p style={{ margin: 0 }}>© 2026 Om Sai Murugan Finance. All rights reserved.</p>
+        <p style={{ margin: 0 }}>{t.copyright}</p>
       </div>
 
       {/* UPI Payment Modal */}
@@ -2295,10 +2330,10 @@ function BalanceCheck() {
                 fontWeight: 700,
                 color: '#1e293b'
               }}>
-                Pay via UPI
+                {t.payViaUpi}
               </h3>
               <div style={{ fontSize: '13px', color: '#64748b' }}>
-                {selectedLoan.loanName || 'Loan Payment'}
+                {loanNameLabel(selectedLoan.loanName) || t.loanPayment}
               </div>
             </div>
 
@@ -2314,7 +2349,7 @@ function BalanceCheck() {
                 justifyContent: 'space-between',
                 marginBottom: '12px'
               }}>
-                <span style={{ color: '#64748b', fontSize: '14px' }}>Amount to Pay:</span>
+                <span style={{ color: '#64748b', fontSize: '14px' }}>{t.amountToPay}</span>
                 <span style={{ fontWeight: 700, fontSize: '18px', color: '#10b981' }}>
                   {selectedLoan.loanType === 'monthly' && formatCurrency(selectedLoan.monthlyAmount)}
                   {selectedLoan.loanType === 'weekly' && formatCurrency(selectedLoan.weeklyAmount)}
@@ -2329,7 +2364,7 @@ function BalanceCheck() {
                 paddingTop: '12px',
                 borderTop: '1px solid #e5e7eb'
               }}>
-                <span style={{ color: '#64748b', fontSize: '14px' }}>Current Balance:</span>
+                <span style={{ color: '#64748b', fontSize: '14px' }}>{t.currentBalance}</span>
                 <span style={{ fontWeight: 600, fontSize: '16px', color: '#475569' }}>
                   {formatCurrency(selectedLoan.balance)}
                 </span>
@@ -2345,7 +2380,7 @@ function BalanceCheck() {
               marginBottom: '20px'
             }}>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#166534', marginBottom: '12px' }}>
-                📱 Pay to UPI ID:
+                📱 {t.payToUpi}
               </div>
               <div style={{
                 background: 'white',
@@ -2360,7 +2395,7 @@ function BalanceCheck() {
               }}>
                 santhokam@okicici
               </div>
-              <div style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', marginBottom: '6px' }}>OR</div>
+              <div style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', marginBottom: '6px' }}>{t.or}</div>
               <div style={{
                 background: 'white',
                 padding: '10px',
@@ -2396,7 +2431,7 @@ function BalanceCheck() {
                   cursor: 'pointer'
                 }}
               >
-                Open UPI App to Pay
+                {t.openUpiApp}
               </button>
             </div>
 
@@ -2410,13 +2445,9 @@ function BalanceCheck() {
               fontSize: '13px',
               color: '#92400e'
             }}>
-              <div style={{ fontWeight: 700, marginBottom: '8px' }}>📋 Payment Instructions:</div>
+              <div style={{ fontWeight: 700, marginBottom: '8px' }}>📋 {t.instructionsTitle}</div>
               <ol style={{ margin: '0', paddingLeft: '20px' }}>
-                <li>Click "Open UPI App to Pay" above</li>
-                <li>Complete the payment in your UPI app</li>
-                <li>Take a screenshot of the payment success page</li>
-                <li>Upload the screenshot below</li>
-                <li>Click "Submit" to notify us</li>
+                {t.steps.map((step, i) => <li key={i}>{step}</li>)}
               </ol>
               <div style={{
                 marginTop: '12px',
@@ -2426,7 +2457,7 @@ function BalanceCheck() {
                 borderRadius: '6px',
                 fontSize: '11px'
               }}>
-                <strong>Note:</strong> If payment fails in UPI app, still upload the screenshot showing the payment attempt. Our admin will verify and update manually.
+                <strong>{t.noteLabel}</strong> {t.noteText}
               </div>
             </div>
 
@@ -2441,7 +2472,7 @@ function BalanceCheck() {
                 color: '#1e293b',
                 marginBottom: '8px'
               }}>
-                Upload Payment Screenshot <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                {t.uploadLabel} <span style={{ color: '#64748b', fontWeight: 400 }}>{t.optional}</span>
               </label>
               <input
                 type="file"
@@ -2466,7 +2497,7 @@ function BalanceCheck() {
                   fontSize: '12px',
                   color: '#166534'
                 }}>
-                  ✓ Screenshot selected: {paymentScreenshot.name}
+                  ✓ {t.screenshotSelected} {paymentScreenshot.name}
                 </div>
               )}
             </div>
@@ -2492,7 +2523,7 @@ function BalanceCheck() {
                   opacity: uploading || paymentSubmitting ? 0.5 : 1
                 }}
               >
-                Cancel
+                {t.cancel}
               </button>
               <button
                 onClick={() => handleSubmitPayment(false)}
@@ -2510,7 +2541,7 @@ function BalanceCheck() {
                   boxShadow: uploading || paymentSubmitting ? 'none' : '0 4px 12px rgba(59, 130, 246, 0.3)'
                 }}
               >
-                {uploading ? 'Uploading...' : paymentSubmitting ? 'Submitting...' : 'Submit Payment'}
+                {uploading ? t.uploading : paymentSubmitting ? t.submitting : t.submitPayment}
               </button>
             </div>
 
@@ -2521,7 +2552,7 @@ function BalanceCheck() {
               color: '#64748b',
               textAlign: 'center'
             }}>
-              Your payment will be verified by our admin before updating your balance
+              {t.verifyNote}
             </div>
           </div>
         </div>
@@ -2572,7 +2603,7 @@ function BalanceCheck() {
               fontWeight: 700,
               margin: '0 0 10px'
             }}>
-              Payment Submitted!
+              {t.paymentSubmitted}
             </h2>
 
             <p style={{
@@ -2581,8 +2612,8 @@ function BalanceCheck() {
               margin: '0 0 20px',
               lineHeight: 1.5
             }}>
-              Amount: <strong style={{ color: '#059669' }}>₹{paymentSuccess.amount?.toLocaleString('en-IN')}</strong><br />
-              Customer: <strong>{paymentSuccess.customerName}</strong>
+              {t.amount}: <strong style={{ color: '#059669' }}>₹{paymentSuccess.amount?.toLocaleString('en-IN')}</strong><br />
+              {t.customer}: <strong>{paymentSuccess.customerName}</strong>
             </p>
 
             {/* WhatsApp auto-sent confirmation */}
@@ -2601,7 +2632,7 @@ function BalanceCheck() {
               marginBottom: '16px'
             }}>
               <span style={{ fontSize: '20px' }}>✅</span>
-              Admin notified via WhatsApp!
+              {t.adminNotified}
             </div>
 
             <p style={{
@@ -2609,7 +2640,7 @@ function BalanceCheck() {
               fontSize: '12px',
               margin: '0 0 16px'
             }}>
-              Please send the WhatsApp message that opened. Admin will verify and approve your payment.
+              {t.sendWhatsappNote}
             </p>
 
             {/* Done Button */}
@@ -2627,7 +2658,7 @@ function BalanceCheck() {
                 cursor: 'pointer'
               }}
             >
-              Done
+              {t.done}
             </button>
           </div>
         </div>
