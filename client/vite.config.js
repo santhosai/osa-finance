@@ -40,7 +40,7 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB limit
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [],
+        navigateFallbackDenylist: [/^\/omsai/], // public business website, not the app
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.vercel\.app\/api\/.*/i,

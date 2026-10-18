@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d4f5c">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Om Sai Murugan Finance">
+<meta property="og:description" content="Weekly, daily and monthly loans, chit fund, Festival Fund and Pongal savings schemes. Call or WhatsApp +91 86675 10724.">
+<meta property="og:url" content="https://osa-finance.vercel.app/omsai">
+<link rel="icon" type="image/svg+xml" href="/icon-192.svg">
+<style>html{-webkit-text-size-adjust:100%}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Om Sai Murugan Finance</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Om Sai Murugan Finance — weekly, daily, monthly and interest loans, vehicle finance, chit fund and festival savings schemes. Check your balance online.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Catamaran:wght@500;700;800;900&family=Hind+Madurai:wght@400;500;600&display=swap">
+<style>
+/* Layout: peacock-blue hero band, then a calm ledger-like page; one marigold accent, used sparingly. */
+:root{
+  --bg:#f2f5f4;
+  --surface:#ffffff;
+  --ink:#10292e;
+  --muted:#4f6668;
+  --line:#d6e0de;
+  --peacock:#0d4f5c;
+  --peacock-deep:#083640;
+  --on-peacock:#e9f3f1;
+  --marigold:#e79a10;
+  --marigold-ink:#7a4c00;
+  --good:#1f7a4d;
+  --due:#b3361f;
+  --chip:#e3eeec;
+  --display:"Catamaran","Noto Sans Tamil","Segoe UI",system-ui,sans-serif;
+  --body:"Hind Madurai","Noto Sans Tamil","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b1719;--surface:#112226;--ink:#e3eeec;--muted:#9db3b2;--line:#21393d;
+  --peacock:#0e3f49;--peacock-deep:#072a31;--on-peacock:#e3eeec;
+  --marigold:#f2ad35;--marigold-ink:#ffd58a;--good:#5cc28d;--due:#f08a72;--chip:#18303a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b1719;--surface:#112226;--ink:#e3eeec;--muted:#9db3b2;--line:#21393d;
+  --peacock:#0e3f49;--peacock-deep:#072a31;--on-peacock:#e3eeec;
+  --marigold:#f2ad35;--marigold-ink:#ffd58a;--good:#5cc28d;--due:#f08a72;--chip:#18303a;color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);line-height:1.15;text-wrap:balance;margin:0}
+p{margin:0}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--marigold);outline-offset:2px;border-radius:4px}
+.ta{font-family:var(--body);font-weight:500;color:var(--muted);font-size:.95rem}
+.eyebrow{font-family:var(--display);font-weight:700;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--marigold-ink)}
+
+/* Top bar */
+.top{background:var(--peacock-deep);color:var(--on-peacock)}
+.top .wrap{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:800;font-size:1.05rem;text-decoration:none}
+.brand svg{flex:none}
+.top nav{display:flex;gap:18px;flex-wrap:wrap;font-size:.92rem}
+.top nav a{text-decoration:none;opacity:.85}
+.top nav a:hover{opacity:1;text-decoration:underline;text-underline-offset:4px}
+
+/* Hero */
+.hero{background:var(--peacock);color:var(--on-peacock);position:relative;overflow:hidden}
+.hero .wrap{display:grid;grid-template-columns:1.15fr .85fr;gap:40px;align-items:center;padding-block:56px 64px}
+.hero h1{font-size:clamp(2.2rem,5.2vw,3.7rem);font-weight:900;letter-spacing:-.01em}
+.hero h1 .hl{color:var(--marigold)}
+.hero .ta-line{font-family:var(--display);font-weight:700;font-size:clamp(1.15rem,2.4vw,1.5rem);color:var(--marigold);margin-top:10px}
+.hero p.lede{margin-top:18px;max-width:52ch;font-size:1.08rem;opacity:.92}
+.cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
+.btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--display);font-weight:800;font-size:1rem;padding:12px 20px;border-radius:999px;text-decoration:none;border:2px solid transparent;cursor:pointer}
+.btn-primary{background:var(--marigold);color:#2b1a00}
+.btn-ghost{border-color:color-mix(in srgb,var(--on-peacock) 45%,transparent);color:var(--on-peacock);background:transparent}
+.btn:hover{filter:brightness(1.06)}
+.phone-line{margin-top:16px;font-size:.95rem;opacity:.9;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.phone-line b{font-family:var(--display);font-size:1.15rem;letter-spacing:.02em;font-variant-numeric:tabular-nums;user-select:all}
+.copy{font:600 .8rem var(--body);background:transparent;color:inherit;border:1px solid color-mix(in srgb,var(--on-peacock) 40%,transparent);border-radius:6px;padding:2px 10px;cursor:pointer}
+
+/* Passbook card in hero: the subject's own artefact */
+.passbook{background:var(--surface);color:var(--ink);border-radius:14px;padding:20px 20px 16px;box-shadow:0 18px 40px rgba(0,0,0,.28);transform:rotate(1.2deg);max-width:380px;justify-self:end;width:100%}
+.passbook header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px dashed var(--line);padding-bottom:10px}
+.passbook header h3{font-size:1.05rem;font-weight:800}
+.passbook header span{font-size:.75rem;color:var(--muted)}
+.pb-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:12px 0;font-size:.85rem}
+.pb-meta dt{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em}
+.pb-meta dd{margin:0;font-family:var(--display);font-weight:800;font-size:1.05rem;font-variant-numeric:tabular-nums}
+.weeks{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:4px}
+.wk{aspect-ratio:1;border-radius:5px;display:grid;place-items:center;font:700 .7rem var(--display);background:var(--chip);color:var(--muted);max-width:100%}
+.wk.paid{background:var(--good);color:#fff}
+.wk.now{background:var(--marigold);color:#2b1a00}
+.pb-foot{display:flex;justify-content:space-between;margin-top:10px;font-size:.75rem;color:var(--muted)}
+.sample{font-size:.7rem;color:var(--muted);text-align:right;margin-top:6px;font-style:italic}
+
+/* Sections */
+section{padding-block:64px}
+.sec-head{display:flex;flex-direction:column;gap:6px;margin-bottom:28px;max-width:60ch}
+.sec-head h2{font-size:clamp(1.7rem,3.4vw,2.3rem);font-weight:900}
+
+/* Services */
+.services{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.svc{background:var(--surface);padding:22px 20px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.svc h3{font-size:1.12rem;font-weight:800}
+.svc .ta{font-size:.85rem}
+.svc p{font-size:.92rem;color:var(--muted)}
+.svc .tag{align-self:flex-start;margin-top:auto;padding-top:8px;font:700 .72rem var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--peacock)}
+:root[data-theme="dark"] .svc .tag{color:var(--marigold-ink)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .svc .tag{color:var(--marigold-ink)}}
+
+/* Collection days */
+.days{background:var(--surface);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.days-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:40px;align-items:center}
+.week-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{border:1px solid var(--line);border-radius:10px;padding:12px 4px;text-align:center;font-family:var(--display);min-width:0}
+.day small{display:block;font-size:.68rem;color:var(--muted);font-weight:600}
+.day b{font-size:1rem;font-weight:800}
+.day.on{background:var(--peacock);border-color:var(--peacock);color:var(--on-peacock)}
+.day.on small{color:var(--marigold)}
+.steps{list-style:none;padding:0;margin:0;display:grid;gap:16px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:36px 1fr;gap:14px;align-items:start}
+.steps li::before{counter-increment:s;content:counter(s);width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font:800 1rem var(--display);background:var(--chip);color:var(--peacock)}
+.steps h3{font-size:1.05rem;font-weight:800}
+.steps p{color:var(--muted);font-size:.93rem}
+
+/* Schemes */
+.schemes{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.scheme{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:26px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.scheme h3{font-size:1.4rem;font-weight:900}
+.amounts{display:flex;gap:10px;flex-wrap:wrap}
+.amt{background:var(--chip);border-radius:10px;padding:10px 14px;font-family:var(--display)}
+.amt b{display:block;font-size:1.35rem;font-weight:900;font-variant-numeric:tabular-nums}
+.amt span{font-size:.75rem;color:var(--muted)}
+.scheme ul{margin:0;padding-left:1.1em;color:var(--muted);font-size:.94rem;display:grid;gap:4px}
+.months{display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
+.months i{height:8px;border-radius:2px;background:var(--chip)}
+.months i.g{background:var(--marigold)}
+
+/* Balance check */
+.check{background:var(--peacock-deep);color:var(--on-peacock);border-radius:18px;padding:36px;display:grid;grid-template-columns:1.2fr .8fr;gap:30px;align-items:center}
+.check h2{font-size:clamp(1.5rem,3vw,2rem);font-weight:900}
+.check p{opacity:.9;margin-top:10px;max-width:50ch}
+.check .links{display:flex;flex-direction:column;gap:10px}
+.check .links a{display:flex;justify-content:space-between;align-items:center;gap:10px;background:color-mix(in srgb,var(--on-peacock) 10%,transparent);border:1px solid color-mix(in srgb,var(--on-peacock) 22%,transparent);border-radius:12px;padding:14px 16px;text-decoration:none;font-family:var(--display);font-weight:700}
+.check .links a:hover{background:color-mix(in srgb,var(--on-peacock) 16%,transparent)}
+.check .links a span{color:var(--marigold)}
+
+/* Contact */
+.contact-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.ct{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ct dt{font:700 .75rem var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ct dd{margin:0;font-family:var(--display);font-weight:800;font-size:1.2rem;overflow-wrap:anywhere}
+.ct small{color:var(--muted)}
+.todo{border-style:dashed}
+.todo dd{color:var(--muted);font-weight:600;font-size:1rem}
+
+footer{border-top:1px solid var(--line);padding-block:22px;color:var(--muted);font-size:.85rem}
+footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+@media (max-width:900px){
+  .hero .wrap,.days-grid,.check{grid-template-columns:1fr}
+  .passbook{justify-self:start;transform:none}
+  .services{grid-template-columns:repeat(2,1fr)}
+  .schemes,.contact-grid{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .services{grid-template-columns:1fr}
+  .top nav{display:none}
+  section{padding-block:44px}
+  .check{padding:24px}
+  .hero .wrap{padding-block:36px 44px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .passbook{transition:transform .4s ease}
+  .passbook:hover{transform:rotate(0)}
+}
+</style>
+
+</head>
+<body>
+<div class="top">
+  <div class="wrap">
+    <a class="brand" href="#home" aria-label="Om Sai Murugan Finance home">
+      <!-- Vel motif -->
+      <svg width="22" height="30" viewBox="0 0 22 30" aria-hidden="true"><path d="M11 1 C17 7 18 12 11 17 C4 12 5 7 11 1Z" fill="var(--marigold)"/><rect x="9.8" y="16" width="2.4" height="13" rx="1.2" fill="var(--on-peacock)"/></svg>
+      Om Sai Murugan Finance
+    </a>
+    <nav aria-label="Sections">
+      <a href="#services">Loans</a>
+      <a href="#schemes">Savings</a>
+      <a href="#balance">Check balance</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </div>
+</div>
+
+<header class="hero" id="home">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow" style="color:var(--marigold)">Loans · Chit · Savings schemes</div>
+      <h1 style="margin-top:10px">Money when you need it. <span class="hl">Paid back week by week.</span></h1>
+      <div class="ta-line">ஓம் சாய் முருகன் ஃபைனான்ஸ்</div>
+      <p class="lede">Weekly, daily and monthly loans, interest loans, vehicle finance and chit fund, with simple savings schemes for Pongal and festival time. Every payment gets a WhatsApp receipt, and you can check your balance online at any time.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://wa.me/918667510724?text=Hello%2C%20I%20would%20like%20to%20know%20about%20a%20loan." target="_blank" rel="noopener">WhatsApp us</a>
+        <a class="btn btn-ghost" href="https://osa-finance.vercel.app/balance-check" target="_blank" rel="noopener">Check my balance</a>
+      </div>
+      <div class="phone-line">Call <b id="phone">+91 86675 10724</b><button class="copy" id="copyBtn" type="button">Copy</button></div>
+    </div>
+
+    <article class="passbook" aria-label="Example weekly loan card">
+      <header><h3>Weekly Loan</h3><span>Collection: Sunday</span></header>
+      <dl class="pb-meta">
+        <div><dt>Loan amount</dt><dd>₹10,000</dd></div>
+        <div><dt>Per week</dt><dd>₹1,000</dd></div>
+        <div><dt>Paid</dt><dd style="color:var(--good)">₹3,000</dd></div>
+        <div><dt>Balance</dt><dd style="color:var(--due)">₹7,000</dd></div>
+      </dl>
+      <div class="weeks" aria-label="Week 4 of 10, 3 weeks paid">
+        <span class="wk paid">1</span><span class="wk paid">2</span><span class="wk paid">3</span><span class="wk now">4</span><span class="wk">5</span><span class="wk">6</span><span class="wk">7</span><span class="wk">8</span><span class="wk">9</span><span class="wk">10</span>
+      </div>
+      <div class="pb-foot"><span>Week 4 / 10</span><span>6 weeks left</span></div>
+      <div class="sample">Example only</div>
+    </article>
+  </div>
+</header>
+
+<main>
+  <section id="services">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">What we offer</span>
+        <h2>Loans that fit how you earn</h2>
+        <span class="ta">உங்கள் வருமானத்திற்கு ஏற்ற கடன்கள்</span>
+      </div>
+      <div class="services">
+        <div class="svc"><h3>Weekly Loan</h3><span class="ta">வார கடன்</span><p>Fixed amount every week over 10 weeks. Collected on Sunday or Thursday.</p><span class="tag">10 weeks</span></div>
+        <div class="svc"><h3>Daily Loan</h3><span class="ta">தினசரி கடன்</span><p>Small daily payments, suited to shops and daily-wage earners.</p><span class="tag">Pay daily</span></div>
+        <div class="svc"><h3>Monthly Finance</h3><span class="ta">மாதாந்திர கடன்</span><p>Fixed monthly EMI on a set payment date each month.</p><span class="tag">Monthly EMI</span></div>
+        <div class="svc"><h3>Interest Loan</h3><span class="ta">வட்டி கடன்</span><p>Pay only the interest each month and return the principal when ready.</p><span class="tag">Vaddi</span></div>
+        <div class="svc"><h3>Vehicle Finance</h3><span class="ta">வாகன கடன்</span><p>Finance for two-wheelers and autos, repaid in monthly EMIs.</p><span class="tag">Auto · Bike</span></div>
+        <div class="svc"><h3>Chit Fund</h3><span class="ta">சீட்டு</span><p>Monthly chit groups with an auction each month. Members can bid to take the amount early.</p><span class="tag">Monthly auction</span></div>
+        <div class="svc"><h3>Festival Fund</h3><span class="ta">பண்டிகை சேமிப்பு</span><p>Save ₹1,000 or ₹2,000 a month for 10 months. Get it back with a bonus and a festival gift.</p><span class="tag">Savings</span></div>
+        <div class="svc"><h3>Pongal Scheme</h3><span class="ta">பொங்கல் சீட்டு</span><p>Pay monthly for 12 months and collect a full grocery package for Pongal.</p><span class="tag">Savings</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="days" id="how">
+    <div class="wrap days-grid">
+      <div>
+        <div class="sec-head" style="margin-bottom:20px">
+          <span class="eyebrow">Collection days</span>
+          <h2>We come to you twice a week</h2>
+          <span class="ta">ஞாயிறு மற்றும் வியாழன் வசூல்</span>
+        </div>
+        <div class="week-strip" role="list" aria-label="Weekly collection days: Sunday and Thursday">
+          <div class="day on" role="listitem"><small>Collection</small><b>Sun</b></div>
+          <div class="day" role="listitem"><small>&nbsp;</small><b>Mon</b></div>
+          <div class="day" role="listitem"><small>&nbsp;</small><b>Tue</b></div>
+          <div class="day" role="listitem"><small>&nbsp;</small><b>Wed</b></div>
+          <div class="day on" role="listitem"><small>Collection</small><b>Thu</b></div>
+          <div class="day" role="listitem"><small>&nbsp;</small><b>Fri</b></div>
+          <div class="day" role="listitem"><small>&nbsp;</small><b>Sat</b></div>
+        </div>
+      </div>
+      <ol class="steps">
+        <li><div><h3>Talk to us</h3><p>Call or WhatsApp. Tell us the amount and which plan suits you.</p></div></li>
+        <li><div><h3>Get your loan</h3><p>Once approved, you receive the money along with a WhatsApp message showing your amount and weekly due.</p></div></li>
+        <li><div><h3>Pay on your day</h3><p>Pay on Sunday or Thursday, in cash or by UPI. Each payment is recorded the same day.</p></div></li>
+        <li><div><h3>Get a receipt every time</h3><p>A WhatsApp receipt shows the amount paid, the week number and your balance.</p></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="schemes">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Savings schemes</span>
+        <h2>Save a little each month for the big days</h2>
+        <span class="ta">பண்டிகைக்கு மாதம் மாதம் சேமியுங்கள்</span>
+      </div>
+      <div class="schemes">
+        <article class="scheme">
+          <h3>Festival Fund</h3>
+          <div class="amounts">
+            <div class="amt"><b>₹1,000</b><span>per month · Scheme 1</span></div>
+            <div class="amt"><b>₹2,000</b><span>per month · Scheme 2</span></div>
+          </div>
+          <div class="months" aria-label="10 monthly payments"><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i></div>
+          <ul>
+            <li>10 monthly payments</li>
+            <li>Get your savings back plus a bonus</li>
+            <li>A festival gift is given in festival week</li>
+            <li>Check your fund balance online</li>
+          </ul>
+        </article>
+        <article class="scheme">
+          <h3>Pongal Grocery Scheme</h3>
+          <div class="amounts">
+            <div class="amt"><b>12</b><span>monthly payments, January to December</span></div>
+          </div>
+          <div class="months" aria-label="12 monthly payments"><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i></div>
+          <ul>
+            <li>Pay a fixed amount each month by cash or UPI</li>
+            <li>Collect a full grocery package for Pongal</li>
+            <li>Get a WhatsApp reminder when a month is due</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="balance" style="padding-top:0">
+    <div class="wrap">
+      <div class="check">
+        <div>
+          <span class="eyebrow" style="color:var(--marigold)">For our customers</span>
+          <h2 style="margin-top:6px">Check your balance with your phone number</h2>
+          <p>Enter your mobile number to see every loan, what you have paid and what is left. It works in English and Tamil, and you can pay by UPI from the same page.</p>
+        </div>
+        <div class="links">
+          <a href="https://osa-finance.vercel.app/balance-check" target="_blank" rel="noopener">Loan balance <span>→</span></a>
+          <a href="https://osa-finance.vercel.app/festival-balance-check" target="_blank" rel="noopener">Festival Fund balance <span>→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Contact</span>
+        <h2>Talk to us</h2>
+        <span class="ta">எங்களை தொடர்பு கொள்ளுங்கள்</span>
+      </div>
+      <dl class="contact-grid">
+        <div class="ct"><dt>Phone / WhatsApp</dt><dd>+91 86675 10724</dd><small>Call or message any day</small></div>
+        <div class="ct"><dt>UPI</dt><dd>8667510724@pthdfc</dd><small>Om Sai Murugan Finance</small></div>
+      </dl>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Om Sai Murugan Finance</span>
+    <span>ஓம் சாய் முருகன் ஃபைனான்ஸ்</span>
+  </div>
+</footer>
+
+<script>
+document.getElementById('copyBtn').addEventListener('click', function () {
+  var btn = this, num = '+918667510724';
+  function done(t){ btn.textContent = t; setTimeout(function(){ btn.textContent = 'Copy'; }, 1600); }
+  try {
+    navigator.clipboard.writeText(num).then(function(){ done('Copied'); }, function(){ selectNum(); done('Select & copy'); });
+  } catch (e) { selectNum(); done('Select & copy'); }
+  function selectNum(){ var r = document.createRange(); r.selectNodeContents(document.getElementById('phone')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+});
+</script>
+</body>
+</html>
