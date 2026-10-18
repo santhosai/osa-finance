@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import useSWR from 'swr';
 import { API_URL } from '../config';
 import { storage } from '../firebase';
@@ -29,14 +29,39 @@ const VEHICLE_ICONS = {
 
 const ADMIN_PHONE = '918667510724';
 
+// The server stores vehicle_* / payment_* field names; this screen reads the
+// short names. Add the short names as aliases so both work everywhere.
+const withVehicleAliases = (c) => ({
+  ...c,
+  make: c.make ?? c.vehicle_make ?? '',
+  model: c.model ?? c.vehicle_model ?? '',
+  reg_number: c.reg_number ?? c.vehicle_reg_number ?? '',
+  year: c.year ?? c.vehicle_year ?? '',
+  color: c.color ?? c.vehicle_color ?? '',
+});
+const withPaymentAliases = (p) => ({
+  ...p,
+  date: p.date ?? p.payment_date,
+  mode: p.mode ?? p.payment_mode,
+});
+const fetchCustomerDetail = async (id) => {
+  const res = await fetch(`${API_URL}/auto-finance/customers/${id}`);
+  if (!res.ok) throw new Error(`Failed to load customer (${res.status})`);
+  return res.json();
+};
+
 // ─── Component ──────────────────────────────────────────────────────────────
 function AutoFinanceDashboard({ navigateTo }) {
 
   // ── Core data via SWR ───────────────────────────────────────────────────
-  const { data: customers = [], mutate, isLoading } = useSWR(
+  const { data: rawCustomers, mutate, isLoading } = useSWR(
     `${API_URL}/auto-finance/customers`,
     fetcher,
     { refreshInterval: 30000, revalidateOnFocus: true }
+  );
+  const customers = useMemo(
+    () => (Array.isArray(rawCustomers) ? rawCustomers.map(withVehicleAliases) : []),
+    [rawCustomers]
   );
   const { data: stats } = useSWR(
     `${API_URL}/auto-finance/stats`,
@@ -76,7 +101,11 @@ function AutoFinanceDashboard({ navigateTo }) {
   const [submitting, setSubmitting] = useState(false);
 
   // Detail view
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [selectedCustomerRaw, setSelectedCustomer] = useState(null);
+  const selectedCustomer = useMemo(
+    () => (selectedCustomerRaw ? withVehicleAliases(selectedCustomerRaw) : null),
+    [selectedCustomerRaw]
+  );
   const [customerPayments, setCustomerPayments] = useState([]);
   const [customerDocs, setCustomerDocs] = useState({});
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -155,12 +184,10 @@ function AutoFinanceDashboard({ navigateTo }) {
   useEffect(() => {
     if (!selectedCustomer) return;
     setLoadingDetail(true);
-    Promise.all([
-      fetch(`${API_URL}/auto-finance/customers/${selectedCustomer.id}/payments`).then(r => r.json()),
-      fetch(`${API_URL}/auto-finance/customers/${selectedCustomer.id}/documents`).then(r => r.json()),
-    ]).then(([payments, docs]) => {
-      setCustomerPayments(Array.isArray(payments) ? payments : []);
-      setCustomerDocs(docs && typeof docs === 'object' ? docs : {});
+    // The customer detail route returns payments and documents together
+    fetchCustomerDetail(selectedCustomer.id).then((detail) => {
+      setCustomerPayments(Array.isArray(detail.payments) ? detail.payments.map(withPaymentAliases) : []);
+      setCustomerDocs(detail.documents && typeof detail.documents === 'object' ? detail.documents : {});
     }).catch(() => {
       setCustomerPayments([]);
       setCustomerDocs({});
@@ -298,7 +325,8 @@ function AutoFinanceDashboard({ navigateTo }) {
       const body = {
         amount: parseFloat(paymentForm.amount) || 0,
         date: paymentForm.date,
-        mode: paymentForm.mode,
+        payment_date: paymentForm.date,
+        payment_mode: paymentForm.mode,
         late_fee: parseFloat(paymentForm.late_fee) || 0,
         notes: paymentForm.notes,
       };
@@ -308,20 +336,20 @@ function AutoFinanceDashboard({ navigateTo }) {
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        const result = await res.json();
-        mutate();
-        // Refresh detail
-        const payments = await fetch(`${API_URL}/auto-finance/customers/${selectedCustomer.id}/payments`).then(r => r.json());
-        setCustomerPayments(Array.isArray(payments) ? payments : []);
-        // Update selected customer balance
-        const updatedCustomers = await fetch(`${API_URL}/auto-finance/customers`).then(r => r.json());
-        const updated = (updatedCustomers || []).find(c => c.id === selectedCustomer.id);
-        if (updated) setSelectedCustomer(updated);
-
+        // The payment is saved at this point. Nothing below may report it as failed.
+        const result = await res.json().catch(() => ({}));
         setShowPaymentModal(false);
+        mutate();
+        // Refresh the detail view; selecting the fresh record reloads payment history
+        try {
+          setSelectedCustomer(await fetchCustomerDetail(selectedCustomer.id));
+        } catch (refreshErr) {
+          console.error('Payment saved, but refreshing the customer failed:', refreshErr);
+        }
 
         // Prepare WhatsApp / Print data
-        const paidCount = (Array.isArray(payments) ? payments : []).length;
+        const paidCount = result.emi_number ?? (customerPayments.length + 1);
+        const newBalance = result.balance_after ?? (selectedCustomer.balance - body.amount);
         const wpData = {
           name: selectedCustomer.name,
           vehicle_make: selectedCustomer.make,
@@ -330,7 +358,7 @@ function AutoFinanceDashboard({ navigateTo }) {
           tenure_months: selectedCustomer.tenure_months,
           amount: body.amount,
           date: formatDate(body.date),
-          balance: updated ? updated.balance : selectedCustomer.balance - body.amount,
+          balance: newBalance,
         };
         setWhatsAppData(wpData);
 
@@ -344,7 +372,7 @@ function AutoFinanceDashboard({ navigateTo }) {
             vehicleReg: selectedCustomer.reg_number,
             emiNumber: paidCount,
             amount: body.amount,
-            balance: updated ? updated.balance : selectedCustomer.balance - body.amount,
+            balance: newBalance,
             date: body.date,
             loanAmount: selectedCustomer.loan_amount,
             totalPayable: selectedCustomer.total_payable,
