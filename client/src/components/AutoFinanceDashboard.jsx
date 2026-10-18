@@ -1237,11 +1237,11 @@ function AutoFinanceDashboard({ navigateTo }) {
                   const msg = buildWhatsAppMessage(whatsAppData);
                   window.open(`https://wa.me/${ADMIN_PHONE}?text=${msg}`, '_blank');
                 }} style={{ ...btnPrimary, background: '#22c55e', flex: 1 }}>
-                  \uD83D\uDCF1 Send WhatsApp
+                  📱 Send WhatsApp
                 </button>
                 <button onClick={() => { setShowWhatsApp(false); setShowPrintReceipt(true); }}
                   style={{ ...btnPrimary, background: '#8b5cf6', flex: 1 }}>
-                  \uD83D\uDDA8\uFE0F Print Receipt
+                  🖨️ Print Receipt
                 </button>
                 <button onClick={() => setShowWhatsApp(false)} style={{ ...btnSecondary, flex: '0 0 100%' }}>
                   Close
@@ -1264,7 +1264,7 @@ function AutoFinanceDashboard({ navigateTo }) {
         {showForeclosure && (
           <div style={modalOverlay} onClick={() => setShowForeclosure(false)}>
             <div style={modalBox} onClick={e => e.stopPropagation()}>
-              <h3 style={{ margin: '0 0 14px', color: '#f59e0b', fontSize: '16px' }}>\uD83D\uDD10 Foreclosure Calculator</h3>
+              <h3 style={{ margin: '0 0 14px', color: '#f59e0b', fontSize: '16px' }}>🔐 Foreclosure Calculator</h3>
 
               {/* Existing info */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
@@ -1534,13 +1534,13 @@ function AutoFinanceDashboard({ navigateTo }) {
                   <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
                     <a href={`tel:${c.phone}`}
                       style={{ flex: 1, padding: '8px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', textAlign: 'center', textDecoration: 'none', fontSize: '12px', fontWeight: 600 }}>
-                      \uD83D\uDCDE Call
+                      📞 Call
                     </a>
                     <button onClick={() => {
                       const msg = buildOverdueReminder(c);
                       window.open(`https://wa.me/${(c.phone || '').replace(/\D/g, '')}?text=${msg}`, '_blank');
                     }} style={{ flex: 1, padding: '8px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-                      \uD83D\uDCF1 WhatsApp
+                      📱 WhatsApp
                     </button>
                     <button onClick={() => {
                       const found = customers.find(cu => cu.id === c.id);
@@ -1559,7 +1559,7 @@ function AutoFinanceDashboard({ navigateTo }) {
         {showReports && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h2 style={{ margin: 0, fontSize: '16px', color: '#0d9488' }}>\uD83D\uDCCA Reports</h2>
+              <h2 style={{ margin: 0, fontSize: '16px', color: '#0d9488' }}>📊 Reports</h2>
               <button onClick={() => setShowReports(false)} style={{ ...btnSecondary, padding: '6px 14px', fontSize: '12px' }}>Back</button>
             </div>
             <div style={{ marginBottom: '14px' }}>
@@ -2058,7 +2058,7 @@ function AutoFinanceDashboard({ navigateTo }) {
                     background: 'linear-gradient(135deg, #f0fdfa, #ccfbf1)', borderRadius: '12px',
                     padding: '14px', marginTop: '10px', border: '1px solid #99f6e4',
                   }}>
-                    <h4 style={{ margin: '0 0 10px', color: '#065f46', fontSize: '13px' }}>\uD83E\uDDEE EMI Calculator</h4>
+                    <h4 style={{ margin: '0 0 10px', color: '#065f46', fontSize: '13px' }}>🧮 EMI Calculator</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px' }}>
                       <div>
                         <div style={{ color: '#6b7280', fontSize: '10px' }}>Loan Amount</div>
