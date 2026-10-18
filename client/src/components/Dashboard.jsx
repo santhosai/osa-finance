@@ -61,6 +61,7 @@ function Dashboard({ navigateTo }) {
   const [undoPaymentConfirm, setUndoPaymentConfirm] = useState(null); // { loan, customer, paymentId }
   const [weeklyDiagnostic, setWeeklyDiagnostic] = useState(null); // Weekly loans overview
   const [weeklyCollectionDay, setWeeklyCollectionDay] = useState('Sunday'); // Sunday or Thursday toggle
+  const [weeklyListSearch, setWeeklyListSearch] = useState({}); // Per-list name search, keyed `${day}-${group}-${paid|unpaid}`
   const [showCharts, setShowCharts] = useState(false); // Toggle charts visibility
   const [loansGivenDate, setLoansGivenDate] = useState(new Date().toISOString().split('T')[0]); // For loans given tracker
   const [showLoansGivenModal, setShowLoansGivenModal] = useState(false); // For loans given modal
@@ -854,14 +855,6 @@ function Dashboard({ navigateTo }) {
   };
 
   // Select/Deselect all unpaid customers within a given group
-  const toggleSelectAllFor = (selected, setSelected, unpaidLoans) => {
-    if (selected.size === unpaidLoans.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(unpaidLoans.map(item => item.loan.loan_id)));
-    }
-  };
-
   // Share selected customers via WhatsApp
   const shareViaWhatsAppFor = (selected, unpaidLoans) => {
     const selectedItems = unpaidLoans.filter(item => selected.has(item.loan.loan_id));
@@ -3454,10 +3447,88 @@ function Dashboard({ navigateTo }) {
               // Renders one group's totals bar + Paid/Unpaid columns. Each group gets its own
               // selection state passed in, so bulk-undo / bulk-WhatsApp only ever act within
               // that group and never cross into the other one.
+              // Name search per list (min 3 letters). Only narrows what is shown —
+              // totals and counts always reflect the full list.
+              const MIN_SEARCH_LENGTH = 3;
+              const getSearchTerm = (searchKey) => (weeklyListSearch[searchKey] || '').trim().toLowerCase();
+              const filterBySearch = (list, searchKey) => {
+                const term = getSearchTerm(searchKey);
+                if (term.length < MIN_SEARCH_LENGTH) return list;
+                return list.filter(item => (item.customer.name || '').toLowerCase().includes(term));
+              };
+              const highlightName = (name, searchKey) => {
+                const term = getSearchTerm(searchKey);
+                const index = term.length >= MIN_SEARCH_LENGTH ? (name || '').toLowerCase().indexOf(term) : -1;
+                if (index < 0) return name;
+                return (
+                  <>
+                    {name.slice(0, index)}
+                    <mark style={{ background: '#fde047', padding: '0 1px', borderRadius: '2px' }}>{name.slice(index, index + term.length)}</mark>
+                    {name.slice(index + term.length)}
+                  </>
+                );
+              };
+              const renderSearchBox = (searchKey, totalCount, shownCount) => {
+                const rawValue = weeklyListSearch[searchKey] || '';
+                const term = getSearchTerm(searchKey);
+                return (
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', pointerEvents: 'none' }}>🔍</span>
+                      <input
+                        type="text"
+                        value={rawValue}
+                        onChange={(e) => setWeeklyListSearch(prev => ({ ...prev, [searchKey]: e.target.value }))}
+                        placeholder="Search name (min 3 letters)"
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '6px 26px 6px 28px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '12px',
+                          background: 'white',
+                          color: '#1f2937'
+                        }}
+                      />
+                      {rawValue && (
+                        <button
+                          onClick={() => setWeeklyListSearch(prev => ({ ...prev, [searchKey]: '' }))}
+                          title="Clear search"
+                          style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#64748b', padding: 0 }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    {term.length > 0 && (
+                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '3px' }}>
+                        {term.length < MIN_SEARCH_LENGTH
+                          ? `Type ${MIN_SEARCH_LENGTH - term.length} more letter(s)…`
+                          : `Showing ${shownCount} of ${totalCount}`}
+                      </div>
+                    )}
+                  </div>
+                );
+              };
+              const renderNoMatch = (searchKey) => (
+                <div style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', padding: '10px' }}>
+                  No match for "{getSearchTerm(searchKey)}"
+                </div>
+              );
+
               const renderPaymentGroup = (groupPaidLoans, groupUnpaidLoans, selectedPaidSet, setSelectedPaidSet, selectedUnpaidSet, setSelectedUnpaidSet, keyPrefix) => {
                 const groupPaidTotal = groupPaidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
                 const groupUnpaidTotal = groupUnpaidLoans.reduce((sum, item) => sum + item.paymentAmount, 0);
                 const groupGrandTotal = groupPaidTotal + groupUnpaidTotal;
+
+                const paidSearchKey = `${weeklyCollectionDay}-${keyPrefix}-paid`;
+                const unpaidSearchKey = `${weeklyCollectionDay}-${keyPrefix}-unpaid`;
+                const visiblePaidLoans = filterBySearch(groupPaidLoans, paidSearchKey);
+                const visibleUnpaidLoans = filterBySearch(groupUnpaidLoans, unpaidSearchKey);
+                // "All" acts on the visible (searched) rows only
+                const allVisiblePaidSelected = visiblePaidLoans.length > 0 && visiblePaidLoans.every(p => selectedPaidSet.has(p.loan.loan_id));
+                const allVisibleUnpaidSelected = visibleUnpaidLoans.length > 0 && visibleUnpaidLoans.every(p => selectedUnpaidSet.has(p.loan.loan_id));
 
                 return (
                   <div>
@@ -3519,10 +3590,10 @@ function Dashboard({ navigateTo }) {
                             <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#065f46', cursor: 'pointer' }}>
                               <input
                                 type="checkbox"
-                                checked={selectedPaidSet.size === groupPaidLoans.length && groupPaidLoans.length > 0}
+                                checked={allVisiblePaidSelected}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setSelectedPaidSet(new Set(groupPaidLoans.map(p => p.loan.loan_id)));
+                                    setSelectedPaidSet(new Set(visiblePaidLoans.map(p => p.loan.loan_id)));
                                   } else {
                                     setSelectedPaidSet(new Set());
                                   }
@@ -3553,8 +3624,10 @@ function Dashboard({ navigateTo }) {
                           </div>
                         )}
                       </div>
+                      {groupPaidLoans.length > 0 && renderSearchBox(paidSearchKey, groupPaidLoans.length, visiblePaidLoans.length)}
                       <div style={{ display: 'grid', gap: '4px' }}>
-                        {groupPaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance, payment }) => (
+                        {groupPaidLoans.length > 0 && visiblePaidLoans.length === 0 && renderNoMatch(paidSearchKey)}
+                        {visiblePaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance, payment }) => (
                           <div
                             key={`${keyPrefix}-${loan.loan_id}`}
                             style={{
@@ -3605,7 +3678,7 @@ function Dashboard({ navigateTo }) {
                               }}
                             >
                               <div style={{ fontWeight: 700, fontSize: '11px', color: '#065f46', marginBottom: '2px' }}>
-                                {customer.name}
+                                {highlightName(customer.name, paidSearchKey)}
                                 {loan.loan_name && loan.loan_name !== 'General Loan' && (
                                   <span style={{ fontSize: '10px', color: '#047857', fontWeight: 500, marginLeft: '4px' }}>
                                     • {loan.loan_name}
@@ -3772,8 +3845,10 @@ function Dashboard({ navigateTo }) {
                             }}>
                               <input
                                 type="checkbox"
-                                checked={selectedUnpaidSet.size === groupUnpaidLoans.length && groupUnpaidLoans.length > 0}
-                                onChange={() => toggleSelectAllFor(selectedUnpaidSet, setSelectedUnpaidSet, groupUnpaidLoans)}
+                                checked={allVisibleUnpaidSelected}
+                                onChange={() => setSelectedUnpaidSet(allVisibleUnpaidSelected
+                                  ? new Set()
+                                  : new Set(visibleUnpaidLoans.map(item => item.loan.loan_id)))}
                                 style={{ cursor: 'pointer' }}
                               />
                               All
@@ -3808,8 +3883,10 @@ function Dashboard({ navigateTo }) {
                         </button>
                       )}
 
+                      {groupUnpaidLoans.length > 0 && renderSearchBox(unpaidSearchKey, groupUnpaidLoans.length, visibleUnpaidLoans.length)}
                       <div style={{ display: 'grid', gap: '4px' }}>
-                        {groupUnpaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
+                        {groupUnpaidLoans.length > 0 && visibleUnpaidLoans.length === 0 && renderNoMatch(unpaidSearchKey)}
+                        {visibleUnpaidLoans.map(({ customer, loan, paymentAmount, weekNumber, totalWeeks, remainingWeeks, balance }) => (
                           <div
                             key={`${keyPrefix}-${loan.loan_id}`}
                             style={{
@@ -3858,7 +3935,7 @@ function Dashboard({ navigateTo }) {
                               }}
                             >
                               <div style={{ fontWeight: 700, fontSize: '11px', color: '#7f1d1d', marginBottom: '2px' }}>
-                                {customer.name}
+                                {highlightName(customer.name, unpaidSearchKey)}
                                 {loan.loan_name && loan.loan_name !== 'General Loan' && (
                                   <span style={{ fontSize: '10px', color: '#991b1b', fontWeight: 500, marginLeft: '4px' }}>
                                     • {loan.loan_name}
