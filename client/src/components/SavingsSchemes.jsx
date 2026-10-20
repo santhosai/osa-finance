@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_URL } from '../config';
+import { THERMAL_COMMANDS, printViaBluetooth } from '../utils/thermalPrint';
 import {
   EN_MONTHS, formatRs, todayISO, schemeYM, schemeMonthKey, schemeMonthLabel, monthKeyLabel,
   currentSchemeMonth, memberMonthStatus, paidMonths, missedMonths, isLatePayment,
@@ -97,6 +98,32 @@ const CSS = `
 .ss-dialog{background:#1f1518;border:1px solid #4a3439;border-radius:14px;width:100%;max-width:520px;max-height:90vh;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
 .ss-msg{white-space:pre-wrap;background:#e7f7ec;color:#16301f;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5}
 .ss-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#f3e8e4;color:#160f11;padding:9px 16px;border-radius:999px;font-weight:600;z-index:200}
+.ss-mcard{background:#2a1d21;border-radius:10px;padding:10px 12px;cursor:pointer;border-left:3px solid #f0b23a;display:flex;flex-direction:column;gap:6px}
+.ss-mcard:hover{background:#33242a}
+.ss-mcard.behind{border-left-color:#f08a7c}
+.ss-mcard.done{border-left-color:#5fcf8c;background:#173323}
+.ss-mcard.off{opacity:.55;border-left-color:#6b5a5e}
+.ss-prog{background:#3a2a2e;border-radius:4px;height:5px;overflow:hidden}
+.ss-prog i{display:block;height:100%;border-radius:4px}
+.ss-section-label{font-size:11px;font-weight:700;color:#b9a5a8;letter-spacing:.05em;margin:14px 0 6px}
+.ss-dhead{margin:-16px -16px 0;padding:16px;border-radius:14px 14px 0 0;color:#fff}
+.ss-dsub{font-size:11px;color:rgba(255,255,255,.8);margin-top:3px}
+.ss-dbox{margin-top:10px;padding:8px 10px;background:rgba(0,0,0,.25);border-radius:8px;font-size:12px;color:#fde68a}
+.ss-tchip{display:flex;flex-direction:column;align-items:center;min-width:64px;padding:5px 6px;border-radius:8px;border:1px solid #3a2a2e;background:#2a1d21;cursor:pointer}
+.ss-tchip b{font-size:10px}
+.ss-tchip span{font-size:10px}
+.ss-tchip small{font-size:9px;color:#b9a5a8}
+.ss-tchip.paid{background:#173323;border-color:#2c5a3d;cursor:default}
+.ss-tchip.paid small{color:#5fcf8c}
+.ss-tchip.missed{background:#3a1a17;border-color:#5a2520}
+.ss-tchip.missed small{color:#f08a7c}
+.ss-tchip.due{border-color:#f0b23a}
+.ss-tchip.due small{color:#f0b23a;font-weight:700}
+.ss-tchip.sel{box-shadow:inset 0 0 0 2px #f0b23a;background:#3a2a12}
+.ss-hist{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 9px;background:#160f11;border:1px solid #1f3b2a;border-radius:8px;font-size:12px;flex-wrap:wrap}
+.ss-total{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:7px 10px;background:#160f11;border:1px solid #3a2a2e;border-radius:8px;font-size:12px;color:#b9a5a8}
+.ss-total b{font-size:14px;color:#f3e8e4}
+.ss-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px}
 @media (max-width:760px){.ss-cols{grid-template-columns:1fr}.ss-form{grid-template-columns:1fr}}
 `;
 
@@ -228,6 +255,53 @@ function SavingsSchemes() {
       replaceMember({ ...member, payments });
       showToast('Payment removed');
     } catch (e) { showToast(e.message); }
+  };
+
+  // ---------- Receipts (same two options as Festival Fund: browser print / Bluetooth thermal) ----------
+  const receiptRows = (member, i) => {
+    const p = member.payments[i];
+    return [
+      ['Card', member.card_number], ['Name', member.name], ['Mobile', member.phone],
+      ['Scheme', scheme.name], ['Month', `${schemeMonthLabel(scheme, i)} (${i}/${scheme.months})`],
+      ['Amount', formatRs(p.amount)], ['Mode', p.mode], ['Date', p.date.split('-').reverse().join('/')],
+      ['Paid so far', `${paidMonths(member).length}/${scheme.months} months`]
+    ];
+  };
+
+  const printReceipt = (member, i) => {
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const rows = receiptRows(member, i).map(([k, v]) => `<div class="row"><span>${esc(k)}:</span><span class="bold">${esc(v)}</span></div>`).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+@page{size:80mm auto;margin:4mm}body{font-family:Arial,sans-serif;font-size:11px;color:#000;text-align:center}
+h2{font-size:13px;margin:4px 0}.line{border-top:1px dashed #000;margin:6px 0}.row{display:flex;justify-content:space-between;gap:8px;margin:3px 0;text-align:left}.bold{font-weight:700;text-align:right}
+</style></head><body><h2>${esc(scheme.run_by || 'OM SAI MURUGAN FINANCE')}</h2>
+<div class="line"></div><div class="bold" style="text-align:center;font-size:12px">${esc(scheme.name_ta || scheme.name)}<br>PAYMENT RECEIPT</div><div class="line"></div>
+${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:10px">${esc(scheme.whatsapp_note)}</div>` : ''}<div style="font-size:10px">Thank you! 🙏</div></body></html>`;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;';
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => { try { document.body.removeChild(iframe); } catch { /* already removed */ } }, 2000);
+    }, 600);
+  };
+
+  // Thermal printers have no Tamil font, so only ASCII text goes to the printer
+  const printReceiptBluetooth = (member, i) => {
+    const ascii = (s) => String(s ?? '').replace(/₹/g, 'Rs.').replace(/[^\x20-\x7E]/g, '').trim();
+    const T = THERMAL_COMMANDS;
+    let r = T.INIT + T.ALIGN_CENTER + T.BOLD_ON + T.DOUBLE_HEIGHT;
+    r += `${ascii(scheme.run_by || 'OM SAI MURUGAN FINANCE').toUpperCase()}\n`;
+    r += T.NORMAL_SIZE + T.BOLD_OFF + T.LINE + T.BOLD_ON + `** ${ascii(scheme.name).toUpperCase()} **\n` + T.BOLD_OFF + T.LINE + T.ALIGN_LEFT;
+    receiptRows(member, i).forEach(([k, v]) => {
+      r += k === 'Amount' ? T.BOLD_ON + `${k}: ${ascii(v)}\n` + T.BOLD_OFF : `${k}: ${ascii(v)}\n`;
+    });
+    r += T.LINE + T.ALIGN_CENTER + 'Thank you!\n' + T.FEED + T.PARTIAL_CUT;
+    printViaBluetooth(r);
   };
 
   const setHandover = async (member, key, given) => {
@@ -503,32 +577,72 @@ function SavingsSchemes() {
     );
   }
 
+  // Member card, same layout as Festival Fund: name + badges, phone, paid/total, progress bar
+  function memberCard(m) {
+    const paid = paidMonths(m).length;
+    const pct = Math.round((paid / scheme.months) * 100);
+    const missed = missedMonths(scheme, m, currentMonth).length;
+    const done = paid >= scheme.months;
+    const cls = m.status === 'withdrawn' ? 'off' : done ? 'done' : missed >= 2 ? 'behind' : '';
+    return (
+      <div key={m.id} className={`ss-mcard ${cls}`} onClick={() => openMember(m.id)}>
+        <div className="ss-spread" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>
+              {highlight(m.name, termOf('members'))}
+              <span className="ss-pill grey" style={{ marginLeft: 6 }}>{m.card_number}</span>
+              {missed >= 2 && m.status !== 'withdrawn' && <span title={`${missed} months missed`} style={{ marginLeft: 5 }}>⚠️</span>}
+              {bonusEligible(scheme, m) && <span title={`${scheme.bonus.name} ${m.handover?.bonus ? 'given' : 'due'}`} style={{ marginLeft: 4 }}>{m.handover?.bonus ? '🎁' : '🎀'}</span>}
+              {m.status === 'withdrawn' && <span className="ss-pill grey" style={{ marginLeft: 6 }}>Withdrawn</span>}
+            </div>
+            <div className="ss-hint" style={{ fontSize: 11, marginTop: 2 }}>📞 {m.phone}{m.village ? ` | ${m.village}` : ''} | Joined {monthKeyLabel(m.join_month)}</div>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: done ? '#5fcf8c' : '#f0b23a' }}>{paid}/{scheme.months}</div>
+            <div className="ss-hint" style={{ fontSize: 10 }}>months</div>
+          </div>
+        </div>
+        {!done && (
+          <div>
+            <div className="ss-spread" style={{ marginBottom: 3 }}>
+              <span className="ss-hint" style={{ fontSize: 10 }}>{formatRs(paid * scheme.amount)} paid · {formatRs((scheme.months - paid) * scheme.amount)} left</span>
+              <span style={{ fontSize: 10, color: '#f0b23a' }}>{pct}%</span>
+            </div>
+            <div className="ss-prog"><i style={{ width: `${pct}%`, background: missed >= 2 ? '#f08a7c' : '#f0b23a' }} /></div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderMembers() {
+    const shown = filterBy(members, 'members');
+    const inProgress = shown.filter(m => m.status !== 'withdrawn' && !isCompleted(scheme, m));
+    const completed = shown.filter(m => m.status !== 'withdrawn' && isCompleted(scheme, m));
+    const withdrawn = shown.filter(m => m.status === 'withdrawn');
     return (
       <>
         <AddMemberForm scheme={scheme} onAdded={(m) => { setMembers(list => [...list, m]); showToast(`Added ${m.name} · ${m.card_number}`); }} onError={showToast} />
         <div className="ss-card">
           <div className="ss-spread" style={{ marginBottom: 10 }}>
-            <h3 style={{ margin: 0 }}>Members ({active.length}{members.length > active.length ? ` + ${members.length - active.length} withdrawn` : ''})</h3>
+            <h3 style={{ margin: 0 }}>Members ({active.length})</h3>
             <div style={{ minWidth: 0, flex: '0 1 300px' }}>{searchBox('members')}</div>
           </div>
-          <div className="ss-table"><table>
-            <thead><tr><th>Card</th><th>Name</th><th>Village</th><th>Joined</th><th>Months</th><th className="r">Paid</th>{scheme.bonus && <th>{scheme.bonus.name}</th>}</tr></thead>
-            <tbody>
-              {filterBy(members, 'members').map(m => (
-                <tr key={m.id} className="click" onClick={() => openMember(m.id)} style={{ opacity: m.status === 'withdrawn' ? 0.5 : 1 }}>
-                  <td>{m.card_number}</td>
-                  <td><b>{highlight(m.name, termOf('members'))}</b>{m.status === 'withdrawn' && <> <span className="ss-pill grey">Withdrawn</span></>}</td>
-                  <td>{m.village}</td>
-                  <td>{monthKeyLabel(m.join_month)}</td>
-                  <td><span className="ss-dots">{Array.from({ length: scheme.months }, (_, k) => <i key={k} className={memberMonthStatus(m, k + 1, currentMonth)} />)}</span></td>
-                  <td className="r">{formatRs(paidMonths(m).length * scheme.amount)}</td>
-                  {scheme.bonus && <td>{bonusEligible(scheme, m) ? <span className={`ss-pill ${m.handover?.bonus ? 'good' : 'gold'}`}>{m.handover?.bonus ? 'Given' : 'Eligible'}</span> : <span className="ss-hint">—</span>}</td>}
-                </tr>
-              ))}
-              {!members.length && <tr><td colSpan="7" className="ss-hint">No members yet. Add the first one above.</td></tr>}
-            </tbody>
-          </table></div>
+          <div className="ss-list">{inProgress.map(memberCard)}</div>
+          {completed.length > 0 && (
+            <>
+              <div className="ss-section-label" style={{ color: '#5fcf8c' }}>🎊 COMPLETED MEMBERS ({completed.length})</div>
+              <div className="ss-list">{completed.map(memberCard)}</div>
+            </>
+          )}
+          {withdrawn.length > 0 && (
+            <>
+              <div className="ss-section-label">WITHDRAWN ({withdrawn.length})</div>
+              <div className="ss-list">{withdrawn.map(memberCard)}</div>
+            </>
+          )}
+          {!members.length && <div className="ss-hint" style={{ textAlign: 'center', padding: 24 }}>No members yet. Add the first one above.</div>}
+          {members.length > 0 && !shown.length && <div className="ss-hint">No match.</div>}
         </div>
       </>
     );
@@ -866,41 +980,130 @@ function SavingsSchemes() {
     const sel = memberSel, setSel = setMemberSel, edit = memberEdit, setEdit = setMemberEdit;
     const toggle = (i) => { const n = new Set(sel); if (n.has(i)) n.delete(i); else n.add(i); setSel(n); };
     const owed = missedMonths(scheme, member, currentMonth);
+    const paidList = paidMonths(member);
+    const done = paidList.length >= scheme.months;
+    const withdrawn = member.status === 'withdrawn';
+    const totalPaid = Object.values(member.payments || {}).reduce((a, p) => a + Number(p.amount || 0), 0);
+    const remaining = (scheme.months - paidList.length) * scheme.amount;
+    const headBg = withdrawn ? 'linear-gradient(135deg,#3a2a2e,#2a1d21)'
+      : done ? 'linear-gradient(135deg,#14532d,#15803d)' : 'linear-gradient(135deg,#92400e,#b45309)';
     return (
       <Dialog onClose={() => setMemberId(null)}>
-        <div className="ss-spread">
-          <div><h3 style={{ margin: 0 }}>{member.name}</h3><div className="ss-hint">{member.card_number} · {member.phone} · {member.village}</div></div>
-          {member.status === 'withdrawn' ? <span className="ss-pill grey">Withdrawn</span> : <span className="ss-pill good">{paidMonths(member).length}/{scheme.months} paid</span>}
+        {/* Header: who, scheme, offer status and progress */}
+        <div className="ss-dhead" style={{ background: headBg }}>
+          <div className="ss-spread" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>{member.name}</div>
+              <div className="ss-dsub">🪪 {member.card_number} &nbsp;|&nbsp; 📞 {member.phone}{member.village ? ` | 📍 ${member.village}` : ''}</div>
+              <div className="ss-dsub">{scheme.name} — {formatRs(scheme.amount)}/month · Joined {monthKeyLabel(member.join_month)}</div>
+              {member.notes && <div className="ss-dsub">📝 {member.notes}</div>}
+            </div>
+            {done && <span style={{ fontSize: 24 }}>🎊</span>}
+            {withdrawn && <span className="ss-pill grey">Withdrawn</span>}
+          </div>
+          {(bonusEligible(scheme, member) || done) && (
+            <div className="ss-dbox">
+              {bonusEligible(scheme, member) && (
+                <div className="ss-spread">
+                  <span>🎀 {scheme.bonus.name}{scheme.bonus.name_ta ? ` / ${scheme.bonus.name_ta}` : ''} (joining offer)</span>
+                  {member.handover?.bonus
+                    ? <span style={{ color: '#4ade80', fontWeight: 700 }}>✅ Given {member.handover.bonus.date}</span>
+                    : <button className="ss-btn sm pri" onClick={() => setHandover(member, 'bonus', true)}>Mark given</button>}
+                </div>
+              )}
+              {done && scheme.items.map(it => (
+                <div key={it.key} className="ss-spread" style={{ marginTop: 4 }}>
+                  <span>🎁 {it.name}{it.per > 1 ? ` × ${it.per} ${it.unit}` : ''}</span>
+                  {member.handover?.[it.key]
+                    ? <span style={{ color: '#4ade80', fontWeight: 700 }}>✅ Given {member.handover[it.key].date}</span>
+                    : <button className="ss-btn sm pri" onClick={() => setHandover(member, it.key, true)}>Mark given</button>}
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ marginTop: 10 }}>
+            <div className="ss-spread" style={{ marginBottom: 3 }}>
+              <span style={{ fontSize: 10, opacity: .8 }}>Payment progress</span>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{paidList.length}/{scheme.months} months</span>
+            </div>
+            <div className="ss-prog" style={{ background: 'rgba(0,0,0,.3)', height: 7 }}>
+              <i style={{ width: `${(paidList.length / scheme.months) * 100}%`, background: done ? '#4ade80' : '#fbbf24' }} />
+            </div>
+          </div>
         </div>
-        <div className="ss-hint">Joined {monthKeyLabel(member.join_month)}{bonusEligible(scheme, member) ? ` · ${scheme.bonus.name} offer: ${member.handover?.bonus ? 'given' : 'eligible'}` : ''}{member.notes ? ` · ${member.notes}` : ''}</div>
 
         {!edit && (
           <>
-            <div className="ss-grid12">
-              {Array.from({ length: scheme.months }, (_, k) => k + 1).map(i => {
-                const p = member.payments?.[i];
-                const st = memberMonthStatus(member, i, currentMonth);
-                return (
-                  <div key={i} className={`ss-cell ${st === 'paid' ? 'paid' : st === 'missed' ? 'missed' : ''} ${sel.has(i) ? 'sel' : ''}`}
-                    onClick={() => { if (!p && member.status !== 'withdrawn') toggle(i); }}>
-                    <b style={{ fontSize: 12 }}>{schemeMonthLabel(scheme, i)}</b>
-                    <small>{p ? `${p.date.slice(8)}/${p.date.slice(5, 7)} · ${p.mode}` : st === 'missed' ? 'Missed' : st === 'due' ? 'Due' : '—'}</small>
-                    {p && <small><button className="ss-btn sm red" style={{ marginTop: 4, padding: '1px 6px', fontSize: 10 }} onClick={(e) => { e.stopPropagation(); undoPayment(member, i); }}>Undo</button></small>}
-                  </div>
-                );
-              })}
+            {/* Timeline: every month with paid date / due / missed; tap unpaid months to pay */}
+            <div>
+              <div className="ss-section-label" style={{ marginTop: 0 }}>PAYMENT TIMELINE {!withdrawn && <span style={{ fontWeight: 400 }}>· tap unpaid months to pay</span>}</div>
+              <div className="ss-chips">
+                {Array.from({ length: scheme.months }, (_, k) => k + 1).map(i => {
+                  const p = member.payments?.[i];
+                  const st = memberMonthStatus(member, i, currentMonth);
+                  return (
+                    <div key={i} className={`ss-tchip ${st} ${sel.has(i) ? 'sel' : ''}`}
+                      onClick={() => { if (!p && !withdrawn) toggle(i); }}>
+                      <b>M{i}</b>
+                      <span>{schemeMonthLabel(scheme, i)}</span>
+                      <small>{p ? p.date.split('-').reverse().join('/') : st === 'due' ? 'DUE' : st === 'missed' ? 'MISSED' : '—'}</small>
+                    </div>
+                  );
+                })}
+              </div>
+              {sel.size > 0 && (
+                <button className="ss-btn pri" style={{ width: '100%', marginTop: 10 }} onClick={() => { setMemberId(null); openPay(member, [...sel]); }}>
+                  Record payment for {sel.size} month{sel.size > 1 ? 's' : ''} · {formatRs(sel.size * scheme.amount)}
+                </button>
+              )}
             </div>
-            <div className="ss-row">
-              {sel.size > 0 && <button className="ss-btn pri" onClick={() => { setMemberId(null); openPay(member, [...sel]); }}>Pay {sel.size} month{sel.size > 1 ? 's' : ''} · {formatRs(sel.size * scheme.amount)}</button>}
-              {owed.length > 0 && <button className="ss-btn" onClick={() => setMsgDialog({ title: 'Reminder', text: reminderMessage(scheme, member, owed), phone: member.phone })}>Remind ({owed.length} missed)</button>}
-              <a className="ss-btn wa" style={{ textDecoration: 'none' }} href={whatsappLink(member.phone, '')} target="_blank" rel="noreferrer">Chat</a>
-              <button className="ss-btn" onClick={() => setEdit({ name: member.name, phone: member.phone, village: member.village || '', notes: member.notes || '', join_month: member.join_month || '' })}>Edit</button>
-              {member.status === 'withdrawn'
-                ? <button className="ss-btn" onClick={() => updateMember(member, { status: 'active' }, 'Member is active again')}>Make active</button>
-                : <button className="ss-btn red" onClick={() => { if (window.confirm(`Mark ${member.name} as withdrawn? Their payments stay recorded.`)) updateMember(member, { status: 'withdrawn' }, 'Member withdrawn'); }}>Withdraw</button>}
-              {!paidMonths(member).length && <button className="ss-btn red" onClick={() => deleteMember(member)}>Delete</button>}
-              <button className="ss-btn" onClick={() => setMemberId(null)}>Close</button>
+
+            {/* History: one row per paid month */}
+            {paidList.length > 0 && (
+              <div>
+                <div className="ss-section-label" style={{ marginTop: 0 }}>PAYMENT HISTORY</div>
+                <div className="ss-list" style={{ gap: 4 }}>
+                  {paidList.map(i => {
+                    const p = member.payments[i];
+                    return (
+                      <div key={i} className="ss-hist">
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: '#5fcf8c', fontWeight: 600 }}>M{i} — {schemeMonthLabel(scheme, i)}</div>
+                          <div className="ss-hint" style={{ fontSize: 11 }}>
+                            {p.date.split('-').reverse().join('/')} · {p.mode} · by {p.collected_by}
+                            {isLatePayment(scheme, i, p) && <span className="ss-pill warn" style={{ marginLeft: 6 }}>Late</span>}
+                          </div>
+                        </div>
+                        <div className="ss-row" style={{ flexWrap: 'nowrap' }}>
+                          <b style={{ color: '#f0b23a' }}>{formatRs(p.amount)}</b>
+                          <button className="ss-btn sm" title="Print receipt" onClick={() => printReceipt(member, i)}>🖨</button>
+                          <button className="ss-btn sm" title="Bluetooth thermal print" onClick={() => printReceiptBluetooth(member, i)}>📶</button>
+                          <button className="ss-btn sm wa" title="WhatsApp receipt" onClick={() => setMsgDialog({ title: 'Receipt', text: receiptMessage(scheme, member, [i]), phone: member.phone })}>WA</button>
+                          <button className="ss-btn sm red" title="Undo this payment" onClick={() => undoPayment(member, i)}>↩</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="ss-total">
+                  <span>Total paid</span><b style={{ color: '#f0b23a' }}>{formatRs(totalPaid)}</b>
+                </div>
+                {!done && <div className="ss-total" style={{ marginTop: 4 }}><span>Still to pay ({scheme.months - paidList.length} months)</span><b>{formatRs(remaining)}</b></div>}
+              </div>
+            )}
+            {!paidList.length && <div className="ss-hint">No payments yet.</div>}
+
+            {/* Actions */}
+            <div className="ss-actions">
+              <button className="ss-btn" onClick={() => setEdit({ name: member.name, phone: member.phone, village: member.village || '', notes: member.notes || '', join_month: member.join_month || '' })}>✏️ Edit</button>
+              <a className="ss-btn wa" style={{ textDecoration: 'none', textAlign: 'center' }} href={whatsappLink(member.phone, '')} target="_blank" rel="noreferrer">💬 WA</a>
+              {owed.length > 0 && !withdrawn && <button className="ss-btn" onClick={() => setMsgDialog({ title: 'Reminder', text: reminderMessage(scheme, member, owed), phone: member.phone })}>🔔 Remind ({owed.length})</button>}
+              {!paidList.length && <button className="ss-btn red" onClick={() => deleteMember(member)}>🗑️ Delete</button>}
             </div>
+            {withdrawn
+              ? <button className="ss-btn" style={{ width: '100%', background: '#15803d', borderColor: '#15803d' }} onClick={() => updateMember(member, { status: 'active' }, 'Member is active again')}>↩️ Make active again</button>
+              : <button className="ss-btn red" style={{ width: '100%' }} onClick={() => { if (window.confirm(`Mark ${member.name} as withdrawn? Their payments stay recorded.`)) updateMember(member, { status: 'withdrawn' }, 'Member withdrawn'); }}>🚫 Withdraw from scheme</button>}
+            <button className="ss-btn" style={{ width: '100%', background: 'none' }} onClick={() => setMemberId(null)}>Close</button>
           </>
         )}
 
