@@ -6708,6 +6708,45 @@ app.put('/api/schemes/:id/members/:memberId/handover', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== FULL BACKUP (one-click Excel of every module) ====================
+// The client pages through each collection and builds one workbook. Paged because a
+// single Vercel response is capped at 4.5 MB. Device push tokens are left out, and
+// login secrets are stripped from app_users.
+const BACKUP_COLLECTIONS = [
+  'customers', 'loans', 'payments', 'archived_loans',
+  'monthly_finance_customers', 'monthly_finance_payments',
+  'daily_customers', 'daily_loans', 'daily_payments',
+  'vaddi_entries', 'vaddi_payments', 'investments',
+  'chit_groups', 'chit_members', 'chit_payments', 'chit_auctions', 'chit_settings',
+  'auto_finance_customers', 'auto_finance_payments',
+  'festival_fund_customers', 'festival_fund_payments',
+  'pongal_plans', 'pongal_customers', 'pongal_payments', 'pongal_counters',
+  'schemes', 'scheme_members',
+  'pending_payments', 'user_transfers', 'app_users', 'app_settings'
+];
+const BACKUP_SECRET_FIELDS = ['password_hash', 'password', 'otp', 'token'];
+
+app.get('/api/backup/collections', (req, res) => {
+  res.json(BACKUP_COLLECTIONS);
+});
+
+app.get('/api/backup/collections/:name', async (req, res) => {
+  try {
+    const { name } = req.params;
+    if (!BACKUP_COLLECTIONS.includes(name)) return res.status(404).json({ error: 'Unknown collection' });
+    const pageSize = Math.min(parseInt(req.query.limit) || 1000, 2000);
+    let q = db.collection(name).orderBy(admin.firestore.FieldPath.documentId()).limit(pageSize);
+    if (req.query.after) q = q.startAfter(String(req.query.after));
+    const snap = await q.get();
+    const docs = snap.docs.map(d => {
+      const data = { id: d.id, ...d.data() };
+      BACKUP_SECRET_FIELDS.forEach(f => { delete data[f]; });
+      return data;
+    });
+    res.json({ docs, next: snap.size === pageSize ? snap.docs[snap.size - 1].id : null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

@@ -1,7 +1,23 @@
 import { useState } from 'react';
+import { downloadFullBackup } from '../utils/fullBackup';
 
 function ModuleSelector({ onSelectModule }) {
   const [hoveredModule, setHoveredModule] = useState(null);
+  const [backupStatus, setBackupStatus] = useState(''); // progress / result text
+  const [backingUp, setBackingUp] = useState(false);
+
+  const runBackup = async () => {
+    setBackingUp(true);
+    try {
+      const { total, sheets, failed } = await downloadFullBackup(setBackupStatus);
+      setBackupStatus(failed.length
+        ? `Downloaded ${total} records. Could not get: ${failed.join(', ')}`
+        : `✅ Downloaded ${total} records in ${sheets} sheets`);
+    } catch (e) {
+      setBackupStatus(`❌ Backup failed: ${e.message}. Check internet and try again.`);
+    }
+    setBackingUp(false);
+  };
 
   const modules = [
     {
@@ -87,11 +103,11 @@ function ModuleSelector({ onSelectModule }) {
 
       {/* Module Cards */}
       <div style={{
-        display: 'flex',
-        gap: '20px',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        maxWidth: '500px'
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: '14px',
+        width: '100%',
+        maxWidth: '520px'
       }}>
         {modules.map((module) => (
           <div
@@ -101,11 +117,11 @@ function ModuleSelector({ onSelectModule }) {
             onMouseLeave={() => setHoveredModule(null)}
             style={{
               background: module.gradient,
-              borderRadius: '20px',
-              padding: '30px 40px',
+              borderRadius: '18px',
+              padding: '22px 12px',
               cursor: 'pointer',
               textAlign: 'center',
-              minWidth: '180px',
+              minWidth: 0,
               boxShadow: hoveredModule === module.id
                 ? `0 20px 40px rgba(0,0,0,0.4), 0 0 30px ${module.color}40`
                 : '0 10px 30px rgba(0,0,0,0.3)',
@@ -115,8 +131,8 @@ function ModuleSelector({ onSelectModule }) {
             }}
           >
             <div style={{
-              fontSize: '48px',
-              marginBottom: '15px',
+              fontSize: '40px',
+              marginBottom: '10px',
               filter: hoveredModule === module.id ? 'drop-shadow(0 0 10px rgba(255,255,255,0.5))' : 'none',
               transition: 'filter 0.3s ease'
             }}>
@@ -124,9 +140,9 @@ function ModuleSelector({ onSelectModule }) {
             </div>
             <h2 style={{
               color: 'white',
-              fontSize: '22px',
+              fontSize: '18px',
               fontWeight: 700,
-              margin: '0 0 8px'
+              margin: '0 0 6px'
             }}>
               {module.title}
             </h2>
@@ -141,11 +157,29 @@ function ModuleSelector({ onSelectModule }) {
         ))}
       </div>
 
+      {/* One-click full backup of every module */}
+      <div style={{ width: '100%', maxWidth: '520px', marginTop: '22px', textAlign: 'center' }}>
+        <button
+          onClick={runBackup}
+          disabled={backingUp}
+          style={{
+            width: '100%', padding: '14px', borderRadius: '14px', border: '1px solid #15803d',
+            background: backingUp ? '#14532d' : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+            color: 'white', fontSize: '15px', fontWeight: 700, cursor: backingUp ? 'wait' : 'pointer'
+          }}
+        >
+          {backingUp ? '⏳ Taking backup…' : '📥 Download Full Backup (Excel)'}
+        </button>
+        <p style={{ color: backupStatus.startsWith('❌') ? '#f87171' : '#94a3b8', fontSize: '12px', margin: '8px 0 0', minHeight: '16px' }}>
+          {backupStatus || 'All modules, all customers and all payments in one Excel file'}
+        </p>
+      </div>
+
       {/* Footer */}
       <p style={{
         color: '#64748b',
         fontSize: '11px',
-        marginTop: '40px'
+        marginTop: '16px'
       }}>
         Select a module to continue
       </p>
