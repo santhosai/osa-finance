@@ -6455,6 +6455,258 @@ app.put('/api/pongal-fund/whatsapp-settings', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== SAVINGS SCHEMES (Diwali, Pongal, ...) ====================
+// One generic module: admin creates a scheme (amount, months, start month, items, joining
+// offer), enrols members, and records monthly payments. A member's payments and handover
+// state live on the member doc itself (maps keyed by month number / item key), so a whole
+// scheme loads with a single query and a payment can never be recorded twice for a month.
+
+const SCHEME_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function schemeCleanItems(items) {
+  return (Array.isArray(items) ? items : [])
+    .filter(it => it && String(it.name || '').trim())
+    .map((it, i) => ({
+      key: String(it.key || `item${i + 1}`),
+      name: String(it.name).trim(),
+      name_ta: String(it.name_ta || '').trim(),
+      per: Number(it.per) > 0 ? Number(it.per) : 1,
+      unit: String(it.unit || '').trim()
+    }));
+}
+
+function schemeCleanBonus(bonus) {
+  if (!bonus || !String(bonus.name || '').trim()) return null;
+  return {
+    name: String(bonus.name).trim(),
+    name_ta: String(bonus.name_ta || '').trim(),
+    join_month: SCHEME_MONTH_RE.test(bonus.join_month || '') ? bonus.join_month : ''
+  };
+}
+
+// Validates and normalizes the editable scheme fields; returns { data } or { error }.
+function schemeFromBody(body) {
+  const name = String(body.name || '').trim();
+  const amount = Number(body.amount);
+  const months = Number(body.months);
+  if (!name) return { error: 'Scheme name is required' };
+  if (!(amount > 0)) return { error: 'Monthly amount must be more than 0' };
+  if (!Number.isInteger(months) || months < 1 || months > 60) return { error: 'Number of months must be between 1 and 60' };
+  if (!SCHEME_MONTH_RE.test(body.start_month || '')) return { error: 'First month is required (YYYY-MM)' };
+  const from = Number(body.window_from) || 1;
+  const to = Number(body.window_to) || 31;
+  if (from < 1 || to > 31 || from > to) return { error: 'Payment days must be between 1 and 31, from ≤ until' };
+  const prefix = String(body.card_prefix || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+  if (!prefix) return { error: 'Card number prefix is required' };
+  const collectors = (Array.isArray(body.collectors) ? body.collectors : String(body.collectors || '').split(','))
+    .map(c => String(c).trim()).filter(Boolean);
+  return {
+    data: {
+      name, name_ta: String(body.name_ta || '').trim(), run_by: String(body.run_by || '').trim(),
+      amount, months, start_month: body.start_month, window_from: from, window_to: to,
+      card_prefix: prefix, collectors: collectors.length ? collectors : ['Admin'],
+      items: schemeCleanItems(body.items), bonus: schemeCleanBonus(body.bonus),
+      whatsapp_note: String(body.whatsapp_note || '').trim(),
+      status: body.status === 'closed' ? 'closed' : 'open'
+    }
+  };
+}
+
+app.get('/api/schemes', async (req, res) => {
+  try {
+    const snap = await db.collection('schemes').get();
+    const schemes = await Promise.all(snap.docs.map(async d => {
+      const count = await db.collection('scheme_members').where('scheme_id', '==', d.id).count().get();
+      return { id: d.id, ...d.data(), member_count: count.data().count };
+    }));
+    schemes.sort((a, b) => String(b.start_month).localeCompare(String(a.start_month)));
+    res.json(schemes);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/schemes', async (req, res) => {
+  try {
+    const { data, error } = schemeFromBody(req.body);
+    if (error) return res.status(400).json({ error });
+    const now = new Date().toISOString();
+    const ref = await db.collection('schemes').add({ ...data, last_card: 0, created_at: now, updated_at: now });
+    res.json({ id: ref.id, ...data, last_card: 0, member_count: 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Amount changes apply to payments recorded from now on; recorded payments keep their amount.
+app.put('/api/schemes/:id', async (req, res) => {
+  try {
+    const ref = db.collection('schemes').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Scheme not found' });
+    const { data, error } = schemeFromBody(req.body);
+    if (error) return res.status(400).json({ error });
+    await ref.update({ ...data, updated_at: new Date().toISOString() });
+    res.json({ id: doc.id, ...doc.data(), ...data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/schemes/:id', async (req, res) => {
+  try {
+    const count = await db.collection('scheme_members').where('scheme_id', '==', req.params.id).count().get();
+    if (count.data().count > 0) return res.status(400).json({ error: 'This scheme has members. Close it instead of deleting.' });
+    await db.collection('schemes').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/schemes/:id/members', async (req, res) => {
+  try {
+    const snap = await db.collection('scheme_members').where('scheme_id', '==', req.params.id).get();
+    const members = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(a.card_number).localeCompare(String(b.card_number)));
+    res.json(members);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/schemes/:id/members', async (req, res) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    const phone = String(req.body.phone || '').replace(/\D/g, '').slice(-10);
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    if (phone.length !== 10) return res.status(400).json({ error: 'Phone must be a 10-digit number' });
+    const joinMonth = SCHEME_MONTH_RE.test(req.body.join_month || '') ? req.body.join_month : new Date().toISOString().slice(0, 7);
+
+    const schemeRef = db.collection('schemes').doc(req.params.id);
+    const memberRef = db.collection('scheme_members').doc();
+    // Transaction: card numbers are sequential per scheme and never collide between two admins
+    const record = await db.runTransaction(async (tx) => {
+      const schemeDoc = await tx.get(schemeRef);
+      if (!schemeDoc.exists) throw Object.assign(new Error('Scheme not found'), { status: 404 });
+      const scheme = schemeDoc.data();
+      if (scheme.status === 'closed') throw Object.assign(new Error('This scheme is closed for new members'), { status: 400 });
+      const next = (scheme.last_card || 0) + 1;
+      const data = {
+        scheme_id: req.params.id,
+        card_number: `${scheme.card_prefix}-${String(next).padStart(4, '0')}`,
+        name, name_lower: name.toLowerCase(), phone,
+        village: String(req.body.village || '').trim(),
+        address: String(req.body.address || '').trim(),
+        notes: String(req.body.notes || '').trim(),
+        join_month: joinMonth,
+        status: 'active',
+        payments: {}, handover: {},
+        created_at: new Date().toISOString()
+      };
+      tx.update(schemeRef, { last_card: next });
+      tx.set(memberRef, data);
+      return data;
+    });
+    res.json({ id: memberRef.id, ...record });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+app.put('/api/schemes/:id/members/:memberId', async (req, res) => {
+  try {
+    const ref = db.collection('scheme_members').doc(req.params.memberId);
+    const doc = await ref.get();
+    if (!doc.exists || doc.data().scheme_id !== req.params.id) return res.status(404).json({ error: 'Member not found' });
+    const update = {};
+    if (req.body.name !== undefined) {
+      const name = String(req.body.name).trim();
+      if (!name) return res.status(400).json({ error: 'Name is required' });
+      update.name = name; update.name_lower = name.toLowerCase();
+    }
+    if (req.body.phone !== undefined) {
+      const phone = String(req.body.phone).replace(/\D/g, '').slice(-10);
+      if (phone.length !== 10) return res.status(400).json({ error: 'Phone must be a 10-digit number' });
+      update.phone = phone;
+    }
+    for (const f of ['village', 'address', 'notes']) if (req.body[f] !== undefined) update[f] = String(req.body[f]).trim();
+    if (req.body.join_month !== undefined && SCHEME_MONTH_RE.test(req.body.join_month)) update.join_month = req.body.join_month;
+    if (req.body.status !== undefined) {
+      if (!['active', 'withdrawn'].includes(req.body.status)) return res.status(400).json({ error: 'status must be active or withdrawn' });
+      update.status = req.body.status;
+    }
+    await ref.update(update);
+    res.json({ id: doc.id, ...doc.data(), ...update });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Only for members added by mistake: refuses once any payment is recorded (withdraw instead)
+app.delete('/api/schemes/:id/members/:memberId', async (req, res) => {
+  try {
+    const ref = db.collection('scheme_members').doc(req.params.memberId);
+    const doc = await ref.get();
+    if (!doc.exists || doc.data().scheme_id !== req.params.id) return res.status(404).json({ error: 'Member not found' });
+    if (Object.keys(doc.data().payments || {}).length) return res.status(400).json({ error: 'This member has payments. Use Withdraw instead.' });
+    await ref.delete();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Body: { months: [1,2], date: 'YYYY-MM-DD', mode: 'Cash'|'UPI', collected_by, recorded_by }
+app.post('/api/schemes/:id/members/:memberId/payments', async (req, res) => {
+  try {
+    const months = [...new Set((req.body.months || []).map(Number))];
+    const date = String(req.body.date || '');
+    if (!months.length) return res.status(400).json({ error: 'Choose at least one month' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Payment date is required' });
+
+    const schemeRef = db.collection('schemes').doc(req.params.id);
+    const memberRef = db.collection('scheme_members').doc(req.params.memberId);
+    const member = await db.runTransaction(async (tx) => {
+      const [schemeDoc, memberDoc] = await Promise.all([tx.get(schemeRef), tx.get(memberRef)]);
+      if (!schemeDoc.exists) throw Object.assign(new Error('Scheme not found'), { status: 404 });
+      if (!memberDoc.exists || memberDoc.data().scheme_id !== req.params.id) throw Object.assign(new Error('Member not found'), { status: 404 });
+      const scheme = schemeDoc.data();
+      const current = memberDoc.data();
+      const bad = months.find(m => !Number.isInteger(m) || m < 1 || m > scheme.months);
+      if (bad !== undefined) throw Object.assign(new Error(`Month ${bad} is outside this scheme`), { status: 400 });
+      const clash = months.find(m => current.payments && current.payments[m]);
+      if (clash) throw Object.assign(new Error(`Month ${clash} is already paid`), { status: 400 });
+      const now = new Date().toISOString();
+      const update = {};
+      months.forEach(m => {
+        update[`payments.${m}`] = {
+          amount: scheme.amount, date,
+          mode: req.body.mode === 'UPI' ? 'UPI' : 'Cash',
+          collected_by: String(req.body.collected_by || '').trim() || 'Admin',
+          recorded_by: String(req.body.recorded_by || '').trim() || 'Admin',
+          recorded_at: now
+        };
+      });
+      tx.update(memberRef, update);
+      const payments = { ...(current.payments || {}) };
+      months.forEach(m => { payments[m] = update[`payments.${m}`]; });
+      return { id: memberDoc.id, ...current, payments };
+    });
+    res.json(member);
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+app.delete('/api/schemes/:id/members/:memberId/payments/:month', async (req, res) => {
+  try {
+    const ref = db.collection('scheme_members').doc(req.params.memberId);
+    const doc = await ref.get();
+    if (!doc.exists || doc.data().scheme_id !== req.params.id) return res.status(404).json({ error: 'Member not found' });
+    await ref.update({ [`payments.${Number(req.params.month)}`]: admin.firestore.FieldValue.delete() });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Body: { key: item key or 'bonus', given: true|false, date, given_by }
+app.put('/api/schemes/:id/members/:memberId/handover', async (req, res) => {
+  try {
+    const key = String(req.body.key || '').replace(/[^A-Za-z0-9_-]/g, '');
+    if (!key) return res.status(400).json({ error: 'Item key is required' });
+    const ref = db.collection('scheme_members').doc(req.params.memberId);
+    const doc = await ref.get();
+    if (!doc.exists || doc.data().scheme_id !== req.params.id) return res.status(404).json({ error: 'Member not found' });
+    const value = req.body.given
+      ? { date: String(req.body.date || new Date().toISOString().slice(0, 10)), given_by: String(req.body.given_by || 'Admin') }
+      : admin.firestore.FieldValue.delete();
+    await ref.update({ [`handover.${key}`]: value });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Start server (only in local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

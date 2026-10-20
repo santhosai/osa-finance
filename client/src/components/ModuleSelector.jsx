@@ -43,6 +43,14 @@ function ModuleSelector({ onSelectModule }) {
       subtitle: '12-Month Grocery Savings',
       color: '#c2410c',
       gradient: 'linear-gradient(135deg, #f2a93b 0%, #c2410c 100%)'
+    },
+    {
+      id: 'savings-schemes',
+      icon: '🪔',
+      title: 'Savings Schemes',
+      subtitle: 'Diwali, Pongal & more',
+      color: '#7a1424',
+      gradient: 'linear-gradient(135deg, #a3263a 0%, #5c0f1b 100%)'
     }
   ];
 

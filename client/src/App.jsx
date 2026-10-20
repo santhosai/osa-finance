@@ -36,6 +36,7 @@ const ChitDashboard = lazy(() => import('./components/ChitDashboard'));
 const AutoFinanceDashboard = lazy(() => import('./components/AutoFinanceDashboard'));
 const FestivalFund = lazy(() => import('./components/FestivalFund'));
 const PongalFund = lazy(() => import('./components/PongalFund'));
+const SavingsSchemes = lazy(() => import('./components/SavingsSchemes'));
 
 // PASSWORD VERSION - Must match Login.jsx to keep session valid
 const CURRENT_PASSWORD_VERSION = '2025-01-27-v2';
@@ -314,6 +315,20 @@ function AppContent() {
           <Routes>
             <Route path="/pongal-fund" element={<PongalFundWrapper />} />
             <Route path="*" element={<Navigate to="/pongal-fund" replace />} />
+          </Routes>
+        </Suspense>
+      </div>
+    );
+  }
+
+  // SAVINGS SCHEMES MODULE (Diwali, Pongal, ... goods savings schemes)
+  if (selectedModule === 'savings-schemes') {
+    return (
+      <div className="app">
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/savings-schemes" element={<SavingsSchemes />} />
+            <Route path="*" element={<Navigate to="/savings-schemes" replace />} />
           </Routes>
         </Suspense>
       </div>
