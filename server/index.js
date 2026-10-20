@@ -6503,6 +6503,7 @@ function schemeFromBody(body) {
   return {
     data: {
       name, name_ta: String(body.name_ta || '').trim(), run_by: String(body.run_by || '').trim(),
+      run_by_ta: String(body.run_by_ta || '').trim(),
       amount, months, start_month: body.start_month, window_from: from, window_to: to,
       card_prefix: prefix, collectors: collectors.length ? collectors : ['Admin'],
       items: schemeCleanItems(body.items), bonus: schemeCleanBonus(body.bonus),

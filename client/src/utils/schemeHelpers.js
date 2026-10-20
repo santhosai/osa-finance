@@ -83,58 +83,67 @@ export function whatsappLink(phone, text) {
   return `https://wa.me/91${digits}?text=${encodeURIComponent(text)}`;
 }
 
-const signOff = (scheme) => `- ${scheme.run_by || scheme.name}`;
+// Messages are plain, everyday Tamil (customers read them on WhatsApp).
+// Shop name and scheme name use the Tamil versions when set in Settings.
+const shopName = (scheme) => scheme.run_by_ta || scheme.run_by || scheme.name;
 const titleOf = (scheme) => scheme.name_ta || scheme.name;
+const taDate = (iso) => iso.split('-').reverse().join('-');
+const withNote = (lines, scheme) => (scheme.whatsapp_note ? [...lines, '', scheme.whatsapp_note] : lines).join('\n').trim();
 
 export function receiptMessage(scheme, member, months) {
   const list = [...months].sort((a, b) => a - b);
   const paid = paidMonths(member).length;
   const left = Math.max(0, scheme.months - paid);
   const p = member.payments?.[list[0]] || {};
-  const monthLine = list.length === 1
-    ? `மாதம்: ${list[0]}/${scheme.months} (${schemeMonthTa(scheme, list[0])})`
-    : `மாதங்கள்: ${list.map(i => schemeMonthTa(scheme, i)).join(', ')}`;
-  return [
-    `✅ ${titleOf(scheme)}`,
+  const lines = [
+    `✅ பணம் வந்து சேர்ந்தது`,
+    titleOf(scheme),
     ``,
-    `அட்டை எண்: ${member.card_number}`,
     `பெயர்: ${member.name}`,
-    `${monthLine} • ${formatRs(scheme.amount * list.length)}`,
-    p.date ? `செலுத்திய தேதி: ${p.date.split('-').reverse().join('-')} • ${p.mode || ''}` : '',
-    `செலுத்தியது: ${paid}/${scheme.months} • மீதம் ${left} மாதம் (${formatRs(left * scheme.amount)})`,
+    `அட்டை எண்: ${member.card_number}`,
+    ...list.map(i => `${schemeMonthTa(scheme, i)} மாதம்: ${formatRs(scheme.amount)}`),
+    p.date ? `கட்டிய தேதி: ${taDate(p.date)}` : null,
     ``,
-    `நன்றி!`,
-    signOff(scheme),
-    scheme.whatsapp_note ? `\n${scheme.whatsapp_note}` : ''
-  ].filter(line => line !== null).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    `கட்டியது: ${paid} / ${scheme.months} மாதம்`,
+    left > 0 ? `இன்னும் கட்ட வேண்டியது: ${left} மாதம் (${formatRs(left * scheme.amount)})` : `🎉 எல்லா மாதமும் கட்டி முடித்துவிட்டீர்கள்!`,
+    ``,
+    `நன்றி 🙏`,
+    `- ${shopName(scheme)}`
+  ].filter(line => line !== null);
+  return withNote(lines, scheme);
 }
 
 export function reminderMessage(scheme, member, months) {
   const list = [...months].sort((a, b) => a - b);
-  return [
-    `🔔 ${titleOf(scheme)}`,
+  const lines = [
+    `🔔 நினைவூட்டல்`,
+    titleOf(scheme),
     ``,
     `வணக்கம் ${member.name},`,
-    `${list.map(i => schemeMonthTa(scheme, i)).join(', ')} மாத தவணை ${formatRs(scheme.amount * list.length)} இன்னும் செலுத்தப்படவில்லை.`,
-    `தயவுசெய்து ${scheme.window_from}–${scheme.window_to} தேதிக்குள் செலுத்தவும்.`,
+    `${list.map(i => schemeMonthTa(scheme, i)).join(', ')} மாத பணம் ${formatRs(scheme.amount * list.length)} இன்னும் கட்டவில்லை.`,
+    `தயவுசெய்து ${scheme.window_from} முதல் ${scheme.window_to} தேதிக்குள் கட்டவும்.`,
     ``,
     `அட்டை எண்: ${member.card_number}`,
-    signOff(scheme),
-    scheme.whatsapp_note ? `\n${scheme.whatsapp_note}` : ''
-  ].join('\n').trim();
+    `நன்றி 🙏`,
+    `- ${shopName(scheme)}`
+  ];
+  return withNote(lines, scheme);
 }
 
 export function handoverMessage(scheme, member) {
   return [
-    `🎁 ${titleOf(scheme)}`,
+    `🎁 பொருட்கள் கொடுக்கப்பட்டது`,
+    titleOf(scheme),
     ``,
-    `அட்டை எண்: ${member.card_number}`,
     `பெயர்: ${member.name}`,
-    `${scheme.months} மாதங்களும் செலுத்தப்பட்டது. பொருட்கள் வழங்கப்பட்டன.`,
-    ...scheme.items.map(it => `• ${it.name_ta || it.name}${it.per > 1 ? ` × ${it.per}` : ''}`),
+    `அட்டை எண்: ${member.card_number}`,
+    `${scheme.months} மாதமும் கட்டி முடித்ததற்கு நன்றி!`,
     ``,
-    `நன்றி!`,
-    signOff(scheme)
+    `நீங்கள் பெற்ற பொருட்கள்:`,
+    ...scheme.items.map(it => `• ${it.name_ta || it.name}${it.per > 1 ? ` – ${it.per}` : ''}`),
+    ``,
+    `நன்றி 🙏`,
+    `- ${shopName(scheme)}`
   ].join('\n').trim();
 }
 

@@ -128,12 +128,12 @@ const CSS = `
 `;
 
 const TABS = [
-  ['dashboard', 'Dashboard'], ['collection', 'Monthly collection'], ['members', 'Members'],
-  ['handover', 'Items & handover'], ['setup', 'Scheme setup'], ['reports', 'Reports']
+  ['dashboard', 'Home'], ['collection', 'Collect money'], ['members', 'Members'],
+  ['handover', 'Gifts'], ['setup', 'Settings'], ['reports', 'Reports']
 ];
 
 const emptyScheme = () => ({
-  name: '', name_ta: '', run_by: 'Om Sai Murugan Finance', amount: '', months: 12,
+  name: '', name_ta: '', run_by: 'Om Sai Murugan Finance', run_by_ta: 'ஓம் சாய் முருகன் ஃபைனான்ஸ்', amount: '', months: 12,
   start_month: todayISO().slice(0, 7), window_from: 1, window_to: 10, card_prefix: '',
   collectors: localStorage.getItem('userName') || 'Admin',
   items: [{ name: '', name_ta: '', per: 1, unit: '' }],
@@ -241,7 +241,7 @@ function SavingsSchemes() {
       localStorage.setItem('schemeCollector', collected_by);
       replaceMember(updated);
       setPayDialog(null);
-      setMsgDialog({ title: 'Payment saved · send receipt', text: receiptMessage(scheme, updated, [...months]), phone: updated.phone });
+      setMsgDialog({ title: 'Saved! Send receipt on WhatsApp', text: receiptMessage(scheme, updated, [...months]), phone: updated.phone });
     } catch (e) { showToast(e.message); }
     setSaving(false);
   };
@@ -458,7 +458,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
     });
     const statusLine = currentMonth < 1
       ? `Starts ${schemeMonthLabel(scheme, 1)}`
-      : currentMonth > scheme.months ? 'All months are over' : `This month is ${currentMonth} of ${scheme.months}`;
+      : currentMonth > scheme.months ? 'All months are over' : `This is month ${currentMonth} of ${scheme.months}`;
     return (
       <>
         <div className="ss-card">
@@ -473,11 +473,11 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
           <div className="ss-stat"><span>Collected · {schemeMonthLabel(scheme, viewMonth)}</span><b style={{ color: '#5fcf8c' }}>{formatRs(paid.reduce((a, m) => a + Number(m.payments[viewMonth].amount || 0), 0))}</b></div>
           <div className="ss-stat"><span>Pending · {paid.length}/{active.length} paid</span><b style={{ color: '#f08a7c' }}>{formatRs(unpaid.length * scheme.amount)}</b></div>
           <div className="ss-stat"><span>Paid late (after {scheme.window_to}th)</span><b style={{ color: '#f3b552' }}>{late.length}</b></div>
-          <div className="ss-stat"><span>Total saved so far</span><b>{formatRs(savedTotal)}</b></div>
+          <div className="ss-stat"><span>Total money saved</span><b>{formatRs(savedTotal)}</b></div>
         </div>
         <div className="ss-cols">
           <div className="ss-card">
-            <h3>Needs attention ({behind.length})</h3>
+            <h3>Not paid for 2+ months ({behind.length})</h3>
             <div className="ss-list">
               {behind.map(m => (
                 <div key={m.id} className="ss-item unpaid">
@@ -489,9 +489,9 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
             </div>
           </div>
           <div className="ss-card">
-            <h3>Collected by · {schemeMonthLabel(scheme, viewMonth)}</h3>
+            <h3>Who collected · {schemeMonthLabel(scheme, viewMonth)}</h3>
             <div className="ss-table"><table>
-              <thead><tr><th>Collector</th><th className="r">Cash</th><th className="r">UPI</th><th className="r">Total</th></tr></thead>
+              <thead><tr><th>Name</th><th className="r">Cash</th><th className="r">UPI</th><th className="r">Total</th></tr></thead>
               <tbody>
                 {Object.entries(byCollector).map(([who, r]) => (
                   <tr key={who}><td>{who}</td><td className="r">{formatRs(r.cash)}</td><td className="r">{formatRs(r.upi)}</td><td className="r"><b>{formatRs(r.cash + r.upi)}</b></td></tr>
@@ -501,7 +501,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
             </table></div>
             {scheme.bonus && (
               <p className="ss-hint" style={{ marginBottom: 0 }}>
-                {scheme.bonus.name} offer: <b>{eligible.length}</b> eligible, <b>{eligible.filter(m => m.handover?.bonus).length}</b> given.
+                Free {scheme.bonus.name.toLowerCase()}: <b>{eligible.length}</b> people get it, <b>{eligible.filter(m => m.handover?.bonus).length}</b> given.
               </p>
             )}
           </div>
@@ -520,7 +520,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
         <div className="ss-card">
           <div className="ss-spread" style={{ marginBottom: 8 }}>
             <h3 style={{ margin: 0 }}>{schemeMonthLabel(scheme, viewMonth)} collection</h3>
-            {viewMonth > currentMonth && <span className="ss-pill warn">Advance month</span>}
+            {viewMonth > currentMonth && <span className="ss-pill warn">Future month</span>}
           </div>
           {monthStrip()}
         </div>
@@ -564,7 +564,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
                   </div>
                   <div className="ss-row">
                     <button className="ss-btn sm" onClick={() => setMsgDialog({ title: 'Reminder', text: reminderMessage(scheme, m, [viewMonth]), phone: m.phone })}>Remind</button>
-                    <button className="ss-btn sm pri" onClick={() => openPay(m, [viewMonth])}>Mark paid</button>
+                    <button className="ss-btn sm pri" onClick={() => openPay(m, [viewMonth])}>Mark as paid</button>
                   </div>
                 </div>
               ))}
@@ -593,7 +593,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
               <span className="ss-pill grey" style={{ marginLeft: 6 }}>{m.card_number}</span>
               {missed >= 2 && m.status !== 'withdrawn' && <span title={`${missed} months missed`} style={{ marginLeft: 5 }}>⚠️</span>}
               {bonusEligible(scheme, m) && <span title={`${scheme.bonus.name} ${m.handover?.bonus ? 'given' : 'due'}`} style={{ marginLeft: 4 }}>{m.handover?.bonus ? '🎁' : '🎀'}</span>}
-              {m.status === 'withdrawn' && <span className="ss-pill grey" style={{ marginLeft: 6 }}>Withdrawn</span>}
+              {m.status === 'withdrawn' && <span className="ss-pill grey" style={{ marginLeft: 6 }}>Removed</span>}
             </div>
             <div className="ss-hint" style={{ fontSize: 11, marginTop: 2 }}>📞 {m.phone}{m.village ? ` | ${m.village}` : ''} | Joined {monthKeyLabel(m.join_month)}</div>
           </div>
@@ -637,7 +637,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
           )}
           {withdrawn.length > 0 && (
             <>
-              <div className="ss-section-label">WITHDRAWN ({withdrawn.length})</div>
+              <div className="ss-section-label">REMOVED ({withdrawn.length})</div>
               <div className="ss-list">{withdrawn.map(memberCard)}</div>
             </>
           )}
@@ -656,7 +656,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
       <>
         <div className="ss-card">
           <div className="ss-spread" style={{ marginBottom: 10 }}>
-            <h3 style={{ margin: 0 }}>Stock to arrange</h3>
+            <h3 style={{ margin: 0 }}>Items to buy</h3>
             <span className="ss-hint">For {active.length} active members</span>
           </div>
           <div className="ss-gifts">
@@ -673,7 +673,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
             {scheme.bonus && (
               <div className="ss-gift">
                 <div className="q">{eligible.length}</div>
-                <b>{scheme.bonus.name} (joining offer)</b>
+                <b>Free {scheme.bonus.name.toLowerCase()} for joining</b>
                 <div className="ss-hint">{scheme.bonus.join_month ? `Joined by ${monthKeyLabel(scheme.bonus.join_month)}` : 'All members'} · {eligible.filter(m => m.handover?.bonus).length} given</div>
               </div>
             )}
@@ -681,10 +681,10 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
         </div>
         <div className="ss-card">
           <div className="ss-spread" style={{ marginBottom: 10 }}>
-            <h3 style={{ margin: 0 }}>Hand over ({completed.length} of {active.length} completed all {scheme.months} months)</h3>
+            <h3 style={{ margin: 0 }}>Give items ({completed.length} of {active.length} paid all {scheme.months} months)</h3>
             <div style={{ minWidth: 0, flex: '0 1 300px' }}>{searchBox('handover')}</div>
           </div>
-          <p className="ss-hint" style={{ marginTop: 0 }}>Items unlock when all {scheme.months} months are paid.{scheme.bonus ? ` The ${scheme.bonus.name.toLowerCase()} can be given any time after joining.` : ''}</p>
+          <p className="ss-hint" style={{ marginTop: 0 }}>Give items only after all {scheme.months} months are paid.{scheme.bonus ? ` The free ${scheme.bonus.name.toLowerCase()} can be given any time.` : ''}</p>
           <div className="ss-list">
             {list.map(m => {
               const done = isCompleted(scheme, m);
@@ -741,26 +741,27 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
       <>
         <div className="ss-card">
           <div className="ss-spread" style={{ marginBottom: 10 }}>
-            <h3 style={{ margin: 0 }}>{isNew ? 'Create a scheme' : 'Scheme settings'}</h3>
-            {!isNew && <span className="ss-hint">Changing the amount affects payments recorded from now on.</span>}
+            <h3 style={{ margin: 0 }}>{isNew ? 'New scheme' : 'Scheme settings'}</h3>
+            {!isNew && <span className="ss-hint">If you change the amount, only new payments use it.</span>}
           </div>
           <div className="ss-form">
             {field('Scheme name (English) *', 'name', { input: { placeholder: 'Diwali Savings Scheme 2026–27' } })}
             {field('Scheme name (Tamil)', 'name_ta', { input: { placeholder: 'தீபாவளி சிறு சேமிப்பு திட்டம்' } })}
-            {field('Run by (shown on WhatsApp messages)', 'run_by', { full: true })}
+            {field('Shop / company name (English)', 'run_by')}
+            {field('Shop / company name (Tamil, for WhatsApp)', 'run_by_ta', { input: { placeholder: 'சக்கரவர்த்தி டிரேடர்ஸ் & ஓம் சாய் முருகன் ஃபைனான்ஸ்' } })}
             {field('Monthly amount (₹) *', 'amount', { input: { type: 'number', min: 1 } })}
             {field('Number of months *', 'months', { input: { type: 'number', min: 1, max: 60 } })}
             {field('First month *', 'start_month', { input: { type: 'month' } })}
             <div className="ss-field"><label>Last month</label><input className="ss-input" value={lastMonth} readOnly /></div>
-            {field('Pay from day', 'window_from', { input: { type: 'number', min: 1, max: 31 } })}
-            {field('Pay until day', 'window_to', { input: { type: 'number', min: 1, max: 31 } })}
-            {field('Card number prefix *', 'card_prefix', { input: { placeholder: 'DW-2627' } })}
-            {field('Collectors (comma separated)', 'collectors', { input: { placeholder: 'Chakravarthy, Santhosh' } })}
+            {field('Pay from date', 'window_from', { input: { type: 'number', min: 1, max: 31 } })}
+            {field('Pay until date', 'window_to', { input: { type: 'number', min: 1, max: 31 } })}
+            {field('Card number starts with *', 'card_prefix', { input: { placeholder: 'DW-2627' } })}
+            {field('People who collect money (use commas)', 'collectors', { input: { placeholder: 'Chakravarthy, Santhosh' } })}
           </div>
         </div>
 
         <div className="ss-card">
-          <h3>Items given at the end</h3>
+          <h3>Gifts at the end</h3>
           <div className="ss-list">
             {f.items.map((it, i) => (
               <div key={i} className="ss-form" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', alignItems: 'end' }}>
@@ -776,17 +777,17 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
         </div>
 
         <div className="ss-card">
-          <h3>Joining offer (optional)</h3>
+          <h3>Free gift for joining (optional)</h3>
           <div className="ss-form">
             <div className="ss-field"><label>Gift</label><input className="ss-input" value={f.bonus?.name || ''} placeholder="Saree" onChange={e => set({ bonus: { ...f.bonus, name: e.target.value } })} /></div>
             <div className="ss-field"><label>Gift (Tamil)</label><input className="ss-input" value={f.bonus?.name_ta || ''} placeholder="புடவை" onChange={e => set({ bonus: { ...f.bonus, name_ta: e.target.value } })} /></div>
-            <div className="ss-field ss-full"><label>For members who join in or before</label><input className="ss-input" type="month" value={f.bonus?.join_month || ''} onChange={e => set({ bonus: { ...f.bonus, join_month: e.target.value } })} /></div>
+            <div className="ss-field ss-full"><label>Only for people who join in or before</label><input className="ss-input" type="month" value={f.bonus?.join_month || ''} onChange={e => set({ bonus: { ...f.bonus, join_month: e.target.value } })} /></div>
           </div>
         </div>
 
         <div className="ss-card">
           <h3>WhatsApp note</h3>
-          <div className="ss-field"><label>Added to the end of every receipt and reminder</label>
+          <div className="ss-field"><label>Added at the end of every WhatsApp message (write in Tamil)</label>
             <textarea className="ss-input" style={{ minHeight: 70 }} value={f.whatsapp_note || ''} onChange={e => set({ whatsapp_note: e.target.value })} placeholder="தொடர்புக்கு: 9344641471 / 8667510724" />
           </div>
           {!isNew && (
@@ -833,9 +834,9 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
         ])
       },
       {
-        title: 'Collector settlement', desc: 'Cash and UPI collected by each person, month by month.',
+        title: 'Money by collector', desc: 'Cash and UPI collected by each person, month by month.',
         run: () => {
-          const rows = [['Month', 'Collector', 'Cash', 'UPI', 'Total', 'Payments']];
+          const rows = [['Month', 'Collected by', 'Cash', 'UPI', 'Total', 'Payments']];
           for (let i = 1; i <= scheme.months; i++) {
             const by = {};
             active.forEach(m => {
@@ -856,14 +857,14 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
           ['Card', 'Name', 'Phone', 'Village', 'Joined', 'Status',
             ...Array.from({ length: scheme.months }, (_, k) => schemeMonthLabel(scheme, k + 1)), 'Months paid', 'Total paid',
             ...(scheme.bonus ? [`${scheme.bonus.name} eligible`] : [])],
-          ...members.map(m => [...memberCols(m), monthKeyLabel(m.join_month), m.status,
+          ...members.map(m => [...memberCols(m), monthKeyLabel(m.join_month), m.status === 'withdrawn' ? 'Removed' : 'Active',
             ...Array.from({ length: scheme.months }, (_, k) => m.payments?.[k + 1]?.date || ''),
             paidMonths(m).length, Object.values(m.payments || {}).reduce((a, p) => a + Number(p.amount || 0), 0),
             ...(scheme.bonus ? [bonusEligible(scheme, m) ? 'Yes' : 'No'] : [])])
         ])
       },
       {
-        title: 'Stock & handover', desc: 'Items each member gets and whether they have been given.',
+        title: 'Gifts given', desc: 'Which gifts each member got and when.',
         run: () => {
           const keys = [...scheme.items.map(it => [it.key, it.name]), ...(scheme.bonus ? [['bonus', scheme.bonus.name]] : [])];
           downloadCSV(`${base}-handover.csv`, [
@@ -919,7 +920,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
           <div className="ss-field"><label>Mode</label>
             <select className="ss-select" value={payDialog.mode} onChange={e => setPayDialog({ ...payDialog, mode: e.target.value })}><option>Cash</option><option>UPI</option></select>
           </div>
-          <div className="ss-field ss-full"><label>Collected by</label>
+          <div className="ss-field ss-full"><label>Who collected</label>
             <select className="ss-select" value={payDialog.collected_by} onChange={e => setPayDialog({ ...payDialog, collected_by: e.target.value })}>
               {scheme.collectors.map(c => <option key={c}>{c}</option>)}
             </select>
@@ -999,13 +1000,13 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
               {member.notes && <div className="ss-dsub">📝 {member.notes}</div>}
             </div>
             {done && <span style={{ fontSize: 24 }}>🎊</span>}
-            {withdrawn && <span className="ss-pill grey">Withdrawn</span>}
+            {withdrawn && <span className="ss-pill grey">Removed</span>}
           </div>
           {(bonusEligible(scheme, member) || done) && (
             <div className="ss-dbox">
               {bonusEligible(scheme, member) && (
                 <div className="ss-spread">
-                  <span>🎀 {scheme.bonus.name}{scheme.bonus.name_ta ? ` / ${scheme.bonus.name_ta}` : ''} (joining offer)</span>
+                  <span>🎀 {scheme.bonus.name}{scheme.bonus.name_ta ? ` / ${scheme.bonus.name_ta}` : ''} (free gift for joining)</span>
                   {member.handover?.bonus
                     ? <span style={{ color: '#4ade80', fontWeight: 700 }}>✅ Given {member.handover.bonus.date}</span>
                     : <button className="ss-btn sm pri" onClick={() => setHandover(member, 'bonus', true)}>Mark given</button>}
@@ -1036,7 +1037,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
           <>
             {/* Timeline: every month with paid date / due / missed; tap unpaid months to pay */}
             <div>
-              <div className="ss-section-label" style={{ marginTop: 0 }}>PAYMENT TIMELINE {!withdrawn && <span style={{ fontWeight: 400 }}>· tap unpaid months to pay</span>}</div>
+              <div className="ss-section-label" style={{ marginTop: 0 }}>MONTHS {!withdrawn && <span style={{ fontWeight: 400 }}>· tap unpaid months to pay</span>}</div>
               <div className="ss-chips">
                 {Array.from({ length: scheme.months }, (_, k) => k + 1).map(i => {
                   const p = member.payments?.[i];
@@ -1061,7 +1062,7 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
             {/* History: one row per paid month */}
             {paidList.length > 0 && (
               <div>
-                <div className="ss-section-label" style={{ marginTop: 0 }}>PAYMENT HISTORY</div>
+                <div className="ss-section-label" style={{ marginTop: 0 }}>PAID MONTHS</div>
                 <div className="ss-list" style={{ gap: 4 }}>
                   {paidList.map(i => {
                     const p = member.payments[i];
@@ -1101,8 +1102,8 @@ ${rows}<div class="line"></div>${scheme.whatsapp_note ? `<div style="font-size:1
               {!paidList.length && <button className="ss-btn red" onClick={() => deleteMember(member)}>🗑️ Delete</button>}
             </div>
             {withdrawn
-              ? <button className="ss-btn" style={{ width: '100%', background: '#15803d', borderColor: '#15803d' }} onClick={() => updateMember(member, { status: 'active' }, 'Member is active again')}>↩️ Make active again</button>
-              : <button className="ss-btn red" style={{ width: '100%' }} onClick={() => { if (window.confirm(`Mark ${member.name} as withdrawn? Their payments stay recorded.`)) updateMember(member, { status: 'withdrawn' }, 'Member withdrawn'); }}>🚫 Withdraw from scheme</button>}
+              ? <button className="ss-btn" style={{ width: '100%', background: '#15803d', borderColor: '#15803d' }} onClick={() => updateMember(member, { status: 'active' }, 'Added back to scheme')}>↩️ Add back to scheme</button>
+              : <button className="ss-btn red" style={{ width: '100%' }} onClick={() => { if (window.confirm(`Remove ${member.name} from the scheme? Their payments stay saved.`)) updateMember(member, { status: 'withdrawn' }, 'Removed from scheme'); }}>🚫 Remove from scheme</button>}
             <button className="ss-btn" style={{ width: '100%', background: 'none' }} onClick={() => setMemberId(null)}>Close</button>
           </>
         )}
@@ -1178,7 +1179,7 @@ function AddMemberForm({ scheme, onAdded, onError }) {
       </div>
       <div className="ss-row" style={{ marginTop: 12 }}>
         <button className="ss-btn pri" type="submit" disabled={busy}>{busy ? 'Adding…' : 'Add member'}</button>
-        {scheme.bonus && <span className="ss-hint">{getsBonus ? `Gets the ${scheme.bonus.name.toLowerCase()} (joining offer).` : `No ${scheme.bonus.name.toLowerCase()}: joined after ${monthKeyLabel(scheme.bonus.join_month)}.`}</span>}
+        {scheme.bonus && <span className="ss-hint">{getsBonus ? `Gets free ${scheme.bonus.name.toLowerCase()}.` : `No free ${scheme.bonus.name.toLowerCase()}: joined after ${monthKeyLabel(scheme.bonus.join_month)}.`}</span>}
       </div>
     </form>
   );
